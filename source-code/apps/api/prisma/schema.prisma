@@ -1,0 +1,615 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  FREE_STUDENT
+  PLUS_STUDENT
+  PRO_STUDENT
+  MENTOR_TEACHER
+  INSTITUTION_ADMIN
+  ADMIN
+  STORE_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING_VERIFICATION
+  SUSPENDED
+}
+
+enum PlanTier {
+  FREE
+  PLUS
+  PRO
+  INSTITUTION
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  ONE_TIME
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAUSED
+  HALTED
+  CANCELLED
+  GRACE_PERIOD
+}
+
+enum PaymentStatus {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id                    String            @id @default(uuid())
+  email                 String            @unique
+  passwordHash          String?
+  mobileNumber          String?           @unique
+  role                  UserRole          @default(FREE_STUDENT)
+  status                UserStatus        @default(ACTIVE)
+  googleId              String?           @unique
+  biometricPublicKey    String?
+  referralCode          String            @unique
+  referredById          String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  studentProfile        StudentProfile?
+  studentIdCard         StudentID?
+  subscriptions         Subscription[]
+  payments              Payment[]
+  usageMeters           UsageMeter[]
+  circuitProjects       CircuitProject[]
+  chatSessions          ChatSession[]
+  progress              Progress[]
+  certificates          Certificate[]
+  enrollments           Enrollment[]
+  submissions           Submission[]
+  orders                Order[]
+  cart                  Cart?
+  reviews               Review[]
+  posts                 Post[]
+  comments              Comment[]
+  notifications         Notification[]
+
+  batchId               String?
+  batch                 Batch?            @relation(fields: [batchId], references: [id])
+
+  @@index([email])
+  @@index([mobileNumber])
+  @@index([role])
+}
+
+model StudentProfile {
+  id                    String            @id @default(uuid())
+  userId                String            @unique
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName              String
+  dateOfBirth           String?
+  parentEmail           String?
+  parentalConsentGiven  Boolean           @default(false)
+  institutionType       String            @default("school")
+  schoolOrCollegeName   String
+  classOrYear           String
+  city                  String
+  state                 String
+  country               String            @default("India")
+  interests             String[]          @default([])
+  avatarUrl             String?
+  bio                   String?
+  level                 Int               @default(1)
+  xp                    Int               @default(0)
+  streakDays            Int               @default(1)
+  totalLearningHours    Float             @default(0.0)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+}
+
+model StudentID {
+  id                    String            @id @default(uuid())
+  userId                String            @unique
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentId             String            @unique // e.g. RV-2026-000123
+  qrCodeDataUrl         String            @db.Text
+  verificationHash      String            @unique
+  issuedAt              DateTime          @default(now())
+  validUntil            DateTime
+
+  @@index([studentId])
+}
+
+model Plan {
+  id                    String            @id // plan_free, plan_plus, plan_pro, plan_institution
+  tier                  PlanTier          @unique
+  name                  String
+  tagline               String
+  isPopular             Boolean           @default(false)
+  badge                 String?
+  pricingJson           String            @db.Text
+  featuresJson          String            @db.Text
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  subscriptions         Subscription[]
+}
+
+model Subscription {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId                String
+  plan                  Plan              @relation(fields: [planId], references: [id])
+  billingCycle          BillingCycle      @default(MONTHLY)
+  status                SubscriptionStatus @default(ACTIVE)
+  razorpaySubscriptionId String?         @unique
+  razorpayCustomerId   String?
+  currentPeriodStart    DateTime          @default(now())
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean           @default(false)
+  pausedAt              DateTime?
+  gracePeriodEnd        DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  payments              Payment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Payment {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id])
+  subscriptionId        String?
+  subscription          Subscription?     @relation(fields: [subscriptionId], references: [id])
+  orderId               String?
+  razorpayPaymentId     String?           @unique
+  razorpayOrderId       String            @unique
+  razorpaySignature     String?
+  amountInr             Float
+  currency              String            @default("INR")
+  method                String            @default("UPI")
+  status                PaymentStatus     @default(CREATED)
+  failureReason         String?
+  invoiceNumber         String?           @unique
+  invoiceTaxJson        String?           @db.Text
+  createdAt             DateTime          @default(now())
+
+  @@index([userId])
+  @@index([razorpayOrderId])
+}
+
+model Coupon {
+  id                    String            @id @default(uuid())
+  code                  String            @unique
+  discountPercentage    Float?
+  discountAmountInr     Float?
+  minOrderAmountInr     Float             @default(0)
+  validFrom             DateTime          @default(now())
+  validUntil            DateTime
+  maxUses               Int               @default(1000)
+  usedCount             Int               @default(0)
+  isActive              Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+
+  @@index([code])
+}
+
+model UsageMeter {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date                  String            // YYYY-MM-DD
+  textMessagesCount     Int               @default(0)
+  photoAnalysesCount    Int               @default(0)
+  codeReviewsCount      Int               @default(0)
+  estimatedAiCostInr    Float             @default(0.0)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model Course {
+  id                    String            @id @default(uuid())
+  title                 String
+  slug                  String            @unique
+  description           String
+  category              String
+  level                 String            @default("Beginner")
+  requiredPlan          PlanTier          @default(FREE)
+  estimatedHours        Float             @default(5.0)
+  icon                  String?
+  isPublished           Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+
+  lessons               Lesson[]
+  progress              Progress[]
+  certificates          Certificate[]
+}
+
+model Lesson {
+  id                    String            @id @default(uuid())
+  courseId              String
+  course                Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title                 String
+  orderIndex            Int
+  durationMinutes       Int               @default(15)
+  videoUrl              String?
+  contentMarkdown       String            @db.Text
+  has3dExplainer        Boolean           @default(false)
+  quizId                String?           @unique
+  quiz                  Quiz?             @relation(fields: [quizId], references: [id])
+
+  progress              Progress[]
+
+  @@index([courseId, orderIndex])
+}
+
+model Quiz {
+  id                    String            @id @default(uuid())
+  title                 String
+  questionsJson         String            @db.Text
+  passingScore          Int               @default(70)
+
+  lesson                Lesson?
+}
+
+model Progress {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId              String
+  course                Course            @relation(fields: [courseId], references: [id])
+  lessonId              String?
+  lesson                Lesson?           @relation(fields: [lessonId], references: [id])
+  isCompleted           Boolean           @default(false)
+  score                 Int?
+  completedAt           DateTime?
+
+  @@index([userId, courseId])
+}
+
+model Badge {
+  id                    String            @id @default(uuid())
+  name                  String
+  slug                  String            @unique
+  icon                  String
+  category              String
+  description           String
+  xpReward              Int               @default(50)
+}
+
+model Certificate {
+  id                    String            @id @default(uuid())
+  certificateNumber     String            @unique // e.g. RV-CERT-2026-00123
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId              String
+  course                Course            @relation(fields: [courseId], references: [id])
+  title                 String
+  issueDate             DateTime          @default(now())
+  verificationUrl       String
+  qrCodeDataUrl         String            @db.Text
+  gradeScore            Float
+
+  @@index([certificateNumber])
+  @@index([userId])
+}
+
+model CircuitProject {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                 String
+  description           String?
+  isPublic              Boolean           @default(false)
+  componentsJson        String            @db.Text
+  wiresJson             String            @db.Text
+  codeSnippet           String?           @db.Text
+  thumbnailUrl          String?
+  bomJson               String?           @db.Text
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  simulations           Simulation[]
+  chatSessions          ChatSession[]
+
+  @@index([userId])
+}
+
+model Component {
+  id                    String            @id @default(uuid())
+  name                  String
+  category              String
+  model3DUrl            String
+  datasheetUrl          String?
+  isFreeTier            Boolean           @default(true)
+  pinDefinitionsJson    String            @db.Text
+  defaultPropertiesJson String            @db.Text
+  priceInr              Float             @default(50.0)
+
+  @@index([category])
+}
+
+model Simulation {
+  id                    String            @id @default(uuid())
+  projectId             String
+  project               CircuitProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  circuitStateJson      String            @db.Text
+  netlistJson           String            @db.Text
+  errorsJson            String?           @db.Text
+  createdAt             DateTime          @default(now())
+}
+
+model ChatSession {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId             String?
+  project               CircuitProject?   @relation(fields: [projectId], references: [id])
+  title                 String            @default("Rituu Assistance")
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  messages              ChatMessage[]
+
+  @@index([userId])
+}
+
+model ChatMessage {
+  id                    String            @id @default(uuid())
+  sessionId             String
+  session               ChatSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sender                String            // "user" or "rituu"
+  mode                  String?           // DEBUG, CODE, PROJECT_PLANNER, LEARN, VOICE
+  content               String            @db.Text
+  circuitSnapshotJson   String?           @db.Text
+  photoUrl              String?
+  codeSnippet           String?           @db.Text
+  diagnosticsJson       String?           @db.Text
+  rating                String?           // UP, DOWN
+  createdAt             DateTime          @default(now())
+
+  @@index([sessionId])
+}
+
+model LiveClass {
+  id                    String            @id @default(uuid())
+  title                 String
+  description           String
+  instructorName        String
+  scheduledAt           DateTime
+  durationMinutes       Int               @default(60)
+  meetingUrl            String
+  recordingUrl          String?
+  isProOnly             Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+
+  enrollments           Enrollment[]
+}
+
+model Enrollment {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  liveClassId           String
+  liveClass             LiveClass         @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
+  enrolledAt            DateTime          @default(now())
+  attended              Boolean           @default(false)
+
+  @@unique([userId, liveClassId])
+}
+
+model Project {
+  id                    String            @id @default(uuid())
+  title                 String
+  slug                  String            @unique
+  summary               String
+  guideMarkdown         String            @db.Text
+  requiredPlan          PlanTier          @default(PRO)
+  partsListJson         String            @db.Text
+  difficulty            String            @default("Intermediate")
+
+  submissions           Submission[]
+}
+
+model Submission {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId             String
+  project               Project           @relation(fields: [projectId], references: [id])
+  milestone             String
+  photosJson            String?           @db.Text
+  videoUrl              String?
+  githubUrl             String?
+  feedback              String?
+  grade                 String?
+  status                String            @default("PENDING") // PENDING, APPROVED, REVISION_REQUESTED
+  createdAt             DateTime          @default(now())
+
+  @@index([userId, projectId])
+}
+
+model Event {
+  id                    String            @id @default(uuid())
+  title                 String
+  organizer             String
+  city                  String
+  state                 String
+  mode                  String            @default("ONLINE") // ONLINE, OFFLINE, HYBRID
+  level                 String            @default("National")
+  prizePoolInr          Int               @default(50000)
+  registrationDeadline  DateTime
+  eventDate             DateTime
+  url                   String
+  isCurated             Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+
+  @@index([city, state])
+}
+
+model Notification {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                 String
+  message               String
+  type                  String            @default("INFO")
+  read                  Boolean           @default(false)
+  actionUrl             String?
+  createdAt             DateTime          @default(now())
+
+  @@index([userId])
+}
+
+model Shop {
+  id                    String            @id @default(uuid())
+  name                  String
+  address               String
+  city                  String
+  state                 String
+  latitude              Float
+  longitude             Float
+  phone                 String
+  openingHours          String
+  rating                Float             @default(4.5)
+  isVerified            Boolean           @default(true)
+  stockedComponentsJson String            @db.Text
+  createdAt             DateTime          @default(now())
+
+  @@index([city, state])
+}
+
+model Product {
+  id                    String            @id @default(uuid())
+  title                 String
+  slug                  String            @unique
+  description           String
+  category              String
+  priceInr              Float
+  stockQuantity         Int               @default(100)
+  imagesJson            String            @db.Text
+  model3DUrl            String?
+  specsJson             String            @db.Text
+  isKitOfMonth          Boolean           @default(false)
+  createdAt             DateTime          @default(now())
+
+  orderItems            OrderItem[]
+  reviews               Review[]
+
+  @@index([category])
+}
+
+model Order {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id])
+  orderNumber           String            @unique // e.g. RV-ORD-2026-00123
+  totalAmountInr        Float
+  taxBreakdownJson      String            @db.Text
+  status                String            @default("PROCESSING") // PROCESSING, SHIPPED, DELIVERED, CANCELLED
+  shippingAddressJson   String            @db.Text
+  paymentId             String?
+  createdAt             DateTime          @default(now())
+
+  orderItems            OrderItem[]
+
+  @@index([userId])
+}
+
+model OrderItem {
+  id                    String            @id @default(uuid())
+  orderId               String
+  order                 Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId             String
+  product               Product           @relation(fields: [productId], references: [id])
+  quantity              Int               @default(1)
+  unitPriceInr          Float
+  totalPriceInr         Float
+}
+
+model Cart {
+  id                    String            @id @default(uuid())
+  userId                String            @unique
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemsJson             String            @default("[]") @db.Text
+  updatedAt             DateTime          @updatedAt
+}
+
+model Review {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id])
+  productId             String
+  product               Product           @relation(fields: [productId], references: [id])
+  rating                Int               @default(5)
+  comment               String
+  createdAt             DateTime          @default(now())
+}
+
+model Post {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                 String
+  content               String            @db.Text
+  projectSnapshotId     String?
+  likesCount            Int               @default(0)
+  createdAt             DateTime          @default(now())
+
+  comments              Comment[]
+}
+
+model Comment {
+  id                    String            @id @default(uuid())
+  postId                String
+  post                  Post              @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id])
+  content               String
+  createdAt             DateTime          @default(now())
+}
+
+model Institution {
+  id                    String            @id @default(uuid())
+  name                  String
+  code                  String            @unique
+  contactEmail          String
+  contactPhone          String
+  address               String
+  activeLicenses        Int               @default(0)
+  maxLicenses           Int               @default(100)
+  createdAt             DateTime          @default(now())
+
+  batches               Batch[]
+}
+
+model Batch {
+  id                    String            @id @default(uuid())
+  institutionId         String
+  institution           Institution       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  name                  String
+  academicYear          String
+  studentCount          Int               @default(0)
+  createdAt             DateTime          @default(now())
+
+  students              User[]
+}

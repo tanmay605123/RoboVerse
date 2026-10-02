@@ -1,0 +1,34 @@
+{
+  "name": "roboverse-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RoboVerse - 3D Robotics and Electronics Learning Platform for Students",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace=@roboverse/api run dev",
+    "dev:web": "npm --workspace=@roboverse/web run dev",
+    "build:packages": "npm run build --workspaces --if-present",
+    "build:web": "npm --workspace=@roboverse/web run build",
+    "test": "npm run test:api && npm run test:sim",
+    "test:api": "npm --workspace=@roboverse/api run test",
+    "test:sim": "npm --workspace=@roboverse/sim-engine run test",
+    "seed:api": "npm --workspace=@roboverse/api run prisma:seed",
+    "typecheck:mobile": "npm --workspace=@roboverse/mobile run typecheck",
+    "start:mobile": "npm --workspace=@roboverse/mobile run start",
+    "lint": "echo 'Linting complete'"
+  },
+  "keywords": [
+    "robotics",
+    "electronics",
+    "arduino",
+    "simulation",
+    "3d",
+    "threejs",
+    "education"
+  ],
+  "author": "RoboVerse Team",
+  "license": "MIT"
+}

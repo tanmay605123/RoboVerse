@@ -1,0 +1,18 @@
+{
+  "name": "RoboVerse - 3D Robotics & Electronics Learning Platform",
+  "short_name": "RoboVerse",
+  "description": "Learn it. Build it. Simulate it. Interactive 3D circuits, Arduino simulation and AI robotics mentor.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07110D",
+  "theme_color": "#39FF6A",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/brand/logo-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

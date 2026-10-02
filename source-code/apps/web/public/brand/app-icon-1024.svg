@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background Radial Glow -->
+    <radialGradient id="appBg" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#0E3324" />
+      <stop offset="60%" stop-color="#081811" />
+      <stop offset="100%" stop-color="#040A07" />
+    </radialGradient>
+
+    <!-- Metallic Rim Gradient -->
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#39FF6A" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#0E2A1F" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#7FE7D6" stop-opacity="0.8" />
+    </linearGradient>
+
+    <!-- Neon Glow Filter -->
+    <filter id="glow1024" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur1" />
+      <feGaussianBlur stdDeviation="32" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <radialGradient id="nodeGlow1024" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#39FF6A" stop-opacity="1" />
+      <stop offset="60%" stop-color="#39FF6A" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#39FF6A" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Squircle App Base -->
+  <rect width="1024" height="1024" rx="224" fill="url(#appBg)" stroke="url(#rimGrad)" stroke-width="8" />
+
+  <!-- Background Cyber Circuit Bus Grid -->
+  <g opacity="0.25">
+    <path d="M 120 300 H 260 L 340 380 V 644 L 260 724 H 120" fill="none" stroke="#39FF6A" stroke-width="6" stroke-linecap="round" />
+    <circle cx="120" cy="300" r="12" fill="#39FF6A" />
+    <circle cx="120" cy="724" r="12" fill="#39FF6A" />
+
+    <path d="M 904 300 H 764 L 684 380 V 644 L 764 724 H 904" fill="none" stroke="#7FE7D6" stroke-width="6" stroke-linecap="round" />
+    <circle cx="904" cy="300" r="12" fill="#7FE7D6" />
+    <circle cx="904" cy="724" r="12" fill="#7FE7D6" />
+  </g>
+
+  <!-- Central Hexagonal Robot Chip Emblem -->
+  <polygon points="512,180 810,350 810,674 512,844 214,674 214,350" 
+           fill="#0A2218" 
+           stroke="#7FE7D6" 
+           stroke-width="10" 
+           stroke-opacity="0.7" />
+
+  <polygon points="512,224 766,370 766,654 512,800 258,654 258,370" 
+           fill="#05140D" 
+           stroke="#39FF6A" 
+           stroke-width="14" 
+           filter="url(#glow1024)" />
+
+  <!-- Gold/Green Contact Bus Pads -->
+  <rect x="174" y="472" width="40" height="80" rx="10" fill="#39FF6A" opacity="0.9" />
+  <rect x="810" y="472" width="40" height="80" rx="10" fill="#39FF6A" opacity="0.9" />
+  <rect x="420" y="146" width="50" height="34" rx="8" fill="#7FE7D6" opacity="0.9" />
+  <rect x="554" y="146" width="50" height="34" rx="8" fill="#7FE7D6" opacity="0.9" />
+
+  <!-- Lightning Bolt Circuit Trace -->
+  <path d="M 548 270 L 388 514 L 520 514 L 460 740 L 640 480 L 536 480 Z" 
+        fill="#39FF6A" 
+        stroke="#FFFFFF" 
+        stroke-width="6" 
+        filter="url(#glow1024)" />
+
+  <!-- Glowing Neon Node -->
+  <circle cx="520" cy="514" r="54" fill="url(#nodeGlow1024)" />
+  <circle cx="520" cy="514" r="18" fill="#FFFFFF" />
+
+  <!-- Top Robotic Eye Visor -->
+  <line x1="390" y1="360" x2="470" y2="360" stroke="#7FE7D6" stroke-width="10" stroke-linecap="round" />
+  <line x1="554" y1="360" x2="634" y2="360" stroke="#7FE7D6" stroke-width="10" stroke-linecap="round" />
+</svg>

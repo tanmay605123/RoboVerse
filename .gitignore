@@ -1,0 +1,31 @@
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# OS/editor files
+.DS_Store
+.vscode/
+
+# JavaScript build/dependency output
+node_modules/
+.next/
+dist/
+coverage/
+.turbo/
+.expo/
+
+# Android/Gradle generated files and local signing/configuration
+.gradle/
+**/build/
+**/local.properties
+**/debug.keystore
+*.apk
+
+# iOS generated dependencies/build output
+Pods/
+derivedData/
+DerivedData/
