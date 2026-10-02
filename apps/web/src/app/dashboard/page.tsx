@@ -90,8 +90,9 @@ export default function DashboardPage() {
               { id: 'workbench', label: '3D Workbench', icon: Cpu, badge: 'MNA', href: '/workbench' },
               { id: 'roadmap', label: 'Learning Roadmap', icon: Layers, href: '/roadmap' },
               { id: 'rituu', label: 'Rituu AI Mentor', icon: Sparkles, badge: 'AI', href: '/rituu' },
-              { id: 'hackathons', label: 'Hackathons Hub', icon: Trophy },
-              { id: 'store', label: 'TechSavyyy Store', icon: ShoppingBag },
+              { id: 'hackathons', label: 'Hackathons Hub', icon: Trophy, href: '/hackathons' },
+              { id: 'shops', label: 'Nearby Shops', icon: Compass, href: '/shops' },
+              { id: 'store', label: 'TechSavyyy Store', icon: ShoppingBag, href: '/store' },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;

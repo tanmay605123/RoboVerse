@@ -29,10 +29,13 @@ export function Navbar() {
             <Sparkles className="w-3.5 h-3.5 text-robo-teal animate-pulse" />
             <span>Rituu AI</span>
           </Link>
-          <Link href="/#hackathons" className="hover:text-robo-neon transition-colors">
+          <Link href="/hackathons" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? 'Hackathons' : 'हैकथॉन'}
           </Link>
-          <Link href="/#store" className="hover:text-robo-neon transition-colors">
+          <Link href="/shops" className="hover:text-robo-neon transition-colors">
+            {lang === 'EN' ? 'Nearby Shops' : 'पार्ट्स दुकानें'}
+          </Link>
+          <Link href="/store" className="hover:text-robo-neon transition-colors">
             TechSavyyy Store
           </Link>
           <Link href="/#pricing" className="hover:text-robo-neon transition-colors">
@@ -116,14 +119,21 @@ export function Navbar() {
             <span>Rituu AI Assistant</span>
           </Link>
           <Link
-            href="/#hackathons"
+            href="/hackathons"
             onClick={() => setMobileMenuOpen(false)}
             className="hover:text-robo-neon py-1"
           >
             Robotics Hackathons
           </Link>
           <Link
-            href="/#store"
+            href="/shops"
+            onClick={() => setMobileMenuOpen(false)}
+            className="hover:text-robo-neon py-1"
+          >
+            Nearby Component Shops
+          </Link>
+          <Link
+            href="/store"
             onClick={() => setMobileMenuOpen(false)}
             className="hover:text-robo-neon py-1"
           >

@@ -49,7 +49,7 @@ export class RazorpayService {
     }
 
     // High fidelity mock order generator for testing/sandbox
-    const mockOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const mockOrderId = `order_mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     return {
       orderId: mockOrderId,
       amount: amountInPaise,
@@ -63,7 +63,7 @@ export class RazorpayService {
     paymentId: string;
     signature: string;
   }): boolean {
-    if (!this.isLiveCredentials && params.signature.startsWith('mock_sig_')) {
+    if (!this.isLiveCredentials && params.signature.startsWith('mock_')) {
       return true; // allow test suite mock signatures
     }
 
