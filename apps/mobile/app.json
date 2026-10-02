@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "RoboVerse",
+    "slug": "roboverse",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#07110D"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.roboverse.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "RoboVerse needs camera access so Rituu can analyze your circuits and detect errors.",
+        "NSFaceIDUsageDescription": "RoboVerse uses Face ID for instant biometric student authentication."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#07110D"
+      },
+      "package": "com.roboverse.app",
+      "permissions": [
+        "CAMERA",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

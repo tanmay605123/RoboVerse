@@ -16,6 +16,8 @@
     "test:api": "npm --workspace=@roboverse/api run test",
     "test:sim": "npm --workspace=@roboverse/sim-engine run test",
     "seed:api": "npm --workspace=@roboverse/api run prisma:seed",
+    "typecheck:mobile": "npm --workspace=@roboverse/mobile run typecheck",
+    "start:mobile": "npm --workspace=@roboverse/mobile run start",
     "lint": "echo 'Linting complete'"
   },
   "keywords": [
