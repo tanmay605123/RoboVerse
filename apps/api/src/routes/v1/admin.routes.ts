@@ -32,15 +32,29 @@ router.get('/metrics', async (req: Request, res: Response) => {
     0
   );
 
+  const orders = Array.from(inMemoryDb.orders.values());
+  const confirmedOrders = orders.filter((o) => o.status === 'CONFIRMED');
+  const storeRevenueInr = confirmedOrders.reduce(
+    (sum, o) => sum + (o.taxBreakdown?.finalAmountInr || 0),
+    0
+  );
+
+  const combinedRevenueInr = totalRevenueInr + storeRevenueInr;
+
   res.json({
     success: true,
     data: {
       totalStudentsRegistered: users.length,
       activePaidSubscriptions: activePaidSubs.length,
-      totalGrossRevenueInr: Number(totalRevenueInr.toFixed(2)),
+      totalGrossRevenueInr: Number(combinedRevenueInr.toFixed(2)),
+      subscriptionRevenueInr: Number(totalRevenueInr.toFixed(2)),
+      storeRevenueInr: Number(storeRevenueInr.toFixed(2)),
+      totalStoreOrdersCount: orders.length,
+      confirmedStoreOrdersCount: confirmedOrders.length,
+      totalInvoicesIssued: inMemoryDb.invoices.size,
       totalAiInferenceCostInr: Number(totalAiCostInr.toFixed(2)),
-      estimatedNetMarginInr: Number((totalRevenueInr - totalAiCostInr).toFixed(2)),
-      razorpayFeeEstimateInr: Number((totalRevenueInr * 0.0236).toFixed(2)), // ~2% + GST
+      estimatedNetMarginInr: Number((combinedRevenueInr - totalAiCostInr).toFixed(2)),
+      razorpayFeeEstimateInr: Number((combinedRevenueInr * 0.0236).toFixed(2)), // ~2% + GST
       planDistribution: {
         free: subscriptions.filter((s) => s.planId === 'plan_free').length,
         plus: subscriptions.filter((s) => s.planId === 'plan_plus').length,
@@ -78,6 +92,95 @@ router.get('/users', async (req: Request, res: Response) => {
   res.json({
     success: true,
     data: users,
+  });
+});
+
+/**
+ * PATCH /api/v1/admin/users/:userId/role
+ * Promote or modify user role (e.g. PLUS_STUDENT, PRO_STUDENT, MENTOR, ADMIN)
+ */
+router.patch('/users/:userId/role', async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const { role } = req.body;
+
+  const user = inMemoryDb.users.get(userId);
+  if (!user) {
+    res.status(404).json({
+      success: false,
+      error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+    });
+    return;
+  }
+
+  user.role = role;
+  inMemoryDb.users.set(userId, user);
+
+  res.json({
+    success: true,
+    message: `User '${userId}' role updated to '${role}'`,
+    data: {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    },
+  });
+});
+
+/**
+ * GET /api/v1/admin/orders
+ * List all TechSavyyy store orders with customer names, status, and GST invoices
+ */
+router.get('/orders', async (req: Request, res: Response) => {
+  const orders = Array.from(inMemoryDb.orders.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  res.json({
+    success: true,
+    data: {
+      total: orders.length,
+      orders,
+    },
+  });
+});
+
+/**
+ * GET /api/v1/admin/invoices
+ * List all official 18% GST tax invoices issued to students
+ */
+router.get('/invoices', async (req: Request, res: Response) => {
+  const invoices = Array.from(inMemoryDb.invoices.values()).sort(
+    (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime()
+  );
+
+  res.json({
+    success: true,
+    data: {
+      total: invoices.length,
+      invoices,
+    },
+  });
+});
+
+/**
+ * GET /api/v1/admin/plans
+ * List all plans with raw configuration for live admin editing
+ */
+router.get('/plans', async (req: Request, res: Response) => {
+  const plans = Array.from(inMemoryDb.plans.values()).map((p) => ({
+    id: p.id,
+    tier: p.tier,
+    name: p.name,
+    tagline: p.tagline,
+    isPopular: p.isPopular,
+    badge: p.badge,
+    pricing: JSON.parse(p.pricingJson),
+    features: JSON.parse(p.featuresJson),
+  }));
+
+  res.json({
+    success: true,
+    data: plans,
   });
 });
 

@@ -7,8 +7,6 @@ import { PlanTier, UserRole, BillingCycle, PaymentMethodType } from '@roboverse/
 
 const router = Router();
 
-const ordersDb = new Map<string, any>();
-
 /**
  * @openapi
  * /api/v1/store/products:
@@ -183,7 +181,7 @@ router.post('/checkout', requireAuth, async (req: Request, res: Response) => {
       createdAt: new Date().toISOString(),
     };
 
-    ordersDb.set(rzpOrder.orderId, pendingOrder);
+    inMemoryDb.orders.set(rzpOrder.orderId, pendingOrder);
 
     return res.status(200).json({
       success: true,
@@ -230,7 +228,7 @@ router.post('/verify-order', requireAuth, async (req: Request, res: Response) =>
       });
     }
 
-    const order = ordersDb.get(razorpayOrderId);
+    const order = inMemoryDb.orders.get(razorpayOrderId);
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -260,7 +258,7 @@ router.post('/verify-order', requireAuth, async (req: Request, res: Response) =>
 
     inMemoryDb.invoices.set(invoice.id, invoice);
     order.invoice = invoice;
-    ordersDb.set(razorpayOrderId, order);
+    inMemoryDb.orders.set(razorpayOrderId, order);
 
     return res.status(200).json({
       success: true,
@@ -291,7 +289,7 @@ router.post('/verify-order', requireAuth, async (req: Request, res: Response) =>
  */
 router.get('/orders', requireAuth, (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const userOrders = Array.from(ordersDb.values()).filter((o) => o.userId === userId);
+  const userOrders = Array.from(inMemoryDb.orders.values()).filter((o) => o.userId === userId);
 
   return res.status(200).json({
     success: true,

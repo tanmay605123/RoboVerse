@@ -93,6 +93,7 @@ export default function DashboardPage() {
               { id: 'hackathons', label: 'Hackathons Hub', icon: Trophy, href: '/hackathons' },
               { id: 'shops', label: 'Nearby Shops', icon: Compass, href: '/shops' },
               { id: 'store', label: 'TechSavyyy Store', icon: ShoppingBag, href: '/store' },
+              { id: 'admin', label: 'Admin Ops', icon: Settings, badge: 'OPS', href: '/admin' },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
