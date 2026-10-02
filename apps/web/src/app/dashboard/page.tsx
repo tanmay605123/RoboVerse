@@ -86,15 +86,35 @@ export default function DashboardPage() {
           {/* Navigation Links */}
           <nav className="space-y-1.5">
             {[
-              { id: 'overview', label: 'Control Room', icon: LayoutDashboard },
-              { id: 'workbench', label: '3D Workbench', icon: Cpu, badge: 'MNA' },
-              { id: 'roadmap', label: 'Learning Roadmap', icon: Layers },
+              { id: 'overview', label: 'Control Room', icon: LayoutDashboard, href: '/dashboard' },
+              { id: 'workbench', label: '3D Workbench', icon: Cpu, badge: 'MNA', href: '/workbench' },
+              { id: 'roadmap', label: 'Learning Roadmap', icon: Layers, href: '/roadmap' },
               { id: 'rituu', label: 'Rituu AI Mentor', icon: Sparkles, badge: 'AI' },
               { id: 'hackathons', label: 'Hackathons Hub', icon: Trophy },
               { id: 'store', label: 'TechSavyyy Store', icon: ShoppingBag },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
+              if (item.href && item.id !== 'overview') {
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className="w-full flex items-center justify-center lg:justify-between px-3 py-3 rounded-xl text-sm font-semibold transition-all text-robo-textSecondary hover:text-robo-text hover:bg-robo-surfaceRaised/50"
+                    title={item.label}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="w-5 h-5 shrink-0" />
+                      <span className="hidden lg:inline">{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span className="hidden lg:inline text-[10px] font-mono px-2 py-0.5 rounded bg-black/60 text-robo-teal border border-robo-teal/30">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              }
               return (
                 <button
                   key={item.id}
@@ -301,7 +321,7 @@ export default function DashboardPage() {
                     <span>Recent 3D Workbench Projects</span>
                   </h3>
                   <Link
-                    href="/#workbench"
+                    href="/workbench"
                     className="text-xs font-mono text-robo-teal hover:text-robo-neon flex items-center gap-1"
                   >
                     <span>New Project</span>

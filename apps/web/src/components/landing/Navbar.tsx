@@ -19,10 +19,10 @@ export function Navbar() {
 
         {/* Desktop Navigation Links */}
         <div className="hidden lg:flex items-center gap-7 text-sm font-medium text-robo-textSecondary">
-          <Link href="/#workbench" className="hover:text-robo-neon transition-colors">
+          <Link href="/workbench" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? '3D Workbench' : '3D वर्कबेंच'}
           </Link>
-          <Link href="/#roadmap" className="hover:text-robo-neon transition-colors">
+          <Link href="/roadmap" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? 'Curriculum' : 'पाठ्यक्रम'}
           </Link>
           <Link href="/#rituu" className="hover:text-robo-neon transition-colors flex items-center gap-1.5">
@@ -94,14 +94,14 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="lg:hidden px-4 pt-3 pb-6 bg-[#07110D]/95 border-b border-robo-borderSubtle backdrop-blur-2xl flex flex-col gap-4 text-base">
           <Link
-            href="/#workbench"
+            href="/workbench"
             onClick={() => setMobileMenuOpen(false)}
             className="hover:text-robo-neon py-1"
           >
             3D Circuit Workbench
           </Link>
           <Link
-            href="/#roadmap"
+            href="/roadmap"
             onClick={() => setMobileMenuOpen(false)}
             className="hover:text-robo-neon py-1"
           >

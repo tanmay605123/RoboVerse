@@ -3,14 +3,24 @@
 import React, { useRef } from 'react';
 import * as THREE from 'three';
 
-export function GridFloor() {
+interface GridFloorProps {
+  size?: number;
+  divisions?: number;
+  position?: [number, number, number];
+}
+
+export function GridFloor({
+  size = 40,
+  divisions = 40,
+  position = [0, -2, 0],
+}: GridFloorProps = {}) {
   const meshRef = useRef<THREE.Mesh>(null);
 
   return (
-    <group position={[0, -2, 0]}>
+    <group position={position}>
       {/* Primary Grid */}
       <gridHelper
-        args={[40, 40, '#39FF6A', '#0E3A28']}
+        args={[size, divisions, '#39FF6A', '#0E3A28']}
         position={[0, 0.01, 0]}
       />
 
