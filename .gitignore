@@ -6,3 +6,11 @@ dist/
 coverage/
 .turbo/
 .next/
+.vercel
+.env*
+.expo/
+*.apk
+*.aab
+.gradle/
+**/build/
+apps/web/node_modules

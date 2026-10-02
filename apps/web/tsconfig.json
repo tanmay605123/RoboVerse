@@ -18,7 +18,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@roboverse/shared": ["../../packages/shared/src/index.ts"],
+      "@roboverse/shared/*": ["../../packages/shared/src/*"],
+      "@roboverse/ui-tokens": ["../../packages/ui-tokens/src/index.ts"],
+      "@roboverse/ui-tokens/*": ["../../packages/ui-tokens/src/*"],
+      "@roboverse/sim-engine": ["../../packages/sim-engine/src/index.ts"],
+      "@roboverse/sim-engine/*": ["../../packages/sim-engine/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

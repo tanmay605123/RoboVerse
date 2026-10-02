@@ -1,11 +1,8 @@
 import { Platform } from 'react-native';
 
-// In Android emulator localhost is 10.0.2.2, in iOS simulator it's localhost:4000
-const DEFAULT_API_URL = Platform.select({
-  android: 'http://10.0.2.2:4000/api/v1',
-  ios: 'http://localhost:4000/api/v1',
-  default: 'http://localhost:4000/api/v1',
-});
+const LIVE_API_URL = 'https://86fac5b648019d.lhr.life/api/v1';
+
+const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL || LIVE_API_URL;
 
 let authToken: string | null = null;
 
