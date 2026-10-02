@@ -25,7 +25,7 @@ export function Navbar() {
           <Link href="/roadmap" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? 'Curriculum' : 'पाठ्यक्रम'}
           </Link>
-          <Link href="/#rituu" className="hover:text-robo-neon transition-colors flex items-center gap-1.5">
+          <Link href="/rituu" className="hover:text-robo-neon transition-colors flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-robo-teal animate-pulse" />
             <span>Rituu AI</span>
           </Link>
@@ -108,7 +108,7 @@ export function Navbar() {
             Curriculum Roadmap
           </Link>
           <Link
-            href="/#rituu"
+            href="/rituu"
             onClick={() => setMobileMenuOpen(false)}
             className="hover:text-robo-neon py-1 flex items-center gap-2"
           >

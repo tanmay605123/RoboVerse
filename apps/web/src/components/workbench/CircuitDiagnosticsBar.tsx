@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useCircuitStore } from '@/store/useCircuitStore';
+import { useRituuStore } from '@/store/useRituuStore';
 import { CircuitDiagnosticSeverity } from '@roboverse/shared';
 import { AlertTriangle, AlertCircle, Bot, X, CheckCircle, ArrowRight } from 'lucide-react';
 
@@ -105,6 +106,19 @@ export const CircuitDiagnosticsBar: React.FC = () => {
             </div>
 
             <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  const { setOpen, sendMessage } = useRituuStore.getState();
+                  setOpen(true);
+                  sendMessage(`Explain and fix this circuit diagnostic error: ${selectedError.message}. ${selectedError.explanation}`);
+                  setSelectedError(null);
+                }}
+                className="flex-1 py-2.5 bg-[#0E2A1F] hover:bg-[#0E2A1F]/80 text-[#39FF6A] border border-[#39FF6A]/40 font-bold text-xs rounded-xl shadow transition font-sans flex items-center justify-center gap-1.5"
+              >
+                <Bot className="w-3.5 h-3.5" />
+                Ask Rituu in Chat
+              </button>
+
               <button
                 onClick={() => setSelectedError(null)}
                 className="flex-1 py-2.5 bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-black font-bold text-xs rounded-xl shadow-lg hover:brightness-110 transition font-sans"

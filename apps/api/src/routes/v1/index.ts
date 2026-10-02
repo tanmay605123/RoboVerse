@@ -7,6 +7,7 @@ import usageRoutes from './usage.routes';
 import couponRoutes from './coupons.routes';
 import adminRoutes from './admin.routes';
 import simulatorRoutes from './simulator.routes';
+import rituuRoutes from './rituu.routes';
 
 const v1Router = Router();
 
@@ -18,5 +19,6 @@ v1Router.use('/usage', usageRoutes);
 v1Router.use('/coupons', couponRoutes);
 v1Router.use('/admin', adminRoutes);
 v1Router.use('/simulator', simulatorRoutes);
+v1Router.use('/rituu', rituuRoutes);
 
 export default v1Router;

@@ -89,7 +89,7 @@ export default function DashboardPage() {
               { id: 'overview', label: 'Control Room', icon: LayoutDashboard, href: '/dashboard' },
               { id: 'workbench', label: '3D Workbench', icon: Cpu, badge: 'MNA', href: '/workbench' },
               { id: 'roadmap', label: 'Learning Roadmap', icon: Layers, href: '/roadmap' },
-              { id: 'rituu', label: 'Rituu AI Mentor', icon: Sparkles, badge: 'AI' },
+              { id: 'rituu', label: 'Rituu AI Mentor', icon: Sparkles, badge: 'AI', href: '/rituu' },
               { id: 'hackathons', label: 'Hackathons Hub', icon: Trophy },
               { id: 'store', label: 'TechSavyyy Store', icon: ShoppingBag },
             ].map((item) => {

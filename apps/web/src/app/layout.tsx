@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { FloatingRituuChat } from '@/components/rituu/FloatingRituuChat';
 
 export const metadata: Metadata = {
   title: 'RoboVerse | 3D Robotics & Electronics Learning Platform',
@@ -36,6 +37,7 @@ export default function RootLayout({
       </head>
       <body className="bg-robo-bg text-robo-text min-h-screen selection:bg-robo-neon selection:text-black">
         {children}
+        <FloatingRituuChat />
       </body>
     </html>
   );
