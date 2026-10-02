@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg-base: #07110D;
+  --color-bg-gradient: #0E2A1F;
+  --color-neon-primary: #39FF6A;
+  --color-neon-hover: #2BD95B;
+  --color-robot-teal: #7FE7D6;
+  --color-warning-orange: #FF9A1F;
+}
+
+body {
+  background-color: #07110D;
+  color: #F0FFF5;
+  font-family: 'Sora', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Custom Cyberpunk Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #040B08;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #143A2A;
+  border-radius: 4px;
+  border: 1px solid rgba(57, 255, 106, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #39FF6A;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: rgba(9, 26, 20, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(57, 255, 106, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(57, 255, 106, 0.15);
+  border-radius: 18px;
+}
+
+.glass-panel-hover:hover {
+  border-color: rgba(57, 255, 106, 0.45);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 18px rgba(57, 255, 106, 0.25);
+  transform: translateY(-2px);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-active {
+  background: rgba(14, 38, 29, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid #39FF6A;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(57, 255, 106, 0.3);
+}
+
+/* Glowing Neon Elements */
+.neon-glow {
+  text-shadow: 0 0 16px rgba(57, 255, 106, 0.6);
+}
+
+.neon-box-glow {
+  box-shadow: 0 0 24px rgba(57, 255, 106, 0.35);
+}
+
+.teal-glow {
+  text-shadow: 0 0 14px rgba(127, 231, 214, 0.6);
+}
+
+/* HUD Background Grid Line Overlay */
+.hud-grid-bg {
+  background-image: linear-gradient(to right, rgba(57, 255, 106, 0.04) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(57, 255, 106, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
