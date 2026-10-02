@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: roboverse_postgres
+    environment:
+      POSTGRES_USER: roboverse
+      POSTGRES_PASSWORD: roboverse_pass
+      POSTGRES_DB: roboverse_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - roboverse_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U roboverse -d roboverse_db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: roboverse_redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - roboverse_redisdata:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: roboverse_api
+    ports:
+      - '4000:4000'
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://roboverse:roboverse_pass@postgres:5432/roboverse_db?schema=public
+      REDIS_URL: redis://redis:6379
+      CLIENT_WEB_URL: http://localhost:3000
+      CLIENT_MOBILE_URL: http://localhost:8081
+      JWT_ACCESS_SECRET: roboverse_super_secret_access_jwt_key_2026_xyz
+      JWT_REFRESH_SECRET: roboverse_super_secret_refresh_jwt_key_2026_abc
+      RAZORPAY_KEY_ID: rzp_test_RoboVerseMockKey2026
+      RAZORPAY_KEY_SECRET: mock_razorpay_secret_key_998877
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  roboverse_pgdata:
+  roboverse_redisdata:

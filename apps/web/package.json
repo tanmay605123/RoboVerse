@@ -1,0 +1,8 @@
+{
+  "name": "@roboverse/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Web will be launched in Phase 2'"
+  }
+}
