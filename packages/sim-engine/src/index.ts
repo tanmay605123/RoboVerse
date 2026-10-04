@@ -365,7 +365,7 @@ export class CircuitDiagnosticEngine {
 
     // 1. Check if there is at least one ground connection
     const hasGround = components.some((c) =>
-      c.pins.some((p) => p.type === 'GROUND') &&
+      (c.pins || []).some((p) => p.type === 'GROUND') &&
       wires.some((w) => (w.fromComponentId === c.id || w.toComponentId === c.id))
     );
 
@@ -387,8 +387,8 @@ export class CircuitDiagnosticEngine {
       const toComp = components.find((c) => c.id === wire.toComponentId);
       if (!fromComp || !toComp) continue;
 
-      const fromPin = fromComp.pins.find((p) => p.id === wire.fromPinId);
-      const toPin = toComp.pins.find((p) => p.id === wire.toPinId);
+      const fromPin = (fromComp.pins || []).find((p) => p.id === wire.fromPinId);
+      const toPin = (toComp.pins || []).find((p) => p.id === wire.toPinId);
 
       if (
         (fromPin?.type === 'POWER_VCC' && toPin?.type === 'GROUND') ||

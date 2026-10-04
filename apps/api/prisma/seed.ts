@@ -1,4 +1,12 @@
-import { DEFAULT_PLANS, PlanTier, UserRole, UserStatus, BillingCycle } from '@roboverse/shared';
+import {
+  DEFAULT_PLANS,
+  PlanTier,
+  UserRole,
+  UserStatus,
+  BillingCycle,
+  ROBOVERSE_COMPONENTS_CATALOG,
+  ROBOVERSE_STARTER_ASSEMBLIES,
+} from '@roboverse/shared';
 import { inMemoryDb } from '../src/lib/db';
 import { generateStudentIdRecord } from '../src/lib/studentId';
 import { hashPassword } from '../src/lib/password';
@@ -109,98 +117,41 @@ export async function runDatabaseSeed() {
     updatedAt: new Date(),
   });
 
-  // 3. Seed Components Library
-  console.log('⚡ Seeding 3D Circuit Component Library...');
-  const componentsData = [
-    {
-      id: 'comp_arduino_uno',
-      name: 'Arduino Uno R3',
-      category: 'MICROCONTROLLER',
-      model3DUrl: '/models/components/arduino_uno.glb',
-      datasheetUrl: 'https://docs.arduino.cc/hardware/uno-rev3/',
-      isFreeTier: true,
-      priceInr: 499,
-      pinDefinitionsJson: JSON.stringify([
-        { id: 'pin_5v', name: '5V', type: 'POWER_VCC' },
-        { id: 'pin_gnd_1', name: 'GND', type: 'GROUND' },
-        { id: 'pin_d13', name: 'D13', type: 'DIGITAL_IO' },
-        { id: 'pin_a0', name: 'A0', type: 'ANALOG_IN' },
-      ]),
-      defaultPropertiesJson: JSON.stringify({ clockSpeed: '16MHz', vcc: 5.0 }),
-    },
-    {
-      id: 'comp_esp32',
-      name: 'ESP32 NodeMCU WROOM',
-      category: 'MICROCONTROLLER',
-      model3DUrl: '/models/components/esp32.glb',
-      datasheetUrl: 'https://www.espressif.com/en/products/socs/esp32',
-      isFreeTier: false, // Plus & Pro
-      priceInr: 349,
-      pinDefinitionsJson: JSON.stringify([
-        { id: 'pin_3v3', name: '3V3', type: 'POWER_VCC' },
-        { id: 'pin_gnd', name: 'GND', type: 'GROUND' },
-        { id: 'pin_gpio2', name: 'GPIO2', type: 'DIGITAL_IO' },
-      ]),
-      defaultPropertiesJson: JSON.stringify({ wifi: true, bluetooth: true, vcc: 3.3 }),
-    },
-    {
-      id: 'comp_led_red',
-      name: 'Red 5mm LED',
-      category: 'DISPLAY',
-      model3DUrl: '/models/components/led_red.glb',
-      isFreeTier: true,
-      priceInr: 5,
-      pinDefinitionsJson: JSON.stringify([
-        { id: 'anode', name: 'Anode (+)', type: 'DIGITAL_IO' },
-        { id: 'cathode', name: 'Cathode (-)', type: 'GROUND' },
-      ]),
-      defaultPropertiesJson: JSON.stringify({ forwardVoltage: 2.0, maxCurrentMa: 20, color: '#FF3333' }),
-    },
-    {
-      id: 'comp_resistor_220',
-      name: '220Ω Resistor',
-      category: 'PASSIVE',
-      model3DUrl: '/models/components/resistor.glb',
-      isFreeTier: true,
-      priceInr: 2,
-      pinDefinitionsJson: JSON.stringify([
-        { id: 't1', name: 'Pin 1', type: 'DIGITAL_IO' },
-        { id: 't2', name: 'Pin 2', type: 'DIGITAL_IO' },
-      ]),
-      defaultPropertiesJson: JSON.stringify({ resistance: 220, unit: 'Ω', powerRating: '0.25W' }),
-    },
-    {
-      id: 'comp_servo_sg90',
-      name: 'TowerPro SG90 Micro Servo',
-      category: 'ACTUATOR',
-      model3DUrl: '/models/components/servo_sg90.glb',
-      isFreeTier: false, // Plus & Pro
-      priceInr: 120,
-      pinDefinitionsJson: JSON.stringify([
-        { id: 'pwm', name: 'PWM Signal (Orange)', type: 'PWM' },
-        { id: 'vcc', name: 'VCC 5V (Red)', type: 'POWER_VCC' },
-        { id: 'gnd', name: 'GND (Brown)', type: 'GROUND' },
-      ]),
-      defaultPropertiesJson: JSON.stringify({ angleRange: 180, operatingVoltage: 5.0 }),
-    },
-    {
-      id: 'comp_ultrasonic_hcsr04',
-      name: 'HC-SR04 Ultrasonic Distance Sensor',
-      category: 'SENSOR',
-      model3DUrl: '/models/components/ultrasonic.glb',
-      isFreeTier: false, // Plus & Pro
-      priceInr: 110,
-      pinDefinitionsJson: JSON.stringify([
-        { id: 'vcc', name: 'VCC', type: 'POWER_VCC' },
-        { id: 'trig', name: 'Trig', type: 'DIGITAL_IO' },
-        { id: 'echo', name: 'Echo', type: 'DIGITAL_IO' },
-        { id: 'gnd', name: 'GND', type: 'GROUND' },
-      ]),
-      defaultPropertiesJson: JSON.stringify({ rangeCm: [2, 400], frequencyKhz: 40 }),
-    },
-  ];
+  // 3. Seed Components Library (~46 Components)
+  console.log('⚡ Seeding Complete 3D Circuit Component Library (~46 components)...');
+  ROBOVERSE_COMPONENTS_CATALOG.forEach((c) => {
+    inMemoryDb.components.set(c.id, {
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      model3DUrl: c.model3DUrl,
+      datasheetUrl: c.datasheetUrl || null,
+      isFreeTier: c.isFreeTier,
+      priceInr: c.priceInr,
+      pinDefinitionsJson: JSON.stringify(c.pins),
+      defaultPropertiesJson: JSON.stringify(c.defaultProperties),
+    });
+  });
 
-  componentsData.forEach((c) => inMemoryDb.components.set(c.id, c));
+  // 3b. Seed Ready-Made Starter Circuit Assemblies
+  console.log('🔌 Seeding Ready-Made Starter Circuit Assemblies...');
+  ROBOVERSE_STARTER_ASSEMBLIES.forEach((starter) => {
+    inMemoryDb.circuitProjects.set(starter.id, {
+      id: starter.id,
+      userId: 'system_starters',
+      title: starter.title,
+      description: starter.description,
+      isPublic: true,
+      category: starter.category,
+      componentsJson: JSON.stringify(starter.components),
+      wiresJson: JSON.stringify(starter.wires),
+      codeSnippet: starter.arduinoCode,
+      thumbnailUrl: starter.thumbnailUrl,
+      isStarter: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  });
 
   // 4. Seed Courses
   console.log('📚 Seeding Learning Roadmap Courses...');

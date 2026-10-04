@@ -32,8 +32,8 @@ export async function generateStudentIdRecord(
     errorCorrectionLevel: 'H',
     margin: 2,
     color: {
-      dark: '#07110D', // dark green/black
-      light: '#39FF6A', // neon green
+      dark: '#1B2559', // brand deep navy
+      light: '#FFFFFF', // clean white background
     },
     width: 300,
   });
@@ -60,8 +60,8 @@ export async function generateCertificateQrCode(
     errorCorrectionLevel: 'H',
     margin: 2,
     color: {
-      dark: '#07110D',
-      light: '#7FE7D6', // teal robot highlight for certificates
+      dark: '#1B2559', // brand deep navy
+      light: '#FFF9F2', // warm orange-tinted soft white
     },
     width: 300,
   });

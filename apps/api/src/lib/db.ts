@@ -1,5 +1,14 @@
 import { PrismaClient } from '@prisma/client';
-import { DEFAULT_PLANS, PlanTier, UserRole, UserStatus, BillingCycle, SubscriptionStatus } from '@roboverse/shared';
+import {
+  DEFAULT_PLANS,
+  PlanTier,
+  UserRole,
+  UserStatus,
+  BillingCycle,
+  SubscriptionStatus,
+  ROBOVERSE_COMPONENTS_CATALOG,
+  ROBOVERSE_STARTER_ASSEMBLIES,
+} from '@roboverse/shared';
 
 // Create real PrismaClient instance
 export const prisma = new PrismaClient({
@@ -60,6 +69,40 @@ export function initInMemorySeed(): void {
       badge: p.badge || null,
       pricingJson: JSON.stringify(p.pricing),
       featuresJson: JSON.stringify(p.features),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  });
+
+  // 1b. Seed 3D Circuit Components (~46 Components)
+  ROBOVERSE_COMPONENTS_CATALOG.forEach((c) => {
+    inMemoryDb.components.set(c.id, {
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      model3DUrl: c.model3DUrl,
+      datasheetUrl: c.datasheetUrl || null,
+      isFreeTier: c.isFreeTier,
+      priceInr: c.priceInr,
+      pinDefinitionsJson: JSON.stringify(c.pins),
+      defaultPropertiesJson: JSON.stringify(c.defaultProperties),
+    });
+  });
+
+  // 1c. Seed Ready-Made Starter Circuit Assemblies
+  ROBOVERSE_STARTER_ASSEMBLIES.forEach((starter) => {
+    inMemoryDb.circuitProjects.set(starter.id, {
+      id: starter.id,
+      userId: 'system_starters',
+      title: starter.title,
+      description: starter.description,
+      isPublic: true,
+      category: starter.category,
+      componentsJson: JSON.stringify(starter.components),
+      wiresJson: JSON.stringify(starter.wires),
+      codeSnippet: starter.arduinoCode,
+      thumbnailUrl: starter.thumbnailUrl,
+      isStarter: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

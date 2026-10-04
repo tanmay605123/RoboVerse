@@ -281,5 +281,81 @@ export const swaggerDocument = {
         },
       },
     },
+    '/api/v1/simulator/components': {
+      get: {
+        tags: ['Circuit Simulator & Laboratory'],
+        summary: 'List available 3D/realistic circuit components with filtering by category and tier',
+        parameters: [
+          { name: 'category', in: 'query', schema: { type: 'string' }, description: 'Filter by component category' },
+          { name: 'freeOnly', in: 'query', schema: { type: 'boolean' }, description: 'Filter only Basic free tier components' },
+        ],
+        responses: { 200: { description: 'List of component definitions with pinout and models' } },
+      },
+    },
+    '/api/v1/simulator/starters': {
+      get: {
+        tags: ['Circuit Simulator & Laboratory'],
+        summary: 'List ready-made starter assemblies (Blink, Servo, Ultrasonic, etc.)',
+        responses: { 200: { description: 'Pre-assembled circuits with code sketches' } },
+      },
+    },
+    '/api/v1/simulator/projects': {
+      get: {
+        tags: ['Circuit Simulator & Laboratory'],
+        summary: 'List user saved circuit projects',
+        security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Saved projects list' } },
+      },
+      post: {
+        tags: ['Circuit Simulator & Laboratory'],
+        summary: 'Save a new circuit project (verifies plan project quota)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['title', 'components', 'wires'],
+                properties: {
+                  title: { type: 'string', example: 'Ultrasonic Rover' },
+                  description: { type: 'string', example: 'Obstacle avoiding rover' },
+                  components: { type: 'array', items: { type: 'object' } },
+                  wires: { type: 'array', items: { type: 'object' } },
+                  codeSnippet: { type: 'string', example: 'void setup() {}' },
+                  isPublic: { type: 'boolean', example: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Circuit project successfully saved' },
+          429: { description: 'Saved project limit reached for current plan' },
+        },
+      },
+    },
+    '/api/v1/simulator/validate': {
+      post: {
+        tags: ['Circuit Simulator & Laboratory'],
+        summary: 'Run real-time electrical safety and diagnostics checks on circuit graph',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['components', 'wires'],
+                properties: {
+                  components: { type: 'array', items: { type: 'object' } },
+                  wires: { type: 'array', items: { type: 'object' } },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: { description: 'Circuit diagnostics report (short circuits, missing ground, etc.)' } },
+      },
+    },
   },
 };
