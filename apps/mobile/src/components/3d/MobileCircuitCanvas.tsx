@@ -54,7 +54,7 @@ export function MobileCircuitCanvas({ height = 260, isSimulating = false }: Mobi
       const height = gl.drawingBufferHeight;
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x07110d, 0.06);
+      scene.fog = new THREE.FogExp2(0xf5f6f8, 0.04);
 
       const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
       camera.position.set(0, 3.2, 5.0);
@@ -74,10 +74,10 @@ export function MobileCircuitCanvas({ height = 260, isSimulating = false }: Mobi
         antialias: true,
       });
       renderer.setSize(width, height);
-      renderer.setClearColor(0x07110d, 1);
+      renderer.setClearColor(0xf5f6f8, 1);
 
       // Floor grid
-      const grid = new THREE.GridHelper(10, 20, 0x39ff6a, 0x0e3a28);
+      const grid = new THREE.GridHelper(10, 20, 0xff8a1f, 0xe8ecf2);
       grid.position.y = -0.5;
       scene.add(grid);
 
@@ -88,7 +88,7 @@ export function MobileCircuitCanvas({ height = 260, isSimulating = false }: Mobi
       // 1. White Half-Size Breadboard
       const bbGeo = new THREE.BoxGeometry(3.2, 0.25, 2.0);
       const bbMat = new THREE.MeshStandardMaterial({
-        color: 0xefefef,
+        color: 0xffffff,
         roughness: 0.8,
         metalness: 0.1,
       });
@@ -98,99 +98,153 @@ export function MobileCircuitCanvas({ height = 260, isSimulating = false }: Mobi
 
       // Power rails (red & blue stripes)
       const redRailGeo = new THREE.BoxGeometry(3.1, 0.02, 0.06);
-      const redRailMat = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+      const redRailMat = new THREE.MeshBasicMaterial({ color: 0xff4d4d });
       const redRail = new THREE.Mesh(redRailGeo, redRailMat);
-      redRail.position.set(0.6, -0.06, 0.85);
+      redRail.position.set(0.6, -0.07, 0.85);
       circuitGroup.add(redRail);
 
-      const blueRailMat = new THREE.MeshBasicMaterial({ color: 0x007aff });
-      const blueRail = new THREE.Mesh(redRailGeo, blueRailMat);
-      blueRail.position.set(0.6, -0.06, 0.75);
+      const blueRailGeo = new THREE.BoxGeometry(3.1, 0.02, 0.06);
+      const blueRailMat = new THREE.MeshBasicMaterial({ color: 0x4c8dff });
+      const blueRail = new THREE.Mesh(blueRailGeo, blueRailMat);
+      blueRail.position.set(0.6, -0.07, -0.85);
       circuitGroup.add(blueRail);
 
-      // 2. Arduino Uno PCB
-      const unoGeo = new THREE.BoxGeometry(2.4, 0.15, 1.8);
+      // 2. Arduino Uno R3 Blue PCB
+      const unoGeo = new THREE.BoxGeometry(2.4, 0.1, 1.8);
       const unoMat = new THREE.MeshStandardMaterial({
-        color: 0x005b66, // Classic Teal/Dark Blue Uno PCB
-        roughness: 0.3,
-        metalness: 0.4,
+        color: 0x007897,
+        roughness: 0.4,
+        metalness: 0.2,
       });
-      const arduino = new THREE.Mesh(unoGeo, unoMat);
-      arduino.position.set(-2.0, -0.2, 0);
-      circuitGroup.add(arduino);
+      const uno = new THREE.Mesh(unoGeo, unoMat);
+      uno.position.set(-1.8, -0.2, 0);
+      circuitGroup.add(uno);
 
-      // USB Port
-      const usbGeo = new THREE.BoxGeometry(0.5, 0.3, 0.45);
-      const usbMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.9, roughness: 0.2 });
-      const usb = new THREE.Mesh(usbGeo, usbMat);
-      usb.position.set(-3.1, -0.1, -0.4);
-      circuitGroup.add(usb);
+      // Silver USB Port on Arduino
+      const usbGeo = new THREE.BoxGeometry(0.5, 0.35, 0.45);
+      const usbMat = new THREE.MeshStandardMaterial({
+        color: 0xcccccc,
+        metalness: 0.9,
+        roughness: 0.2,
+      });
+      const usbPort = new THREE.Mesh(usbGeo, usbMat);
+      usbPort.position.set(-2.8, -0.05, -0.4);
+      circuitGroup.add(usbPort);
 
-      // ATmega328P DIP IC
-      const icGeo = new THREE.BoxGeometry(1.2, 0.12, 0.35);
-      const icMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 });
-      const ic = new THREE.Mesh(icGeo, icMat);
-      ic.position.set(-1.8, -0.08, 0.1);
-      circuitGroup.add(ic);
+      // Black ATmega328P MCU Chip
+      const chipGeo = new THREE.BoxGeometry(1.2, 0.15, 0.35);
+      const chipMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+      const chip = new THREE.Mesh(chipGeo, chipMat);
+      chip.position.set(-1.6, -0.08, 0.2);
+      circuitGroup.add(chip);
 
-      // 3. 5mm LED Component (Interactive Glowing Bulb)
-      const ledBulbGeo = new THREE.SphereGeometry(0.14, 16, 16);
+      // 3. 5mm Red LED Component on Breadboard
+      const ledBulbGeo = new THREE.SphereGeometry(0.18, 16, 16);
       const ledBulbMat = new THREE.MeshStandardMaterial({
-        color: 0x39ff6a,
-        emissive: 0x39ff6a,
+        color: 0xff3b30,
+        emissive: 0xff3b30,
         emissiveIntensity: 0.8,
         roughness: 0.1,
       });
       const ledBulb = new THREE.Mesh(ledBulbGeo, ledBulbMat);
-      ledBulb.position.set(0.8, 0.18, 0);
+      ledBulb.position.set(0.4, 0.2, 0.2);
       circuitGroup.add(ledBulb);
 
-      // LED Light emission
-      const ledLight = new THREE.PointLight(0x39ff6a, 2.0, 3);
-      ledLight.position.set(0.8, 0.25, 0);
+      const ledBaseGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.2, 16);
+      const ledBase = new THREE.Mesh(ledBaseGeo, ledBulbMat);
+      ledBase.position.set(0.4, 0.05, 0.2);
+      circuitGroup.add(ledBase);
+
+      const ledLight = new THREE.PointLight(0xff3b30, 2, 4);
+      ledLight.position.set(0.4, 0.3, 0.2);
       circuitGroup.add(ledLight);
 
-      // Resistor
-      const resGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.4, 12);
-      const resMat = new THREE.MeshStandardMaterial({ color: 0xdbc48b, roughness: 0.5 });
-      const resistor = new THREE.Mesh(resGeo, resMat);
+      // 4. Resistor Component (220 Ohm with Color Bands)
+      const resBodyGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 16);
+      const resMat = new THREE.MeshStandardMaterial({ color: 0xd9b382, roughness: 0.6 });
+      const resistor = new THREE.Mesh(resBodyGeo, resMat);
       resistor.rotation.z = Math.PI / 2;
-      resistor.position.set(0.4, 0.05, 0);
+      resistor.position.set(0.4, 0.05, -0.2);
       circuitGroup.add(resistor);
 
-      // 4. Curved 3D Jumper Wire from Arduino Pin 13 to Breadboard
-      const curve = new THREE.QuadraticBezierCurve3(
-        new THREE.Vector3(-1.0, 0.0, 0.7),
-        new THREE.Vector3(-0.3, 1.0, 0.5),
-        new THREE.Vector3(0.4, 0.0, 0.0)
-      );
-      const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.04, 8, false);
-      const wireMat = new THREE.MeshStandardMaterial({ color: 0xff9a1f, roughness: 0.4 });
-      const wire = new THREE.Mesh(tubeGeo, wireMat);
-      circuitGroup.add(wire);
+      // Resistor Color Bands (Red, Red, Brown, Gold)
+      const bandMatRed = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const bandMatBrown = new THREE.MeshBasicMaterial({ color: 0x8b4513 });
+      const bandMatGold = new THREE.MeshBasicMaterial({ color: 0xffd700 });
 
-      // Ground wire (Green)
-      const gndCurve = new THREE.QuadraticBezierCurve3(
-        new THREE.Vector3(-1.0, 0.0, 0.5),
-        new THREE.Vector3(-0.1, 0.8, 0.2),
-        new THREE.Vector3(0.8, 0.0, 0.0)
-      );
-      const gndTubeGeo = new THREE.TubeGeometry(gndCurve, 20, 0.04, 8, false);
-      const gndWireMat = new THREE.MeshStandardMaterial({ color: 0x39ff6a, roughness: 0.4 });
-      const gndWire = new THREE.Mesh(gndTubeGeo, gndWireMat);
-      circuitGroup.add(gndWire);
+      const bandGeo = new THREE.CylinderGeometry(0.085, 0.085, 0.05, 16);
+      const band1 = new THREE.Mesh(bandGeo, bandMatRed);
+      band1.rotation.z = Math.PI / 2;
+      band1.position.set(0.28, 0.05, -0.2);
+      circuitGroup.add(band1);
 
-      // Lights
-      const ambLight = new THREE.AmbientLight(0xffffff, 0.7);
+      const band2 = new THREE.Mesh(bandGeo, bandMatRed);
+      band2.rotation.z = Math.PI / 2;
+      band2.position.set(0.36, 0.05, -0.2);
+      circuitGroup.add(band2);
+
+      const band3 = new THREE.Mesh(bandGeo, bandMatBrown);
+      band3.rotation.z = Math.PI / 2;
+      band3.position.set(0.44, 0.05, -0.2);
+      circuitGroup.add(band3);
+
+      const band4 = new THREE.Mesh(bandGeo, bandMatGold);
+      band4.rotation.z = Math.PI / 2;
+      band4.position.set(0.52, 0.05, -0.2);
+      circuitGroup.add(band4);
+
+      // 5. Jumper Wires connecting Arduino to Breadboard
+      const createWire = (p1: THREE.Vector3, p2: THREE.Vector3, colorHex: number) => {
+        const mid = new THREE.Vector3(
+          (p1.x + p2.x) / 2,
+          Math.max(p1.y, p2.y) + 0.6,
+          (p1.z + p2.z) / 2
+        );
+        const curve = new THREE.QuadraticBezierCurve3(p1, mid, p2);
+        const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.025, 8, false);
+        const tubeMat = new THREE.MeshStandardMaterial({
+          color: colorHex,
+          roughness: 0.3,
+        });
+        return new THREE.Mesh(tubeGeo, tubeMat);
+      };
+
+      // Red Wire: Uno 5V -> Breadboard Power Rail
+      const redWire = createWire(
+        new THREE.Vector3(-1.0, 0.0, 0.6),
+        new THREE.Vector3(-0.6, 0.0, 0.85),
+        0xff3b30
+      );
+      circuitGroup.add(redWire);
+
+      // Black Wire: Uno GND -> Breadboard GND Rail
+      const blackWire = createWire(
+        new THREE.Vector3(-0.8, 0.0, 0.6),
+        new THREE.Vector3(-0.4, 0.0, -0.85),
+        0x111111
+      );
+      circuitGroup.add(blackWire);
+
+      // Orange Wire: Uno Pin 13 -> Resistor -> LED
+      const orangeWire = createWire(
+        new THREE.Vector3(-1.0, 0.0, -0.6),
+        new THREE.Vector3(0.15, 0.0, -0.2),
+        0xff8a1f
+      );
+      circuitGroup.add(orangeWire);
+
+      // Lighting
+      const ambLight = new THREE.AmbientLight(0xffffff, 1.3);
       scene.add(ambLight);
 
       const dLight = new THREE.DirectionalLight(0xffffff, 1.2);
-      dLight.position.set(3, 6, 4);
+      dLight.position.set(5, 10, 7);
       scene.add(dLight);
 
       setLoading(false);
 
-      const clock = new THREE.Clock();
+      // Animation Loop
+      let clock = new THREE.Clock();
 
       const render = () => {
         animFrameRef.current = requestAnimationFrame(render);
@@ -229,11 +283,11 @@ export function MobileCircuitCanvas({ height = 260, isSimulating = false }: Mobi
           <View
             style={[
               styles.statusDot,
-              { backgroundColor: isSimulating ? COLORS.neon : COLORS.warning },
+              { backgroundColor: isSimulating ? COLORS.green : COLORS.coral },
             ]}
           />
           <Text style={styles.statusText}>
-            {isSimulating ? 'SIMULATION ACTIVE // 5.0V DC' : 'CIRCUIT STANDBY // READY'}
+            {isSimulating ? 'SIMULATION RUNNING • 5.0V DC' : 'CIRCUIT READY • SIM HALTED'}
           </Text>
         </View>
 
@@ -244,7 +298,7 @@ export function MobileCircuitCanvas({ height = 260, isSimulating = false }: Mobi
 
       {loading && (
         <View style={styles.loader}>
-          <ActivityIndicator size="small" color={COLORS.neon} />
+          <ActivityIndicator size="small" color={COLORS.primary} />
           <Text style={styles.loaderText}>Mounting 3D Breadboard...</Text>
         </View>
       )}
@@ -273,36 +327,44 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(4, 11, 8, 0.85)',
+    backgroundColor: COLORS.card,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(57, 255, 106, 0.3)',
+    borderColor: COLORS.borderSubtle,
+    shadowColor: 'rgba(20, 30, 60, 0.08)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     marginRight: 6,
   },
   statusText: {
-    color: COLORS.textPrimary,
+    color: COLORS.navy,
     fontSize: 10,
-    fontWeight: '700',
-    fontFamily: 'monospace',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   touchHint: {
     alignSelf: 'center',
-    backgroundColor: 'rgba(4, 11, 8, 0.65)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
   },
   hintText: {
     color: COLORS.textMuted,
     fontSize: 9,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
+    fontWeight: '700',
   },
   loader: {
     ...StyleSheet.absoluteFillObject,
@@ -311,8 +373,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loaderText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+    color: COLORS.textMuted,
+    fontSize: 12,
     marginTop: 8,
   },
 });

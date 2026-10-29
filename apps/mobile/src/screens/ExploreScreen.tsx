@@ -18,7 +18,6 @@ import {
   Clock,
   Star,
   Users,
-  Calendar,
   ExternalLink,
   ShieldCheck,
   Radio,
@@ -67,7 +66,7 @@ export function ExploreScreen() {
           style={[styles.tabButton, activeTab === 'hackathons' && styles.tabButtonActive]}
           onPress={() => setActiveTab('hackathons')}
         >
-          <Trophy size={14} color={activeTab === 'hackathons' ? '#000' : COLORS.textSecondary} />
+          <Trophy size={15} color={activeTab === 'hackathons' ? '#FFFFFF' : COLORS.textMuted} />
           <Text
             style={[
               styles.tabButtonText,
@@ -82,7 +81,7 @@ export function ExploreScreen() {
           style={[styles.tabButton, activeTab === 'shops' && styles.tabButtonActive]}
           onPress={() => setActiveTab('shops')}
         >
-          <Radio size={14} color={activeTab === 'shops' ? '#000' : COLORS.textSecondary} />
+          <Radio size={15} color={activeTab === 'shops' ? '#FFFFFF' : COLORS.textMuted} />
           <Text
             style={[
               styles.tabButtonText,
@@ -97,7 +96,7 @@ export function ExploreScreen() {
       {/* Content Stream */}
       {loading ? (
         <View style={styles.loaderCenter}>
-          <ActivityIndicator size="small" color={COLORS.neon} />
+          <ActivityIndicator size="small" color={COLORS.primary} />
           <Text style={styles.loaderText}>Scanning Robotics Grid...</Text>
         </View>
       ) : (
@@ -107,7 +106,7 @@ export function ExploreScreen() {
               <View key={h.id} style={styles.hackathonCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cityBadge}>
-                    <MapPin size={10} color={COLORS.teal} />
+                    <MapPin size={11} color={COLORS.blue} />
                     <Text style={styles.cityText}>{h.city}</Text>
                   </View>
                   <Text style={styles.modeText}>{h.mode}</Text>
@@ -126,7 +125,7 @@ export function ExploreScreen() {
                   </View>
 
                   <View style={styles.squadBadge}>
-                    <Users size={12} color={COLORS.textSecondary} />
+                    <Users size={13} color={COLORS.textSecondary} />
                     <Text style={styles.squadText}>Squad of {h.teamSizeMax}</Text>
                   </View>
                 </View>
@@ -136,7 +135,7 @@ export function ExploreScreen() {
                     style={styles.joinSquadBtn}
                     onPress={() => Linking.openURL(h.url)}
                   >
-                    <Users size={12} color={COLORS.teal} />
+                    <Users size={13} color={COLORS.blue} />
                     <Text style={styles.joinSquadText}>Find Teammates</Text>
                   </TouchableOpacity>
 
@@ -145,7 +144,7 @@ export function ExploreScreen() {
                     onPress={() => Linking.openURL(h.url)}
                   >
                     <Text style={styles.portalText}>Official Rules</Text>
-                    <ExternalLink size={12} color="#000" />
+                    <ExternalLink size={13} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -156,7 +155,7 @@ export function ExploreScreen() {
                 <View style={styles.cardHeader}>
                   <Text style={styles.shopName}>{s.name}</Text>
                   <View style={styles.distanceBadge}>
-                    <Navigation size={10} color={COLORS.neon} />
+                    <Navigation size={10} color={COLORS.primary} />
                     <Text style={styles.distanceText}>{s.distanceKm} km</Text>
                   </View>
                 </View>
@@ -167,19 +166,19 @@ export function ExploreScreen() {
 
                 <View style={styles.shopMetaRow}>
                   <View style={styles.ratingBadge}>
-                    <Star size={11} color="#FFD700" fill="#FFD700" />
+                    <Star size={12} color="#FF9A1F" fill="#FF9A1F" />
                     <Text style={styles.ratingText}>{s.rating}</Text>
                   </View>
 
                   <View style={styles.hoursRow}>
-                    <Clock size={11} color={COLORS.textMuted} />
+                    <Clock size={12} color={COLORS.textMuted} />
                     <Text style={styles.hoursText}>{s.openingHours}</Text>
                   </View>
 
                   {s.isVerified && (
                     <View style={styles.verifiedRow}>
-                      <ShieldCheck size={12} color={COLORS.neon} />
-                      <Text style={styles.verifiedText}>Verified</Text>
+                      <ShieldCheck size={12} color={COLORS.green} />
+                      <Text style={styles.verifiedText}>Verified Shop</Text>
                     </View>
                   )}
                 </View>
@@ -199,7 +198,7 @@ export function ExploreScreen() {
                     style={styles.callStoreBtn}
                     onPress={() => dialShopPhone(s.phone)}
                   >
-                    <Phone size={12} color={COLORS.textPrimary} />
+                    <Phone size={13} color={COLORS.navy} />
                     <Text style={styles.callStoreText}>Call Shop</Text>
                   </TouchableOpacity>
 
@@ -207,7 +206,7 @@ export function ExploreScreen() {
                     style={styles.directionsBtn}
                     onPress={() => openMapsDirections(s.directionsUrl)}
                   >
-                    <Navigation size={12} color="#000" />
+                    <Navigation size={13} color="#FFFFFF" />
                     <Text style={styles.directionsText}>Google Maps</Text>
                   </TouchableOpacity>
                 </View>
@@ -228,10 +227,10 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     padding: 12,
-    backgroundColor: '#05110C',
+    backgroundColor: COLORS.card,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderSubtle,
-    gap: 8,
+    gap: 10,
   },
   tabButton: {
     flex: 1,
@@ -239,28 +238,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#091A14',
+    borderRadius: 14,
+    backgroundColor: '#F9FAFC',
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     gap: 6,
   },
   tabButtonActive: {
-    backgroundColor: COLORS.neon,
-    borderColor: COLORS.neon,
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
   },
   tabButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+    color: COLORS.textMuted,
+    fontSize: 12,
     fontWeight: '700',
   },
   tabButtonTextActive: {
-    color: '#000',
+    color: '#FFFFFF',
     fontWeight: '800',
   },
   scrollList: {
     padding: 16,
-    gap: 12,
+    gap: 14,
   },
   loaderCenter: {
     flex: 1,
@@ -269,16 +273,20 @@ const styles = StyleSheet.create({
   },
   loaderText: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 8,
-    fontFamily: 'monospace',
   },
   hackathonCard: {
-    backgroundColor: '#081A12',
+    backgroundColor: COLORS.card,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     padding: 16,
+    shadowColor: 'rgba(20, 30, 60, 0.05)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -290,38 +298,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(127, 231, 214, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: 'rgba(76, 141, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
   },
   cityText: {
-    color: COLORS.teal,
-    fontSize: 10,
+    color: COLORS.blue,
+    fontSize: 11,
     fontWeight: '700',
-    fontFamily: 'monospace',
   },
   modeText: {
-    color: COLORS.neon,
-    fontSize: 9,
-    fontFamily: 'monospace',
+    color: COLORS.primary,
+    fontSize: 11,
     fontWeight: '700',
+    backgroundColor: 'rgba(255, 138, 31, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   hackathonTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
+    color: COLORS.navy,
+    fontSize: 16,
     fontWeight: '800',
     marginBottom: 4,
   },
   organizerText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+    color: COLORS.textMuted,
+    fontSize: 12,
     marginBottom: 6,
   },
   hackathonDesc: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    lineHeight: 16,
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: 12,
   },
   statsRow: {
@@ -330,19 +340,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: COLORS.borderSubtle,
-    paddingTop: 10,
+    paddingTop: 12,
     marginBottom: 12,
   },
   prizeLabel: {
     color: COLORS.textMuted,
-    fontSize: 8,
-    fontFamily: 'monospace',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.6,
   },
   prizeValue: {
-    color: COLORS.neon,
-    fontSize: 16,
+    color: COLORS.primary,
+    fontSize: 18,
     fontWeight: '800',
-    fontFamily: 'monospace',
   },
   squadBadge: {
     flexDirection: 'row',
@@ -351,27 +361,28 @@ const styles = StyleSheet.create({
   },
   squadText: {
     color: COLORS.textSecondary,
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '600',
   },
   cardActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   joinSquadBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#091A14',
+    backgroundColor: '#F9FAFC',
     borderWidth: 1,
-    borderColor: COLORS.teal,
-    borderRadius: 10,
-    height: 36,
+    borderColor: 'rgba(76, 141, 255, 0.3)',
+    borderRadius: 12,
+    height: 40,
     gap: 6,
   },
   joinSquadText: {
-    color: COLORS.teal,
-    fontSize: 11,
+    color: COLORS.blue,
+    fontSize: 12,
     fontWeight: '700',
   },
   portalBtn: {
@@ -379,50 +390,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.neon,
-    borderRadius: 10,
-    height: 36,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    height: 40,
     gap: 6,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
   },
   portalText: {
-    color: '#000',
-    fontSize: 11,
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '800',
   },
   // Shop card
   shopCard: {
-    backgroundColor: '#081A12',
+    backgroundColor: COLORS.card,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     padding: 16,
+    shadowColor: 'rgba(20, 30, 60, 0.05)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    elevation: 2,
   },
   shopName: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
+    color: COLORS.navy,
+    fontSize: 15,
     fontWeight: '800',
     flex: 1,
   },
   distanceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(57, 255, 106, 0.1)',
+    backgroundColor: 'rgba(255, 138, 31, 0.1)',
     borderWidth: 1,
-    borderColor: COLORS.neon,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderColor: 'rgba(255, 138, 31, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
-    gap: 3,
+    gap: 4,
   },
   distanceText: {
-    color: COLORS.neon,
-    fontSize: 10,
+    color: COLORS.primary,
+    fontSize: 11,
     fontWeight: '800',
-    fontFamily: 'monospace',
   },
   addressText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+    color: COLORS.textMuted,
+    fontSize: 12,
     marginVertical: 6,
   },
   shopMetaRow: {
@@ -434,67 +454,67 @@ const styles = StyleSheet.create({
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
   },
   ratingText: {
-    color: '#FFD700',
-    fontSize: 11,
+    color: COLORS.navy,
+    fontSize: 12,
     fontWeight: '700',
   },
   hoursRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
   },
   hoursText: {
     color: COLORS.textMuted,
-    fontSize: 10,
+    fontSize: 11,
   },
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
     marginLeft: 'auto',
   },
   verifiedText: {
-    color: COLORS.neon,
-    fontSize: 10,
+    color: COLORS.green,
+    fontSize: 11,
     fontWeight: '700',
   },
   stockedChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 14,
   },
   componentChip: {
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: '#F5F6F8',
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   componentChipText: {
     color: COLORS.textSecondary,
-    fontSize: 9,
-    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '600',
   },
   callStoreBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#091A14',
+    backgroundColor: '#F9FAFC',
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    borderRadius: 10,
-    height: 36,
+    borderRadius: 12,
+    height: 40,
     gap: 6,
   },
   callStoreText: {
-    color: COLORS.textPrimary,
-    fontSize: 11,
+    color: COLORS.navy,
+    fontSize: 12,
     fontWeight: '700',
   },
   directionsBtn: {
@@ -502,14 +522,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.neon,
-    borderRadius: 10,
-    height: 36,
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    height: 40,
     gap: 6,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
   },
   directionsText: {
-    color: '#000',
-    fontSize: 11,
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '800',
   },
 });

@@ -53,6 +53,13 @@ export class UsageService {
       photoAnalysesUsed: meter.photoAnalysesCount,
       photoAnalysesLimit: limits.rituuDailyPhotoAnalysisLimit,
       photoAnalysesRemaining: Math.max(0, limits.rituuDailyPhotoAnalysisLimit - meter.photoAnalysesCount),
+      rituuMessagesCount: meter.textMessagesCount,
+      photoAnalysesCount: meter.photoAnalysesCount,
+      limits: {
+        dailyTextMessageLimit: limits.rituuDailyTextMessageLimit,
+        dailyPhotoAnalysisLimit: limits.rituuDailyPhotoAnalysisLimit,
+        maxSavedProjects: limits.maxSavedProjects,
+      },
       codeReviewsUsed: meter.codeReviewsCount,
       codeReviewsLimit: limits.rituuCodeReviewAndDebugging ? 100 : 0,
       codeReviewsRemaining: limits.rituuCodeReviewAndDebugging

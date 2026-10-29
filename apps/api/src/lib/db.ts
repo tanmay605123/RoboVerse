@@ -34,6 +34,8 @@ interface InMemoryDatabase {
   products: Map<string, any>;
   invoices: Map<string, any>;
   orders: Map<string, any>;
+  qrPayments: Map<string, any>;
+  auditLogs: Map<string, any>;
 }
 
 export const inMemoryDb: InMemoryDatabase = {
@@ -54,6 +56,8 @@ export const inMemoryDb: InMemoryDatabase = {
   products: new Map(),
   invoices: new Map(),
   orders: new Map(),
+  qrPayments: new Map(),
+  auditLogs: new Map(),
 };
 
 // Seed default plans into inMemoryDb immediately

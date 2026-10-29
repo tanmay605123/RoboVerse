@@ -67,17 +67,17 @@ export function AuthScreen({ navigation }: any) {
         {/* Top Brand Logo & Emblem */}
         <View style={styles.brandContainer}>
           <View style={styles.logoBadge}>
-            <Cpu size={32} color={COLORS.neon} />
+            <Cpu size={34} color="#FFFFFF" />
           </View>
           <Text style={styles.brandTitle}>ROBOVERSE</Text>
-          <Text style={styles.brandTagline}>LEARN IT. BUILD IT. SIMULATE IT.</Text>
+          <Text style={styles.brandTagline}>LEARN IT • BUILD IT • SIMULATE IT</Text>
         </View>
 
         {/* Auth Form Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <ShieldCheck size={16} color={COLORS.teal} />
-            <Text style={styles.cardHeaderText}>STUDENT CONTROL ROOM AUTH</Text>
+            <ShieldCheck size={16} color={COLORS.blue} />
+            <Text style={styles.cardHeaderText}>STUDENT WORKSPACE AUTH</Text>
           </View>
 
           {errorMsg && (
@@ -88,7 +88,7 @@ export function AuthScreen({ navigation }: any) {
 
           {/* Student ID / Email Input */}
           <View style={styles.inputContainer}>
-            <Mail size={16} color={COLORS.textSecondary} style={styles.inputIcon} />
+            <Mail size={16} color={COLORS.textMuted} style={styles.inputIcon} />
             <TextInput
               value={identifier}
               onChangeText={setIdentifier}
@@ -102,7 +102,7 @@ export function AuthScreen({ navigation }: any) {
 
           {/* Password Input */}
           <View style={styles.inputContainer}>
-            <Lock size={16} color={COLORS.textSecondary} style={styles.inputIcon} />
+            <Lock size={16} color={COLORS.textMuted} style={styles.inputIcon} />
             <TextInput
               value={password}
               onChangeText={setPassword}
@@ -121,11 +121,11 @@ export function AuthScreen({ navigation }: any) {
             activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color="#000" />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
-                <Text style={styles.primaryButtonText}>Authenticate &amp; Enter</Text>
-                <ArrowRight size={16} color="#000" />
+                <Text style={styles.primaryButtonText}>Sign In to Workshop</Text>
+                <ArrowRight size={16} color="#FFFFFF" />
               </>
             )}
           </TouchableOpacity>
@@ -137,9 +137,9 @@ export function AuthScreen({ navigation }: any) {
             disabled={loading}
             activeOpacity={0.8}
           >
-            <Fingerprint size={18} color={COLORS.neon} />
+            <Fingerprint size={18} color={COLORS.primary} />
             <Text style={styles.biometricButtonText}>
-              {Platform.OS === 'ios' ? 'Sign in with Face ID' : 'Sign in with Fingerprint'}
+              {Platform.OS === 'ios' ? 'Sign in with Face ID' : 'Sign in with Biometrics'}
             </Text>
           </TouchableOpacity>
 
@@ -149,8 +149,8 @@ export function AuthScreen({ navigation }: any) {
             onPress={() => loginAsGuestStudent()}
             activeOpacity={0.7}
           >
-            <Sparkles size={14} color={COLORS.teal} />
-            <Text style={styles.guestButtonText}>Enter as Guest Student</Text>
+            <Sparkles size={14} color={COLORS.blue} />
+            <Text style={styles.guestButtonText}>Explore as Demo Student</Text>
           </TouchableOpacity>
         </View>
 
@@ -181,44 +181,40 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: '#091A14',
-    borderWidth: 1.5,
-    borderColor: COLORS.neon,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.neon,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 18,
-    elevation: 8,
-    marginBottom: 12,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 6,
+    marginBottom: 14,
   },
   brandTitle: {
-    color: '#FFF',
+    color: COLORS.navy,
     fontSize: 26,
     fontWeight: '900',
-    letterSpacing: 2.5,
-    fontFamily: 'monospace',
+    letterSpacing: 2,
   },
   brandTagline: {
-    color: COLORS.neon,
+    color: COLORS.primary,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 1.5,
-    marginTop: 4,
-    fontFamily: 'monospace',
+    marginTop: 6,
   },
   card: {
-    backgroundColor: '#091C14',
+    backgroundColor: COLORS.card,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: COLORS.borderHighlight,
+    borderColor: COLORS.borderSubtle,
     padding: 22,
-    shadowColor: '#000',
+    shadowColor: 'rgba(20, 30, 60, 0.08)',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
+    shadowOpacity: 1,
     shadowRadius: 24,
-    elevation: 10,
+    elevation: 6,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -227,36 +223,35 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardHeaderText: {
-    color: COLORS.teal,
-    fontSize: 10,
+    color: COLORS.blue,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1,
-    fontFamily: 'monospace',
+    letterSpacing: 0.8,
   },
   errorBox: {
-    backgroundColor: 'rgba(255, 67, 67, 0.15)',
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
     borderWidth: 1,
-    borderColor: COLORS.error,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
     borderRadius: 10,
     padding: 10,
     marginBottom: 14,
   },
   errorText: {
-    color: '#FFA1A1',
-    fontSize: 11,
+    color: COLORS.coral,
+    fontSize: 12,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#05100B',
+    backgroundColor: '#F9FAFC',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     marginBottom: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   inputIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   input: {
     flex: 1,
@@ -268,20 +263,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.neon,
+    backgroundColor: COLORS.primary,
     borderRadius: 14,
     height: 48,
     marginTop: 6,
     marginBottom: 12,
     gap: 8,
-    shadowColor: COLORS.neon,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 3,
   },
   primaryButtonText: {
-    color: '#000',
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -289,16 +284,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#040C08',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(57, 255, 106, 0.4)',
+    borderColor: 'rgba(255, 138, 31, 0.35)',
     height: 48,
     marginBottom: 12,
     gap: 8,
   },
   biometricButtonText: {
-    color: COLORS.neon,
+    color: COLORS.primary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -310,13 +305,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   guestButtonText: {
-    color: COLORS.teal,
+    color: COLORS.blue,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   footerNotice: {
     color: COLORS.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     textAlign: 'center',
     marginTop: 24,
     letterSpacing: 0.5,

@@ -17,7 +17,10 @@
     "test": "npm run test:api && npm run test:sim",
     "test:api": "npm --workspace=@roboverse/api run test",
     "test:sim": "npm --workspace=@roboverse/sim-engine run test",
-    "seed:api": "npm --workspace=@roboverse/api run prisma:seed",
+    "seed:api": "npm --workspace=@roboverse/api run seed:mongo",
+    "seed:mongo": "npm --workspace=@roboverse/api run seed:mongo",
+    "dev:worker": "npm --workspace=@roboverse/worker run dev",
+    "build:worker": "npm --workspace=@roboverse/worker run build",
     "typecheck:mobile": "npm --workspace=@roboverse/mobile run typecheck",
     "start:mobile": "npm --workspace=@roboverse/mobile run start",
     "lint": "echo 'Linting complete'"

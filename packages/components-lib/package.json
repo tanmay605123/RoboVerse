@@ -1,0 +1,17 @@
+{
+  "name": "@roboverse/components-lib",
+  "version": "1.0.0",
+  "description": "RoboVerse Original Component Artworks, Pin Layouts, 2D Vector Sprites & 3D Specs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc -w"
+  },
+  "dependencies": {
+    "@roboverse/shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

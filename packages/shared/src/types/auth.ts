@@ -159,3 +159,19 @@ export interface AuthTokens {
   refreshToken: string;
   expiresIn: number;
 }
+
+export interface AuthResponseData {
+  user: {
+    id: string;
+    email: string;
+    fullName?: string;
+    role: UserRole;
+    studentId?: string;
+    planId?: string;
+  };
+  tokens: AuthTokens;
+  studentIdCard?: any;
+}
+
+export type StudentIdRecord = any;
+

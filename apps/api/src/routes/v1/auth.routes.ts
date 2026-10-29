@@ -24,9 +24,43 @@ import { generateStudentIdRecord } from '../../lib/studentId';
 import { redis } from '../../lib/redis';
 import { inMemoryDb } from '../../lib/db';
 import { usageService } from '../../lib/usage';
+import { UserModel, StudentProfileModel, StudentIDModel } from '../../models';
+
+export function getRoleRedirectPath(role: UserRole | string): string {
+  switch (role) {
+    case UserRole.ADMIN:
+      return '/admin';
+    case UserRole.MENTOR_TEACHER:
+      return '/teacher';
+    case UserRole.INSTITUTION_ADMIN:
+      return '/institution';
+    case UserRole.STORE_ADMIN:
+      return '/store-admin';
+    case UserRole.FREE_STUDENT:
+    case UserRole.PLUS_STUDENT:
+    case UserRole.PRO_STUDENT:
+    default:
+      return '/dashboard';
+  }
+}
 
 const router = Router();
 let studentSequenceCounter = 100;
+
+/**
+ * GET /api/v1/auth/redirect-path
+ * Query the correct role-based dashboard URL for a given role
+ */
+router.get('/redirect-path', (req: Request, res: Response) => {
+  const role = (req.query.role as string) || UserRole.FREE_STUDENT;
+  res.json({
+    success: true,
+    data: {
+      role,
+      redirectTo: getRoleRedirectPath(role),
+    },
+  });
+});
 
 /**
  * POST /api/v1/auth/register
@@ -173,6 +207,7 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
       },
       profile,
       tokens,
+      redirectTo: getRoleRedirectPath(user.role),
     },
   });
 });
@@ -249,6 +284,7 @@ router.post('/login', validateBody(LoginInputSchema), async (req: Request, res: 
       studentId: studentIdRecord?.studentId,
       profile,
       tokens,
+      redirectTo: getRoleRedirectPath(matchedUser.role),
     },
   });
 });
@@ -380,6 +416,7 @@ router.post('/otp/verify', validateBody(VerifyOtpInputSchema), async (req: Reque
       studentId: studentIdRecord?.studentId,
       profile,
       tokens,
+      redirectTo: getRoleRedirectPath(user.role),
     },
   });
 });
@@ -453,7 +490,13 @@ router.post('/google', validateBody(GoogleAuthInputSchema), async (req: Request,
   res.json({
     success: true,
     message: 'Google authentication successful',
-    data: { user, studentId: studentIdRecord?.studentId, profile, tokens },
+    data: {
+      user,
+      studentId: studentIdRecord?.studentId,
+      profile,
+      tokens,
+      redirectTo: getRoleRedirectPath(user.role),
+    },
   });
 });
 
@@ -534,7 +577,13 @@ router.post(
     res.json({
       success: true,
       message: 'Biometric authentication successful',
-      data: { user, studentId: studentIdRecord?.studentId, profile, tokens },
+      data: {
+        user,
+        studentId: studentIdRecord?.studentId,
+        profile,
+        tokens,
+        redirectTo: getRoleRedirectPath(user.role),
+      },
     });
   }
 );
@@ -709,6 +758,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
       activeSubscription: sub || null,
       planTier,
       todayUsage: usage,
+      redirectTo: getRoleRedirectPath(user?.role || req.user!.role),
     },
   });
 });

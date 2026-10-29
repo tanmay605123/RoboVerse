@@ -3,11 +3,13 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
+import mongoSanitize from 'express-mongo-sanitize';
 import { swaggerDocument } from './swagger/swaggerSpec';
 import v1Router from './routes/v1';
 import { errorHandler } from './middleware/errorHandler';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { ENV } from './config/env';
+import { getMongoHealthStatus } from './lib/mongoose';
 
 export function createApp(): Express {
   const app = express();
@@ -38,19 +40,30 @@ export function createApp(): Express {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+  // Sanitize data against NoSQL query injection
+  app.use(mongoSanitize());
+
   // Global rate limiter
-  if (process.env.NODE_ENV !== 'test') {
-    app.use('/api/', apiRateLimiter);
-  }
+  app.use('/api/', apiRateLimiter);
 
   // Health check endpoint
   app.get(['/health', '/api/health'], (req: Request, res: Response) => {
+    const mongoStatus = getMongoHealthStatus();
     res.json({
       status: 'healthy',
       app: 'RoboVerse Core API',
       version: '1.0.0',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      database: {
+        type: 'MongoDB',
+        ...mongoStatus,
+      },
+      redis: {
+        status: 'active',
+        url: ENV.REDIS_URL,
+      },
     });
   });
 

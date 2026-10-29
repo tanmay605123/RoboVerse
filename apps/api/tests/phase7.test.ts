@@ -89,6 +89,21 @@ describe('Phase 7: Admin Control Center, Live Pricing Editor & Telemetry API', (
       expect(res.body.success).toBe(true);
       expect(res.body.data.totalStudentsRegistered).toBeGreaterThanOrEqual(2);
       expect(res.body.data.razorpayFeeEstimateInr).toBeDefined();
+      expect(res.body.data.liveStudentsWorkingCount).toBeGreaterThan(0);
+      expect(res.body.data.topStudiedTopics.length).toBeGreaterThan(0);
+    });
+
+    it('should stream live student activity and active project topics via /api/v1/admin/live-activity', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/live-activity')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.totalActiveStudents).toBeGreaterThan(0);
+      expect(res.body.data.sessions[0].studentId).toMatch(/^RV-/);
+      expect(res.body.data.sessions[0].projectTitle).toBeDefined();
+      expect(res.body.data.sessions[0].currentAction).toBeDefined();
     });
   });
 

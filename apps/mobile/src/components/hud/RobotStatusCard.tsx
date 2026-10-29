@@ -9,25 +9,25 @@ export function RobotStatusCard() {
       label: 'Working',
       count: 14,
       icon: CheckCircle2,
-      color: COLORS.neon,
-      bg: 'rgba(57, 255, 106, 0.1)',
-      border: 'rgba(57, 255, 106, 0.3)',
+      color: COLORS.green,
+      bg: 'rgba(18, 183, 106, 0.08)',
+      border: 'rgba(18, 183, 106, 0.25)',
     },
     {
       label: 'Under Repair',
       count: 3,
       icon: Wrench,
-      color: COLORS.teal,
-      bg: 'rgba(127, 231, 214, 0.1)',
-      border: 'rgba(127, 231, 214, 0.3)',
+      color: COLORS.blue,
+      bg: 'rgba(76, 141, 255, 0.08)',
+      border: 'rgba(76, 141, 255, 0.25)',
     },
     {
       label: 'To be Repaired',
       count: 1,
       icon: AlertTriangle,
-      color: COLORS.warning,
-      bg: 'rgba(255, 154, 31, 0.1)',
-      border: 'rgba(255, 154, 31, 0.3)',
+      color: COLORS.coral,
+      bg: 'rgba(255, 107, 107, 0.08)',
+      border: 'rgba(255, 107, 107, 0.25)',
     },
   ];
 
@@ -67,10 +67,11 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     color: COLORS.textMuted,
-    fontSize: 9,
-    fontFamily: 'monospace',
-    letterSpacing: 1,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
     marginBottom: 8,
+    textTransform: 'uppercase',
   },
   grid: {
     flexDirection: 'row',
@@ -78,11 +79,11 @@ const styles = StyleSheet.create({
   },
   tile: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 12,
     justifyContent: 'space-between',
-    minHeight: 72,
+    minHeight: 74,
   },
   topRow: {
     flexDirection: 'row',
@@ -93,11 +94,10 @@ const styles = StyleSheet.create({
   countText: {
     fontSize: 18,
     fontWeight: '800',
-    fontFamily: 'monospace',
   },
   label: {
     color: COLORS.textSecondary,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
   },
 });

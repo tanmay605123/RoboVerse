@@ -1,21 +1,19 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: roboverse_postgres
+  mongo:
+    image: mongo:7.0
+    container_name: roboverse_mongo
     environment:
-      POSTGRES_USER: roboverse
-      POSTGRES_PASSWORD: roboverse_pass
-      POSTGRES_DB: roboverse_db
+      MONGO_INITDB_DATABASE: roboverse
     ports:
-      - '5432:5432'
+      - '27017:27017'
     volumes:
-      - roboverse_pgdata:/var/lib/postgresql/data
+      - roboverse_mongodata:/data/db
     restart: unless-stopped
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U roboverse -d roboverse_db']
-      interval: 5s
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
+      interval: 10s
       timeout: 5s
       retries: 5
 
@@ -43,7 +41,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgresql://roboverse:roboverse_pass@postgres:5432/roboverse_db?schema=public
+      MONGODB_URI: mongodb://mongo:27017/roboverse
+      DATABASE_URL: mongodb://mongo:27017/roboverse
       REDIS_URL: redis://redis:6379
       CLIENT_WEB_URL: http://localhost:3000
       CLIENT_MOBILE_URL: http://localhost:8081
@@ -51,13 +50,33 @@ services:
       JWT_REFRESH_SECRET: roboverse_super_secret_refresh_jwt_key_2026_abc
       RAZORPAY_KEY_ID: rzp_test_RoboVerseMockKey2026
       RAZORPAY_KEY_SECRET: mock_razorpay_secret_key_998877
+      RAZORPAY_WEBHOOK_SECRET: mock_razorpay_webhook_secret_112233
+      GEMINI_API_KEY: mock_gemini_api_key_2026
+      GEMINI_MODEL: gemini-1.5-flash
+      GEMINI_MODEL_PRO: gemini-1.5-pro
     depends_on:
-      postgres:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: roboverse_worker
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/roboverse
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  roboverse_pgdata:
+  roboverse_mongodata:
   roboverse_redisdata:

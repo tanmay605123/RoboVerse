@@ -85,6 +85,9 @@ model User {
   posts                 Post[]
   comments              Comment[]
   notifications         Notification[]
+  taughtClasses         Class[]           @relation("TeacherClasses")
+  classEnrollments      ClassEnrollment[]
+  collections           Collection[]
 
   batchId               String?
   batch                 Batch?            @relation(fields: [batchId], references: [id])
@@ -325,9 +328,12 @@ model CircuitProject {
   codeSnippet           String?           @db.Text
   thumbnailUrl          String?
   bomJson               String?           @db.Text
+  collectionId          String?
+  collection            Collection?       @relation(fields: [collectionId], references: [id])
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
+  versions              ProjectVersion[]
   simulations           Simulation[]
   chatSessions          ChatSession[]
 
@@ -613,3 +619,80 @@ model Batch {
 
   students              User[]
 }
+
+model Class {
+  id                    String            @id @default(uuid())
+  name                  String
+  section               String?
+  subject               String            @default("Robotics & Electronics")
+  inviteCode            String            @unique
+  teacherId             String
+  teacher               User              @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  students              ClassEnrollment[]
+  assignments           Assignment[]
+
+  @@index([teacherId])
+  @@index([inviteCode])
+}
+
+model ClassEnrollment {
+  id                    String            @id @default(uuid())
+  classId               String
+  class                 Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentId             String
+  student               User              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enrolledAt            DateTime          @default(now())
+
+  @@unique([classId, studentId])
+  @@index([studentId])
+}
+
+model Assignment {
+  id                    String            @id @default(uuid())
+  classId               String
+  class                 Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
+  title                 String
+  instructions          String            @db.Text
+  dueDate               DateTime?
+  starterCircuitId      String?
+  rubricJson            String?           @db.Text
+  createdAt             DateTime          @default(now())
+
+  @@index([classId])
+}
+
+model ProjectVersion {
+  id                    String            @id @default(uuid())
+  projectId             String
+  project               CircuitProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versionNumber         Int
+  label                 String            // e.g. "v1.0 - Initial circuit"
+  description           String?
+  componentsJson        String            @db.Text
+  wiresJson             String            @db.Text
+  codeSnippet           String?           @db.Text
+  createdAt             DateTime          @default(now())
+
+  @@unique([projectId, versionNumber])
+  @@index([projectId])
+}
+
+model Collection {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                  String
+  description           String?
+  color                 String            @default("#FF8A1F")
+  isPublic              Boolean           @default(false)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  projects              CircuitProject[]
+
+  @@index([userId])
+}
+

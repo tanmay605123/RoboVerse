@@ -14,3 +14,4 @@ coverage/
 .gradle/
 **/build/
 apps/web/node_modules
+*.tsbuildinfo

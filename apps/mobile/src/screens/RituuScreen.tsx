@@ -19,10 +19,8 @@ import {
   Camera,
   Mic,
   MicOff,
-  Cpu,
   AlertTriangle,
   Play,
-  RotateCcw,
 } from 'lucide-react-native';
 
 interface ChatMessage {
@@ -140,7 +138,7 @@ export function RituuScreen({ navigation }: any) {
             avatarState === 'speaking' && styles.avatarSpeaking,
           ]}
         >
-          {/* Friendly Glowing Robot Face */}
+          {/* Friendly Robot Face */}
           <View style={styles.robotFace}>
             <View style={styles.eyesRow}>
               <View
@@ -190,13 +188,15 @@ export function RituuScreen({ navigation }: any) {
           >
             {msg.sender === 'rituu' && (
               <View style={styles.rituuBubbleHeader}>
-                <Sparkles size={12} color={COLORS.teal} />
-                <Text style={styles.rituuSenderText}>Rituu</Text>
+                <Sparkles size={13} color={COLORS.primary} />
+                <Text style={styles.rituuSenderText}>Rituu AI</Text>
                 <Text style={styles.timestampText}>{msg.timestamp}</Text>
               </View>
             )}
 
-            <Text style={styles.messageText}>{msg.text}</Text>
+            <Text style={[styles.messageText, msg.sender === 'user' && styles.userMessageText]}>
+              {msg.text}
+            </Text>
 
             {/* Code Snippet Box */}
             {msg.codeSnippet && (
@@ -205,10 +205,10 @@ export function RituuScreen({ navigation }: any) {
                   <Text style={styles.codeLangText}>Arduino C++ Firmware</Text>
                   <TouchableOpacity
                     style={styles.runInSimBtn}
-                    onPress={() => navigation.navigate('Workbench')}
+                    onPress={() => navigation.navigate('Lab')}
                   >
-                    <Play size={10} color="#000" fill="#000" />
-                    <Text style={styles.runInSimText}>Run in Workbench</Text>
+                    <Play size={10} color="#FFFFFF" fill="#FFFFFF" />
+                    <Text style={styles.runInSimText}>Run in Lab</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.codeContent}>{msg.codeSnippet}</Text>
@@ -218,7 +218,7 @@ export function RituuScreen({ navigation }: any) {
             {/* Safety Warning */}
             {msg.safetyWarning && (
               <View style={styles.safetyBox}>
-                <AlertTriangle size={14} color={COLORS.warning} />
+                <AlertTriangle size={14} color={COLORS.coral} />
                 <Text style={styles.safetyText}>{msg.safetyWarning}</Text>
               </View>
             )}
@@ -227,7 +227,7 @@ export function RituuScreen({ navigation }: any) {
 
         {isSending && (
           <View style={[styles.messageBubble, styles.rituuBubble, styles.loadingBubble]}>
-            <ActivityIndicator size="small" color={COLORS.neon} />
+            <ActivityIndicator size="small" color={COLORS.primary} />
             <Text style={styles.thinkingText}>Rituu is analyzing circuits...</Text>
           </View>
         )}
@@ -257,7 +257,7 @@ export function RituuScreen({ navigation }: any) {
           onPress={handleSimulatePhotoUpload}
           accessibilityLabel="Upload Circuit Photo"
         >
-          <Camera size={18} color={COLORS.teal} />
+          <Camera size={18} color={COLORS.primary} />
         </TouchableOpacity>
 
         <TextInput
@@ -273,7 +273,7 @@ export function RituuScreen({ navigation }: any) {
           onPress={() => setIsListening(!isListening)}
         >
           {isListening ? (
-            <MicOff size={16} color={COLORS.warning} />
+            <MicOff size={16} color={COLORS.coral} />
           ) : (
             <Mic size={16} color={COLORS.textSecondary} />
           )}
@@ -284,7 +284,7 @@ export function RituuScreen({ navigation }: any) {
           onPress={() => sendMessage()}
           disabled={!inputText.trim() || isSending}
         >
-          <Send size={16} color="#000" />
+          <Send size={16} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -301,32 +301,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#05120D',
+    backgroundColor: COLORS.card,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderSubtle,
     gap: 12,
+    shadowColor: 'rgba(20, 30, 60, 0.04)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   avatarGlowBox: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: '#091A14',
+    backgroundColor: 'rgba(255, 138, 31, 0.1)',
     borderWidth: 1.5,
-    borderColor: COLORS.neon,
+    borderColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.neon,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   avatarThinking: {
-    borderColor: COLORS.teal,
-    shadowColor: COLORS.teal,
+    borderColor: COLORS.blue,
+    shadowColor: COLORS.blue,
+    backgroundColor: 'rgba(76, 141, 255, 0.1)',
   },
   avatarSpeaking: {
-    borderColor: '#39FF6A',
+    borderColor: COLORS.green,
+    shadowColor: COLORS.green,
     transform: [{ scale: 1.05 }],
   },
   robotFace: {
@@ -342,17 +349,17 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.neon,
+    backgroundColor: COLORS.primary,
   },
   eyeSpeaking: {
     height: 5,
-    backgroundColor: '#7FE7D6',
+    backgroundColor: COLORS.green,
   },
   mouthLine: {
     width: 14,
     height: 2,
     borderRadius: 1,
-    backgroundColor: 'rgba(57, 255, 106, 0.5)',
+    backgroundColor: 'rgba(255, 138, 31, 0.6)',
   },
   avatarMeta: {
     flex: 1,
@@ -363,32 +370,30 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   onlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.neon,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: COLORS.green,
   },
   nameText: {
-    color: '#FFF',
+    color: COLORS.navy,
     fontSize: 13,
     fontWeight: '800',
-    fontFamily: 'monospace',
     letterSpacing: 0.5,
   },
   stateBadge: {
-    color: COLORS.teal,
+    color: COLORS.blue,
     fontSize: 9,
-    fontFamily: 'monospace',
-    backgroundColor: 'rgba(127, 231, 214, 0.15)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    fontWeight: '700',
+    backgroundColor: 'rgba(76, 141, 255, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   quotaText: {
     color: COLORS.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 2,
-    fontFamily: 'monospace',
   },
   messageList: {
     flex: 1,
@@ -404,15 +409,20 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#112C20',
+    backgroundColor: 'rgba(255, 138, 31, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(57, 255, 106, 0.3)',
+    borderColor: 'rgba(255, 138, 31, 0.3)',
   },
   rituuBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#091C14',
+    backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
+    shadowColor: 'rgba(20, 30, 60, 0.05)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    elevation: 2,
   },
   loadingBubble: {
     flexDirection: 'row',
@@ -426,116 +436,127 @@ const styles = StyleSheet.create({
   rituuBubbleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     marginBottom: 6,
   },
   rituuSenderText: {
-    color: COLORS.teal,
-    fontSize: 11,
+    color: COLORS.primary,
+    fontSize: 12,
     fontWeight: '800',
   },
   timestampText: {
     color: COLORS.textMuted,
-    fontSize: 9,
+    fontSize: 10,
     marginLeft: 'auto',
   },
   messageText: {
     color: COLORS.textPrimary,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
+  },
+  userMessageText: {
+    color: COLORS.navy,
   },
   codeSnippetBox: {
     marginTop: 10,
     borderRadius: 12,
-    backgroundColor: '#040B08',
+    backgroundColor: '#0F1530',
     borderWidth: 1,
-    borderColor: 'rgba(57, 255, 106, 0.25)',
+    borderColor: '#2A3568',
     overflow: 'hidden',
   },
   codeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: '#171E3F',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#25305E',
   },
   codeLangText: {
-    color: COLORS.teal,
+    color: '#CBD5E1',
     fontSize: 10,
-    fontFamily: 'monospace',
+    fontWeight: '700',
   },
   runInSimBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.neon,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6,
     gap: 4,
   },
   runInSimText: {
-    color: '#000',
-    fontSize: 9,
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: '800',
   },
   codeContent: {
-    padding: 10,
-    color: '#E0FFE8',
+    padding: 12,
+    color: '#F0FFF5',
     fontSize: 11,
-    fontFamily: 'monospace',
-    lineHeight: 16,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 17,
   },
   safetyBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 154, 31, 0.1)',
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
     borderWidth: 1,
-    borderColor: COLORS.warning,
+    borderColor: 'rgba(255, 107, 107, 0.3)',
     borderRadius: 10,
-    padding: 8,
+    padding: 10,
     marginTop: 8,
   },
   safetyText: {
-    color: COLORS.warning,
+    color: COLORS.coral,
     fontSize: 11,
     flex: 1,
+    fontWeight: '600',
   },
   chipsRow: {
     flexDirection: 'row',
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    gap: 6,
+    paddingVertical: 8,
+    gap: 8,
   },
   chip: {
-    backgroundColor: '#071810',
+    backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    shadowColor: 'rgba(20, 30, 60, 0.04)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 1,
   },
   chipText: {
-    color: COLORS.teal,
-    fontSize: 10,
+    color: COLORS.primary,
+    fontSize: 11,
     fontWeight: '600',
   },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#05110C',
+    paddingVertical: 10,
+    backgroundColor: COLORS.card,
     borderTopWidth: 1,
     borderTopColor: COLORS.borderSubtle,
     gap: 8,
   },
   attachBtn: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: '#091A14',
+    backgroundColor: '#F9FAFC',
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     alignItems: 'center',
@@ -543,34 +564,41 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    height: 40,
-    backgroundColor: '#081710',
+    height: 42,
+    backgroundColor: '#F9FAFC',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     color: COLORS.textPrimary,
-    fontSize: 12,
+    fontSize: 13,
   },
   voiceBtn: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: '#091A14',
+    backgroundColor: '#F9FAFC',
+    borderWidth: 1,
+    borderColor: COLORS.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
   voiceBtnActive: {
-    borderColor: COLORS.warning,
-    borderWidth: 1,
+    borderColor: COLORS.coral,
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
   },
   sendBtn: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: COLORS.neon,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 2,
   },
   sendBtnDisabled: {
     opacity: 0.4,

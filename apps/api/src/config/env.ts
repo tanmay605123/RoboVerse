@@ -12,7 +12,8 @@ export const ENV = {
   CLIENT_MOBILE_URL: process.env.CLIENT_MOBILE_URL || 'http://localhost:8081',
   
   // Database & Redis
-  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://roboverse:roboverse_pass@localhost:5432/roboverse_db?schema=public',
+  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/roboverse',
+  DATABASE_URL: process.env.DATABASE_URL || 'mongodb://localhost:27017/roboverse',
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
   
   // JWT Secrets
@@ -26,8 +27,15 @@ export const ENV = {
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || 'mock_razorpay_secret_key_998877',
   RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || 'mock_razorpay_webhook_secret_112233',
   
-  // Anthropic Claude for Rituu (server-side only)
+  // Google Gemini API for Rituu (server-side only)
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || 'mock_gemini_api_key_for_testing',
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+  GEMINI_MODEL_PRO: process.env.GEMINI_MODEL_PRO || 'gemini-1.5-pro',
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || 'mock_claude_api_key_for_testing',
+
+  // Google Maps Platform Keys
+  GOOGLE_MAPS_SERVER_KEY: process.env.GOOGLE_MAPS_SERVER_KEY || 'mock_google_maps_server_key',
+  GOOGLE_MAPS_CLIENT_KEY: process.env.GOOGLE_MAPS_CLIENT_KEY || 'mock_google_maps_client_key',
 
   // Google OAuth
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'mock_google_client_id.apps.googleusercontent.com',

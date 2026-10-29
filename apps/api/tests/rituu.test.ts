@@ -129,4 +129,36 @@ describe('Rituu AI Chatbot & Safety Guardrails API', () => {
     expect(overLimitRes.status).toBe(429);
     expect(overLimitRes.body.error.code).toBe('RITUU_DAILY_QUOTA_EXCEEDED');
   });
+
+  it('should support swapping AI provider behind the AIProvider interface', async () => {
+    const { AIProviderFactory } = await import('../src/services/ai/aiFactory');
+    
+    // Default provider is google-gemini
+    expect(AIProviderFactory.getProvider().name).toBe('google-gemini');
+
+    // Swap to mock-provider
+    AIProviderFactory.setActiveProvider('mock-provider');
+    expect(AIProviderFactory.getProvider().name).toBe('mock-provider');
+
+    const mockRes = await AIProviderFactory.getProvider().generateText('Hello Rituu');
+    expect(mockRes.text).toContain('[MockAIProvider]');
+
+    // Swap back to google-gemini
+    AIProviderFactory.setActiveProvider('google-gemini');
+    expect(AIProviderFactory.getProvider().name).toBe('google-gemini');
+  });
+
+  it('should support Hindi responses when requested', async () => {
+    const res = await request(app)
+      .post('/api/v1/rituu/chat')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        message: 'How do I blink an LED on Arduino Uno?',
+        language: 'hi',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.message.content).toContain('Arduino C++ स्केच');
+  });
 });
+

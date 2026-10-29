@@ -11,6 +11,7 @@ import {
   PinState,
   ComponentSimulationOutput,
 } from '@roboverse/sim-engine';
+import { avrMcuRunner } from '@/lib/simulation/avrRunner';
 
 export type WorkbenchViewMode = '3D' | 'SCHEMATIC' | 'ROBOT_BUILDER';
 export type ToolMode = 'SELECT' | 'WIRE' | 'DELETE' | 'PROBE';
@@ -179,6 +180,15 @@ export interface CircuitState {
   activeChallengeId: string | null;
   challengeCompleted: boolean;
 
+  // RoboVerse Circuit Lab UI State (References B2-B6)
+  projectName: string;
+  activeTab: 'circuits' | 'schematic' | 'components';
+  is3DMode: boolean;
+  wireStyle: 'curved' | 'straight' | 'angled';
+  areComponentsVisible: boolean;
+  isCodeOpen: boolean;
+  isNoteActive: boolean;
+
   // Actions
   setViewMode: (mode: WorkbenchViewMode) => void;
   setToolMode: (mode: ToolMode) => void;
@@ -187,6 +197,21 @@ export interface CircuitState {
   addComponent: (component: CircuitComponent) => void;
   removeComponent: (id: string) => void;
   updateComponentPosition: (id: string, position: [number, number, number]) => void;
+  updateComponentProperties: (id: string, properties: Record<string, any>) => void;
+  rotateComponent: (id: string) => void;
+  flipComponent: (id: string) => void;
+  loadStarterAssembly: (assembly: { components: CircuitComponent[]; wires: WireConnection[]; arduinoCode?: string; title?: string }) => void;
+  
+  setProjectName: (name: string) => void;
+  setActiveTab: (tab: 'circuits' | 'schematic' | 'components') => void;
+  setIs3DMode: (is3D: boolean) => void;
+  toggle3DMode: () => void;
+  setWireStyle: (style: 'curved' | 'straight' | 'angled') => void;
+  setAreComponentsVisible: (visible: boolean) => void;
+  toggleComponentsVisibility: () => void;
+  setIsCodeOpen: (open: boolean) => void;
+  toggleCodeOpen: () => void;
+  setIsNoteActive: (active: boolean) => void;
   
   startWireDraft: (componentId: string, pinId: string) => void;
   completeWireDraft: (componentId: string, pinId: string) => void;
@@ -216,11 +241,20 @@ const sketchRunner = new ArduinoSketchRunner();
 export const useCircuitStore = create<CircuitState>((set, get) => ({
   viewMode: '3D',
   toolMode: 'SELECT',
-  activeWireColor: '#39FF6A',
+  activeWireColor: '#12B76A',
   components: DEFAULT_COMPONENTS,
   wires: DEFAULT_WIRES,
   selectedComponentId: null,
   wireDraftFrom: null,
+
+  // UI state
+  projectName: 'Mighty Bombul-Fyyran',
+  activeTab: 'circuits',
+  is3DMode: false,
+  wireStyle: 'curved',
+  areComponentsVisible: true,
+  isCodeOpen: false,
+  isNoteActive: false,
   
   undoStack: [],
   redoStack: [],
@@ -272,6 +306,73 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
       components: components.map((c) => (c.id === id ? { ...c, position } : c)),
     });
   },
+
+  updateComponentProperties: (id, properties) => {
+    const { components, wires, arduinoCode, undoStack } = get();
+    set({
+      undoStack: [...undoStack, { components, wires, arduinoCode }],
+      redoStack: [],
+      components: components.map((c) =>
+        c.id === id ? { ...c, properties: { ...c.properties, ...properties } } : c
+      ),
+    });
+  },
+
+  rotateComponent: (id) => {
+    const { components, wires, arduinoCode, undoStack } = get();
+    set({
+      undoStack: [...undoStack, { components, wires, arduinoCode }],
+      redoStack: [],
+      components: components.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              rotation: [c.rotation[0], ((c.rotation[1] || 0) + 45) % 360, c.rotation[2]],
+            }
+          : c
+      ),
+    });
+  },
+
+  flipComponent: (id) => {
+    const { components, wires, arduinoCode, undoStack } = get();
+    set({
+      undoStack: [...undoStack, { components, wires, arduinoCode }],
+      redoStack: [],
+      components: components.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              rotation: [c.rotation[0], ((c.rotation[1] || 0) + 180) % 360, c.rotation[2]],
+            }
+          : c
+      ),
+    });
+  },
+
+  loadStarterAssembly: (assembly) => {
+    const { components, wires, arduinoCode, undoStack } = get();
+    set({
+      undoStack: [...undoStack, { components, wires, arduinoCode }],
+      redoStack: [],
+      components: assembly.components,
+      wires: assembly.wires,
+      arduinoCode: assembly.arduinoCode || arduinoCode,
+      projectName: assembly.title || get().projectName,
+      selectedComponentId: null,
+    });
+  },
+
+  setProjectName: (name) => set({ projectName: name }),
+  setActiveTab: (tab) => set({ activeTab: tab }),
+  setIs3DMode: (is3D) => set({ is3DMode: is3D }),
+  toggle3DMode: () => set((state) => ({ is3DMode: !state.is3DMode })),
+  setWireStyle: (style) => set({ wireStyle: style }),
+  setAreComponentsVisible: (visible) => set({ areComponentsVisible: visible }),
+  toggleComponentsVisibility: () => set((state) => ({ areComponentsVisible: !state.areComponentsVisible })),
+  setIsCodeOpen: (open) => set({ isCodeOpen: open }),
+  toggleCodeOpen: () => set((state) => ({ isCodeOpen: !state.isCodeOpen })),
+  setIsNoteActive: (active) => set({ isNoteActive: active }),
 
   startWireDraft: (componentId, pinId) => {
     set({ wireDraftFrom: { componentId, pinId } });
@@ -334,18 +435,29 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
   clearSerialLogs: () => set({ serialLogs: [] }),
 
   startSimulation: () => {
-    const { mcuLoopInterval } = get();
+    const { mcuLoopInterval, arduinoCode } = get();
     if (mcuLoopInterval) clearInterval(mcuLoopInterval);
 
     solver.reset();
     sketchRunner.reset();
+    avrMcuRunner.initMcu();
+    avrMcuRunner.loadCode(arduinoCode);
 
     const interval = setInterval(() => {
-      const { components, wires, activeSketchType, isSimulating } = get();
+      const { components, wires, activeSketchType, isSimulating, arduinoCode: currentCode } = get();
       if (!isSimulating) return;
 
+      avrMcuRunner.loadCode(currentCode);
+      avrMcuRunner.executeLoopTick();
       sketchRunner.executeCycle(activeSketchType);
+
       const pinVoltages = sketchRunner.getPinVoltages();
+      // Apply AVR8js digital pin states
+      for (let p = 0; p <= 13; p++) {
+        const v = avrMcuRunner.getDigitalPinVoltage(p);
+        if (v > 0) pinVoltages.set(p, v);
+      }
+
       const simResult = solver.solveStep(components, wires, pinVoltages);
 
       set({
@@ -356,7 +468,7 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
         diagnostics: simResult.diagnostics,
         serialLogs: sketchRunner.getSerialLogs(),
       });
-    }, 400); // 400ms tick for visible LED blinking and motor motion
+    }, 350); // 350ms tick for responsive visual feedback
 
     set({ isSimulating: true, mcuLoopInterval: interval });
   },

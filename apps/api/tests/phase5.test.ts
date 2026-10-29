@@ -82,6 +82,16 @@ describe('Phase 5: Hackathons Hub, Component Shops & TechSavyyy Store API', () =
       expect(res.body.data.shops.length).toBeGreaterThanOrEqual(1);
       expect(res.body.data.shops.some((s: any) => s.name.includes('ElectroHub'))).toBe(true);
     });
+
+    it('should geocode Indian electronics markets to coordinates via Google Maps Platform endpoint', async () => {
+      const res = await request(app).get('/api/v1/shops/geocode?query=Lamington Road');
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.latitude).toBeCloseTo(18.96, 1);
+      expect(res.body.data.longitude).toBeCloseTo(72.81, 1);
+      expect(res.body.data.city).toBe('Mumbai');
+    });
   });
 
   describe('3. TechSavyyy Store E-Commerce API', () => {

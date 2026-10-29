@@ -39,22 +39,22 @@ export const RituuAvatar: React.FC<RituuAvatarProps> = ({
       className={`relative inline-flex items-center justify-center shrink-0 select-none ${className}`}
       style={{ width: pixelSize, height: pixelSize }}
     >
-      {/* Outer Glowing Halo Ring */}
+      {/* Outer Glowing Cyber Halo Ring */}
       {showHalo && (
         <div
           className={`absolute inset-0 rounded-full transition-all duration-700 pointer-events-none ${
             state === 'thinking'
-              ? 'ring-2 ring-[#7FE7D6] shadow-[0_0_15px_rgba(127,231,214,0.6)] animate-spin'
+              ? 'ring-2 ring-[#7FE7D6] shadow-[0_0_18px_rgba(127,231,214,0.7)] animate-spin'
               : state === 'speaking'
-              ? 'ring-2 ring-[#39FF6A] shadow-[0_0_20px_rgba(57,255,106,0.8)] animate-pulse'
-              : 'ring-1 ring-[#39FF6A]/30 shadow-[0_0_10px_rgba(57,255,106,0.2)]'
+              ? 'ring-2 ring-[#39FF6A] shadow-[0_0_24px_rgba(57,255,106,0.8)] animate-pulse'
+              : 'ring-1 ring-[#39FF6A]/40 shadow-[0_0_10px_rgba(57,255,106,0.25)]'
           }`}
         />
       )}
 
-      {/* Rituu Robot Avatar SVG */}
+      {/* Rituu Robot Avatar Container in Dark Glass */}
       <div
-        className={`relative w-full h-full rounded-2xl overflow-hidden bg-[#07110D] border border-[#39FF6A]/40 flex items-center justify-center p-1 transition-transform ${
+        className={`relative w-full h-full rounded-2xl overflow-hidden bg-[#0E2A1F] border border-[rgba(57,255,106,0.25)] flex items-center justify-center p-1 transition-transform shadow-[0_0_15px_rgba(0,0,0,0.7)] ${
           state === 'thinking'
             ? 'scale-105'
             : state === 'speaking'
@@ -78,7 +78,7 @@ export const RituuAvatar: React.FC<RituuAvatarProps> = ({
           state === 'thinking'
             ? 'bg-[#7FE7D6] animate-ping'
             : state === 'speaking'
-            ? 'bg-[#39FF6A] animate-pulse'
+            ? 'bg-[#39FF6A] shadow-[0_0_6px_#39FF6A] animate-pulse'
             : 'bg-[#39FF6A]'
         }`}
       />

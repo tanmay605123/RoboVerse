@@ -7,3 +7,4 @@ export * from './types/simulator';
 export * from './types/rituu';
 export * from './types/api';
 export * from './data/componentsCatalog';
+export * from './client/apiClient';

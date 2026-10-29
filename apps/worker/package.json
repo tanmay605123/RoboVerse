@@ -1,0 +1,23 @@
+{
+  "name": "@roboverse/worker",
+  "version": "1.0.0",
+  "description": "RoboVerse BullMQ Background Worker for PDFs, Invoices, Certificates, DailyStats, and AI jobs",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@roboverse/shared": "*",
+    "bullmq": "^5.81.5",
+    "dotenv": "^16.4.5",
+    "ioredis": "^5.4.1",
+    "mongoose": "^8.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "tsx": "^4.10.5",
+    "typescript": "^5.4.5"
+  }
+}

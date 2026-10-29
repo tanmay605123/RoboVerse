@@ -2,6 +2,7 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { app } from './app';
 import { ENV } from './config/env';
+import { connectMongo, disconnectMongo } from './lib/mongoose';
 
 const server = http.createServer(app);
 
@@ -41,6 +42,11 @@ io.on('connection', (socket) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
+  // Connect to MongoDB Atlas / replica set
+  connectMongo().catch((err) => {
+    console.warn(`MongoDB init warning: ${err.message}`);
+  });
+
   server.listen(ENV.PORT, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
@@ -57,8 +63,9 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // Graceful shutdown
-const shutdown = () => {
+const shutdown = async () => {
   console.log('Stopping RoboVerse API server gracefully...');
+  await disconnectMongo();
   server.close(() => {
     console.log('RoboVerse API stopped.');
     process.exit(0);

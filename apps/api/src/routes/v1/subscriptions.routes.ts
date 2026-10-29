@@ -263,6 +263,243 @@ router.post(
 );
 
 /**
+ * POST /api/v1/subscriptions/create-qr
+ * Generate Dynamic UPI QR Code via Razorpay QR API with 18% GST and 15-minute countdown timer
+ */
+router.post(
+  '/create-qr',
+  requireAuth,
+  validateBody(CreateSubscriptionOrderInputSchema),
+  async (req: Request, res: Response) => {
+    const userId = req.user!.userId;
+    const { planTier, billingCycle, couponCode, customerState } = req.body;
+
+    if (planTier === PlanTier.FREE) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'FREE_PLAN_NO_PAYMENT', message: 'Free plan does not require QR checkout' },
+      });
+      return;
+    }
+
+    const planId = `plan_${planTier.toLowerCase()}`;
+    const plan = inMemoryDb.plans.get(planId);
+    if (!plan) {
+      res.status(404).json({
+        success: false,
+        error: { code: 'PLAN_NOT_FOUND', message: 'Requested plan not found' },
+      });
+      return;
+    }
+
+    const pricingList = JSON.parse(plan.pricingJson);
+    const selectedPricing = pricingList.find((p: any) => p.cycle === billingCycle);
+    if (!selectedPricing) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_BILLING_CYCLE', message: `Billing cycle '${billingCycle}' not available for ${planTier}` },
+      });
+      return;
+    }
+
+    let finalAmountInr = selectedPricing.priceInrInclusiveGst;
+    if (planTier === PlanTier.INSTITUTION) {
+      finalAmountInr = finalAmountInr * 50;
+    }
+
+    let discountAmountInr = 0;
+    if (couponCode) {
+      const coupon = inMemoryDb.coupons.get(couponCode.toUpperCase());
+      if (coupon && coupon.isActive && new Date(coupon.validUntil) > new Date()) {
+        if (finalAmountInr >= coupon.minOrderAmountInr) {
+          if (coupon.discountPercentage) {
+            discountAmountInr = (finalAmountInr * coupon.discountPercentage) / 100;
+          } else if (coupon.discountAmountInr) {
+            discountAmountInr = coupon.discountAmountInr;
+          }
+          finalAmountInr = Math.max(1, finalAmountInr - discountAmountInr);
+        }
+      }
+    }
+
+    const isInterState = !customerState.toLowerCase().includes('haryana');
+    const taxBreakdown = calculateGst(finalAmountInr, isInterState);
+
+    const qrResult = await razorpayService.createDynamicQrCode({
+      amountInr: finalAmountInr,
+      description: `RoboVerse ${planTier} (${billingCycle})`,
+      notes: {
+        userId,
+        planTier,
+        billingCycle,
+        couponCode: couponCode || '',
+      },
+      expiryMinutes: 15,
+    });
+
+    const qrRecord = {
+      id: qrResult.qrCodeId,
+      userId,
+      planTier,
+      billingCycle,
+      qrCodeId: qrResult.qrCodeId,
+      qrImageUrl: qrResult.qrImageUrl,
+      upiIntentString: qrResult.upiIntentString,
+      amountInr: finalAmountInr,
+      taxBreakdown,
+      status: 'PENDING',
+      expiresAt: qrResult.expiresAt,
+      createdAt: new Date(),
+    };
+
+    inMemoryDb.qrPayments.set(qrResult.qrCodeId, qrRecord);
+
+    res.json({
+      success: true,
+      message: 'Dynamic UPI QR Code generated. Scan with any UPI app (GPay, PhonePe, Paytm, BHIM).',
+      data: {
+        qrCodeId: qrResult.qrCodeId,
+        qrImageUrl: qrResult.qrImageUrl,
+        upiIntentString: qrResult.upiIntentString,
+        amountInr: finalAmountInr,
+        planTier,
+        billingCycle,
+        taxBreakdown,
+        expiresAt: qrResult.expiresAt.toISOString(),
+        expiresInSeconds: qrResult.expiresInSeconds,
+      },
+    });
+  }
+);
+
+/**
+ * GET /api/v1/subscriptions/qr-status/:qrCodeId
+ * Check payment status of a dynamic UPI QR Code (supports frontend polling)
+ */
+router.get('/qr-status/:qrCodeId', requireAuth, async (req: Request, res: Response) => {
+  const { qrCodeId } = req.params;
+  const qrRecord = inMemoryDb.qrPayments.get(qrCodeId);
+
+  if (!qrRecord) {
+    res.status(404).json({
+      success: false,
+      error: { code: 'QR_NOT_FOUND', message: 'QR payment record not found.' },
+    });
+    return;
+  }
+
+  // Check if expired
+  if (qrRecord.status === 'PENDING' && new Date(qrRecord.expiresAt) < new Date()) {
+    qrRecord.status = 'EXPIRED';
+  }
+
+  res.json({
+    success: true,
+    data: {
+      qrCodeId: qrRecord.qrCodeId,
+      status: qrRecord.status,
+      amountInr: qrRecord.amountInr,
+      planTier: qrRecord.planTier,
+      billingCycle: qrRecord.billingCycle,
+      expiresAt: qrRecord.expiresAt,
+      invoiceId: qrRecord.invoiceId || null,
+      subscriptionId: qrRecord.subscriptionId || null,
+    },
+  });
+});
+
+/**
+ * POST /api/v1/subscriptions/simulate-qr-credit
+ * Test sandbox helper: simulate instant credit of a dynamic UPI QR code
+ */
+router.post('/simulate-qr-credit', requireAuth, async (req: Request, res: Response) => {
+  const { qrCodeId } = req.body;
+  const qrRecord = inMemoryDb.qrPayments.get(qrCodeId);
+
+  if (!qrRecord) {
+    res.status(404).json({ success: false, error: { code: 'QR_NOT_FOUND', message: 'QR Code not found' } });
+    return;
+  }
+
+  qrRecord.status = 'CREDITED';
+  qrRecord.razorpayPaymentId = `pay_sim_${Date.now()}`;
+
+  const user = inMemoryDb.users.get(qrRecord.userId);
+  const profile = inMemoryDb.profiles.get(qrRecord.userId);
+  const studentIdRecord = inMemoryDb.studentIds.get(qrRecord.userId);
+
+  if (user) {
+    if (qrRecord.planTier === PlanTier.PRO) {
+      user.role = UserRole.PRO_STUDENT;
+    } else if (qrRecord.planTier === PlanTier.PLUS) {
+      user.role = UserRole.PLUS_STUDENT;
+    }
+  }
+
+  // Deactivate prior active subs
+  Array.from(inMemoryDb.subscriptions.values()).forEach((s) => {
+    if (s.userId === qrRecord.userId && s.status === 'ACTIVE') {
+      s.status = 'CANCELLED';
+    }
+  });
+
+  const now = new Date();
+  const periodEnd = new Date(now);
+  if (qrRecord.billingCycle === BillingCycle.YEARLY) {
+    periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+  } else if (qrRecord.billingCycle === BillingCycle.QUARTERLY) {
+    periodEnd.setMonth(periodEnd.getMonth() + 3);
+  } else {
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
+  }
+
+  const subscriptionId = `sub_${qrRecord.userId}_${Date.now()}`;
+  const sub = {
+    id: subscriptionId,
+    userId: qrRecord.userId,
+    planId: `plan_${qrRecord.planTier.toLowerCase()}`,
+    billingCycle: qrRecord.billingCycle,
+    status: 'ACTIVE',
+    razorpaySubscriptionId: `sub_qr_${Date.now()}`,
+    currentPeriodStart: now,
+    currentPeriodEnd: periodEnd,
+    cancelAtPeriodEnd: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  inMemoryDb.subscriptions.set(subscriptionId, sub);
+  qrRecord.subscriptionId = subscriptionId;
+
+  const invoice = generateGstInvoice({
+    orderId: qrRecord.qrCodeId,
+    userId: qrRecord.userId,
+    studentId: studentIdRecord?.studentId || 'RV-STUDENT',
+    customerName: profile?.fullName || 'RoboVerse Student',
+    customerEmail: user?.email || 'student@roboverse.io',
+    customerState: 'Delhi',
+    planName: qrRecord.planTier,
+    billingCycle: qrRecord.billingCycle,
+    grossAmountInr: qrRecord.amountInr,
+    paymentMethod: PaymentMethodType.UPI,
+    paymentId: qrRecord.razorpayPaymentId,
+  });
+  inMemoryDb.invoices.set(invoice.id, invoice);
+  qrRecord.invoiceId = invoice.id;
+
+  res.json({
+    success: true,
+    message: 'QR Payment successfully credited.',
+    data: {
+      qrCodeId,
+      status: 'CREDITED',
+      subscriptionId,
+      invoiceId: invoice.id,
+      userRole: user?.role,
+    },
+  });
+});
+
+/**
  * POST /api/v1/subscriptions/webhook
  * Razorpay Webhook Handler
  */
@@ -287,6 +524,79 @@ router.post('/webhook', async (req: Request, res: Response) => {
   console.log(`🔔 Razorpay Webhook Event Received: ${event}`);
 
   switch (event) {
+    case 'qr_code.credited': {
+      const qrId = payload?.qr_code?.entity?.id;
+      const paymentEntity = payload?.payment?.entity;
+      const qrRecord = inMemoryDb.qrPayments.get(qrId);
+
+      if (qrRecord && qrRecord.status !== 'CREDITED') {
+        qrRecord.status = 'CREDITED';
+        qrRecord.razorpayPaymentId = paymentEntity?.id || `pay_qr_${Date.now()}`;
+
+        const user = inMemoryDb.users.get(qrRecord.userId);
+        const profile = inMemoryDb.profiles.get(qrRecord.userId);
+        const studentIdRecord = inMemoryDb.studentIds.get(qrRecord.userId);
+
+        if (user) {
+          if (qrRecord.planTier === PlanTier.PRO) {
+            user.role = UserRole.PRO_STUDENT;
+          } else if (qrRecord.planTier === PlanTier.PLUS) {
+            user.role = UserRole.PLUS_STUDENT;
+          }
+        }
+
+        Array.from(inMemoryDb.subscriptions.values()).forEach((s) => {
+          if (s.userId === qrRecord.userId && s.status === 'ACTIVE') {
+            s.status = 'CANCELLED';
+          }
+        });
+
+        const now = new Date();
+        const periodEnd = new Date(now);
+        if (qrRecord.billingCycle === BillingCycle.YEARLY) {
+          periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+        } else if (qrRecord.billingCycle === BillingCycle.QUARTERLY) {
+          periodEnd.setMonth(periodEnd.getMonth() + 3);
+        } else {
+          periodEnd.setMonth(periodEnd.getMonth() + 1);
+        }
+
+        const subscriptionId = `sub_${qrRecord.userId}_${Date.now()}`;
+        const sub = {
+          id: subscriptionId,
+          userId: qrRecord.userId,
+          planId: `plan_${qrRecord.planTier.toLowerCase()}`,
+          billingCycle: qrRecord.billingCycle,
+          status: 'ACTIVE',
+          razorpaySubscriptionId: `sub_qr_${Date.now()}`,
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+          cancelAtPeriodEnd: false,
+          createdAt: now,
+          updatedAt: now,
+        };
+        inMemoryDb.subscriptions.set(subscriptionId, sub);
+        qrRecord.subscriptionId = subscriptionId;
+
+        const invoice = generateGstInvoice({
+          orderId: qrRecord.qrCodeId,
+          userId: qrRecord.userId,
+          studentId: studentIdRecord?.studentId || 'RV-STUDENT',
+          customerName: profile?.fullName || 'RoboVerse Student',
+          customerEmail: user?.email || 'student@roboverse.io',
+          customerState: 'Delhi',
+          planName: qrRecord.planTier,
+          billingCycle: qrRecord.billingCycle,
+          grossAmountInr: qrRecord.amountInr,
+          paymentMethod: PaymentMethodType.UPI,
+          paymentId: qrRecord.razorpayPaymentId,
+        });
+        inMemoryDb.invoices.set(invoice.id, invoice);
+        qrRecord.invoiceId = invoice.id;
+      }
+      break;
+    }
+
     case 'subscription.charged':
     case 'payment.captured': {
       // Find subscription and extend period

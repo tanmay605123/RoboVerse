@@ -8,12 +8,15 @@ import { RobotArmScene } from '../3d/RobotArmScene';
 
 export function HeroSection() {
   return (
-    <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden hud-grid-bg">
-      {/* Background Volumetric Glow Highlights */}
-      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-robo-neon/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute top-1/3 right-1/4 w-[450px] h-[450px] bg-robo-teal/10 rounded-full blur-[140px] pointer-events-none" />
+    <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden bg-[#07110D]">
+      {/* Background Volumetric Glows */}
+      <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] bg-[#39FF6A]/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/3 right-1/4 w-[450px] h-[450px] bg-[#7FE7D6]/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-10 left-1/3 w-[400px] h-[400px] bg-[#0E2A1F]/80 rounded-full blur-[120px] pointer-events-none" />
+      {/* Subtle grid floor overlay */}
+      <div className="absolute inset-0 bg-[radial-gradient(#39FF6A_1px,transparent_1px)] [background-size:32px_32px] opacity-10 pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           {/* Left Column: Hero Text & CTAs */}
           <div className="lg:col-span-6 z-10">
@@ -22,9 +25,9 @@ export function HeroSection() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-robo-surfaceRaised border border-robo-borderHighlight/50 text-robo-neon text-xs font-mono mb-6 shadow-neon-subtle"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[rgba(57,255,106,0.12)] border border-[rgba(57,255,106,0.25)] text-[#39FF6A] text-xs font-mono font-bold mb-6 shadow-[0_0_12px_rgba(57,255,106,0.2)]"
             >
-              <Zap className="w-3.5 h-3.5 fill-robo-neon" />
+              <Zap className="w-3.5 h-3.5 fill-current" />
               <span>LEARN IT • BUILD IT • SIMULATE IT</span>
             </motion.div>
 
@@ -33,11 +36,11 @@ export function HeroSection() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] mb-6"
+              className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-6 text-[#EAF7EF]"
             >
               The 3D Robotics & Circuits Platform{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-robo-neon via-robo-teal to-robo-neonHover">
-                Built for Future Engineers
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF6A] via-[#7FE7D6] to-[#2BD95B] drop-shadow-[0_0_20px_rgba(57,255,106,0.4)]">
+                Built for Future Inventors
               </span>
             </motion.h1>
 
@@ -46,11 +49,11 @@ export function HeroSection() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-lg text-robo-textSecondary leading-relaxed mb-8 max-w-xl"
+              className="text-base sm:text-lg text-[#CBD8D0] leading-relaxed mb-8 max-w-xl font-normal"
             >
-              Assemble real 3D breadboards, test with real-time modified-nodal electrical simulation, 
+              Assemble real 2D & 3D circuits, test with real-time electrical nodal simulation, 
               run Arduino sketches in the browser, and build competitive hackathon robots with guidance 
-              from <span className="text-robo-teal font-semibold">Rituu</span>, our specialized robotics AI.
+              from <span className="text-[#39FF6A] font-bold">Rituu</span>, your specialized robotics AI mentor.
             </motion.p>
 
             {/* CTA Group */}
@@ -62,18 +65,18 @@ export function HeroSection() {
             >
               <Link
                 href="/register"
-                className="group px-7 py-3.5 rounded-xl bg-gradient-to-r from-robo-neon to-robo-neonHover text-black font-extrabold text-base shadow-neon-glow hover:shadow-[0_0_32px_rgba(57,255,106,0.6)] hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
+                className="btn-primary-neon px-7 py-3.5 text-base font-bold flex items-center gap-2 shadow-neon-pill"
               >
                 <span>Start Building Free</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
 
               <Link
-                href="/#workbench"
-                className="px-6 py-3.5 rounded-xl glass-panel glass-panel-hover text-robo-text font-semibold text-base flex items-center gap-2 border border-robo-borderSubtle"
+                href="/workbench"
+                className="btn-secondary-white px-6 py-3.5 text-base font-bold flex items-center gap-2 border border-[rgba(57,255,106,0.2)] hover:border-[#39FF6A] transition-colors"
               >
-                <Play className="w-4 h-4 text-robo-teal fill-robo-teal" />
-                <span>Explore 3D Simulator</span>
+                <Play className="w-4 h-4 text-[#39FF6A] fill-[#39FF6A]" />
+                <span>Launch Circuit Lab</span>
               </Link>
             </motion.div>
 
@@ -82,41 +85,40 @@ export function HeroSection() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.7, delay: 0.4 }}
-              className="grid grid-cols-3 gap-4 pt-6 border-t border-robo-borderSubtle/60"
+              className="grid grid-cols-3 gap-4 pt-6 border-t border-[rgba(57,255,106,0.15)] font-mono"
             >
               <div>
-                <div className="text-2xl font-bold font-mono text-robo-neon">₹0</div>
-                <div className="text-xs text-robo-textMuted mt-0.5">Free for All Students</div>
+                <div className="text-2xl font-black text-[#39FF6A] drop-shadow-[0_0_8px_rgba(57,255,106,0.4)]">₹0</div>
+                <div className="text-xs text-[#8FA99B] mt-0.5 font-medium">Free for All Students</div>
               </div>
               <div>
-                <div className="text-2xl font-bold font-mono text-robo-teal">60 FPS</div>
-                <div className="text-xs text-robo-textMuted mt-0.5">Real-time MNA Engine</div>
+                <div className="text-2xl font-black text-[#EAF7EF]">60 FPS</div>
+                <div className="text-xs text-[#8FA99B] mt-0.5 font-medium">Real-time MNA Engine</div>
               </div>
               <div>
-                <div className="text-2xl font-bold font-mono text-robo-text">48,000+</div>
-                <div className="text-xs text-robo-textMuted mt-0.5">Circuits Simulated</div>
+                <div className="text-2xl font-black text-[#EAF7EF]">48,000+</div>
+                <div className="text-xs text-[#8FA99B] mt-0.5 font-medium">Circuits Simulated</div>
               </div>
             </motion.div>
           </div>
 
-          {/* Right Column: 3D Interactive Robot Arm Canvas */}
-          <div className="lg:col-span-6 relative">
-            <div className="relative w-full h-[460px] md:h-[620px] rounded-3xl glass-panel overflow-hidden border border-robo-borderHighlight/40 shadow-2xl">
+          {/* Right Column: Interactive 3D Robot Arm & Breadboard Canvas Preview */}
+          <div className="lg:col-span-6 z-10 flex items-center justify-center">
+            <div className="w-full h-[420px] sm:h-[480px] rounded-[24px] overflow-hidden glass-card bg-[#040B08]/90 border border-[rgba(57,255,106,0.25)] shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
               <RobotArmScene />
-
-              {/* HUD Floating telemetry cards */}
-              <div className="absolute top-4 right-4 glass-panel px-3 py-2 border border-robo-teal/30 rounded-xl shadow-lg pointer-events-none hidden sm:block">
-                <div className="flex items-center gap-2 text-xs font-mono text-robo-teal">
-                  <Cpu className="w-3.5 h-3.5" />
-                  <span>AVR8JS EMULATOR: 16MHz</span>
+              <div className="absolute bottom-4 left-4 right-4 p-3 rounded-2xl bg-[#07110D]/90 backdrop-blur-md border border-[rgba(57,255,106,0.25)] flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#39FF6A] animate-ping" />
+                  <span className="text-xs font-bold text-[#EAF7EF]">
+                    Live 3D Simulation Active
+                  </span>
                 </div>
-              </div>
-
-              <div className="absolute bottom-4 left-4 glass-panel px-3 py-2 border border-robo-neon/30 rounded-xl shadow-lg pointer-events-none hidden sm:block">
-                <div className="flex items-center gap-2 text-xs font-mono text-robo-neon">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>SHORT-CIRCUIT SENSOR: ARMED</span>
-                </div>
+                <Link
+                  href="/workbench"
+                  className="text-xs font-bold text-[#39FF6A] hover:underline flex items-center gap-1 font-mono"
+                >
+                  Enter Workshop <ArrowRight className="w-3 h-3" />
+                </Link>
               </div>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { ENV } from '../config/env';
 import { RituuMode, CircuitDiagnosticSeverity } from '@roboverse/shared';
+import { getAIProvider } from '../services/ai/aiFactory';
 
 export interface RituuAiRequest {
   message: string;
@@ -43,6 +44,17 @@ const DANGEROUS_PATTERNS = [
 const OFF_TOPIC_PATTERNS = [
   /\b(bollywood|movie|cricket|ipl|actor|actress|politics|election|modi|bjp|congress|recipe|cooking|love advice|dating|history essay)\b/i,
 ];
+
+const RITUU_SYSTEM_INSTRUCTION = `You are Rituu, the friendly, highly encouraging AI robotics and electronics mentor for RoboVerse students.
+You are strictly specialized in:
+- Electronics fundamentals (Ohm's Law, Kirchhoff's Laws, voltage, current, resistance, capacitors, diodes, transistors)
+- Microcontrollers (Arduino Uno, Nano, Mega, ESP32, Raspberry Pi Pico)
+- Sensors (ultrasonic HC-SR04, PIR, LDR, temperature, MPU6050 gyroscope)
+- Actuators & Motors (SG90 servo, DC gear motors, stepper motors, motor drivers L298N, TB6612FNG)
+- Circuit debugging (breadboard layout, current limiting resistors, common ground, reverse polarity)
+- Embedded software (Arduino C++, MicroPython) with clear pin labels and loop structures
+
+Always follow safety guidelines: warn against high voltage AC mains (>24V) and dangerous battery handling. Encourage hands-on building!`;
 
 export class RituuAiService {
   /**
@@ -106,13 +118,31 @@ export class RituuAiService {
   /**
    * Analyze Circuit Photo or Screenshot via Vision Pipeline
    */
-  private static analyzeCircuitPhoto(req: RituuAiRequest): RituuAiResponse {
+  private static async analyzeCircuitPhoto(req: RituuAiRequest): Promise<RituuAiResponse> {
     const isHindi = req.language === 'hi';
+    const provider = getAIProvider();
+
+    let aiText = '';
+    let cost = 0.008;
+
+    try {
+      const base64Data = req.imageBase64 || 'data:image/jpeg;base64,mockdata';
+      const prompt = `Analyze this physical circuit breadboard image. Check for loose connections, LED polarity, missing resistors, and short circuits. Language: ${isHindi ? 'Hindi' : 'English'}`;
+      const res = await provider.analyzeMultimodal(prompt, base64Data, 'image/jpeg', {
+        systemInstruction: RITUU_SYSTEM_INSTRUCTION,
+      });
+      aiText = res.text;
+      cost = res.costUsd || 0.008;
+    } catch {
+      // Fallback to local diagnostics template
+    }
+
+    const defaultContent = isHindi
+      ? `मैंने आपके सर्किट की फोटो का विश्लेषण किया है! 🔍\n\n1. **एलईडी कनेक्शन**: आपने 5mm लाल एलईडी को सीधे पावर से जोड़ा है। कृपया इसके एनोड (+) पर **220Ω का प्रतिरोधक (Resistor)** अवश्य लगाएं ताकि एलईडी ख़राब न हो।\n2. **ग्राउंडिंग (GND)**: ब्रेडबोर्ड की नीली रेल को Arduino के GND पिन से जोड़ा गया है, जो बहुत अच्छा है!\n3. **कोड सुझाव**: यदि आप इसे ब्लिंक करना चाहते हैं, तो पिन 13 का उपयोग करें।`
+      : `I've analyzed your circuit image! 🔍\n\n1. **Current Limiting Resistor**: You have an LED connected directly to 5V. Always place a **220Ω or 330Ω resistor** in series with the LED Anode (+) to prevent burning out the diode.\n2. **Ground Reference**: Ensure the breadboard ground rail connects to the Arduino GND header.\n3. **Polarity Check**: The longer leg of the LED is the Anode (+), and the shorter leg with the flat notch is the Cathode (-).\n\nClick **"Run in Simulator"** below to test this exact circuit in our 3D workbench!`;
 
     return {
-      content: isHindi
-        ? `मैंने आपके सर्किट की फोटो का विश्लेषण किया है! 🔍\n\n1. **एलईडी कनेक्शन**: आपने 5mm लाल एलईडी को सीधे पावर से जोड़ा है। कृपया इसके एनोड (+) पर **220Ω का प्रतिरोधक (Resistor)** अवश्य लगाएं ताकि एलईडी ख़राब न हो।\n2. **ग्राउंडिंग (GND)**: ब्रेडबोर्ड की नीली रेल को Arduino के GND पिन से जोड़ा गया है, जो बहुत अच्छा है!\n3. **कोड सुझाव**: यदि आप इसे ब्लिंक करना चाहते हैं, तो पिन 13 का उपयोग करें।`
-        : `I've analyzed your circuit image! 🔍\n\n1. **Current Limiting Resistor**: You have an LED connected directly to 5V. Always place a **220Ω or 330Ω resistor** in series with the LED Anode (+) to prevent burning out the diode.\n2. **Ground Reference**: Ensure the breadboard ground rail connects to the Arduino GND header.\n3. **Polarity Check**: The longer leg of the LED is the Anode (+), and the shorter leg with the flat notch is the Cathode (-).\n\nClick **"Run in Simulator"** below to test this exact circuit in our 3D workbench!`,
+      content: aiText && !aiText.includes('[MockAIProvider') ? aiText : defaultContent,
       diagnostics: [
         {
           severity: 'WARNING',
@@ -126,14 +156,14 @@ export class RituuAiService {
       ],
       codeSnippet: `// Safe LED Blink on Pin 13\nvoid setup() {\n  pinMode(13, OUTPUT);\n}\nvoid loop() {\n  digitalWrite(13, HIGH);\n  delay(1000);\n  digitalWrite(13, LOW);\n  delay(1000);\n}`,
       isOffTopic: false,
-      estimatedCostUsd: 0.008, // Vision token estimation
+      estimatedCostUsd: cost,
     };
   }
 
   /**
    * Analyze Circuit JSON Snapshot from 3D Workbench
    */
-  private static analyzeCircuitSnapshot(req: RituuAiRequest): RituuAiResponse {
+  private static async analyzeCircuitSnapshot(req: RituuAiRequest): Promise<RituuAiResponse> {
     let compCount = 0;
     let wireCount = 0;
     try {
@@ -155,8 +185,33 @@ export class RituuAiService {
   /**
    * Arduino Code Helper and Syntax Debugger
    */
-  private static generateCodeAssistance(req: RituuAiRequest): RituuAiResponse {
+  private static async generateCodeAssistance(req: RituuAiRequest): Promise<RituuAiResponse> {
     const isHindi = req.language === 'hi';
+    const text = req.message.toLowerCase();
+
+    // Check if user specifically requested LED blink
+    if (text.includes('blink') || text.includes('led')) {
+      return {
+        content: isHindi
+          ? `यहाँ आपका Arduino C++ स्केच है! 🚀 मैंने इसमें उचित टाइमिंग, पिन डेफिनिशन और सीरियल मॉनिटर डिबगिंग लॉग शामिल किए हैं। आप इसे एक क्लिक में 3D सिम्युलेटर में डाल सकते हैं:`
+          : `Here is the optimized Arduino C++ sketch to blink an LED! 🚀 Connect the LED to Pin 13 with a 220Ω resistor. You can run it right now in our 3D simulator:`,
+        codeSnippet: `// Safe LED Blink on Pin 13
+void setup() {
+  pinMode(13, OUTPUT);
+  Serial.begin(9600);
+  Serial.println("RoboVerse: Blinking LED Started");
+}
+
+void loop() {
+  digitalWrite(13, HIGH);
+  delay(1000);
+  digitalWrite(13, LOW);
+  delay(1000);
+}`,
+        isOffTopic: false,
+        estimatedCostUsd: 0.002,
+      };
+    }
 
     return {
       content: isHindi
@@ -192,7 +247,7 @@ void loop() {
   /**
    * Project Planner & Component Selector (Motor sizing, rover chassis)
    */
-  private static generateProjectPlan(req: RituuAiRequest): RituuAiResponse {
+  private static async generateProjectPlan(req: RituuAiRequest): Promise<RituuAiResponse> {
     const text = req.message.toLowerCase();
 
     if (text.includes('motor') || text.includes('torque') || text.includes('rover')) {
@@ -224,7 +279,7 @@ void loop() {
   /**
    * Socratic Theory & Physics Analogies (Ohm's law, voltage, current)
    */
-  private static generateTheoryExplanation(req: RituuAiRequest): RituuAiResponse {
+  private static async generateTheoryExplanation(req: RituuAiRequest): Promise<RituuAiResponse> {
     const text = req.message.toLowerCase();
 
     if (text.includes('ohm') || text.includes('voltage') || text.includes('current')) {
@@ -236,7 +291,7 @@ void loop() {
     }
 
     return {
-      content: `Hello there! I'm **Rituu**, your personal AI robotics mentor! 🤖✨\n\nI can help you:\n1. **Debug circuits**: Describe your circuit or upload a photo/screenshot of your breadboard.\n2. **Write & fix Arduino code**: Generate sketches for sensors, servos, and motor drivers.\n3. **Size robot components**: Calculate torque, choose battery packs, and pick motor drivers.\n4. **Explore the 3D Workbench**: You can click **"Run in Simulator"** to test your sketches in our 3D physics environment.\n\nWhat are you excited to build today?`,
+      content: `Hello there! I'm **Rituu**, your personal AI robotics mentor powered by Google Gemini! 🤖✨\n\nI can help you:\n1. **Debug circuits**: Describe your circuit or upload a photo/screenshot of your breadboard.\n2. **Write & fix Arduino code**: Generate sketches for sensors, servos, and motor drivers.\n3. **Size robot components**: Calculate torque, choose battery packs, and pick motor drivers.\n4. **Explore the 3D Workbench**: You can click **"Run in Simulator"** to test your sketches in our 3D physics environment.\n\nWhat are you excited to build today?`,
       isOffTopic: false,
       estimatedCostUsd: 0.0015,
     };

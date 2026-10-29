@@ -9,12 +9,15 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@react-three/drei": "^9.105.6",
     "@react-three/fiber": "^8.16.6",
+    "@roboverse/components-lib": "*",
     "@roboverse/shared": "*",
     "@roboverse/sim-engine": "*",
     "@roboverse/ui-tokens": "*",
     "@tanstack/react-query": "^5.37.1",
+    "avr8js": "^0.21.1",
     "canvas-confetti": "^1.9.3",
     "framer-motion": "^11.2.4",
     "gsap": "^3.12.5",

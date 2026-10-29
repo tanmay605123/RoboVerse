@@ -58,6 +58,50 @@ export class RazorpayService {
     };
   }
 
+  public async createDynamicQrCode(params: {
+    amountInr: number;
+    description: string;
+    notes?: Record<string, string>;
+    expiryMinutes?: number;
+  }): Promise<{
+    qrCodeId: string;
+    qrImageUrl: string;
+    upiIntentString: string;
+    amountInr: number;
+    expiresAt: Date;
+    expiresInSeconds: number;
+  }> {
+    const amountInPaise = Math.round(params.amountInr * 100);
+    const expirySec = (params.expiryMinutes || 15) * 60;
+    const expiresAt = new Date(Date.now() + expirySec * 1000);
+    const qrCodeId = `qr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    // Standard NPCI UPI URI Scheme
+    const upiIntentString = `upi://pay?pa=roboverse@icici&pn=RoboVerse%20Technologies&am=${params.amountInr.toFixed(
+      2
+    )}&cu=INR&tn=${encodeURIComponent(params.description)}&tr=${qrCodeId}`;
+
+    const QRCode = require('qrcode');
+    const qrImageUrl = await QRCode.toDataURL(upiIntentString, {
+      errorCorrectionLevel: 'M',
+      width: 320,
+      margin: 2,
+      color: {
+        dark: '#1B2559',
+        light: '#FFFFFF',
+      },
+    });
+
+    return {
+      qrCodeId,
+      qrImageUrl,
+      upiIntentString,
+      amountInr: params.amountInr,
+      expiresAt,
+      expiresInSeconds: expirySec,
+    };
+  }
+
   public verifyPaymentSignature(params: {
     orderId: string;
     paymentId: string;

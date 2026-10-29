@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Logo } from '../../components/brand/Logo';
-import { Eye, EyeOff, Lock, Mail, Smartphone, Fingerprint, Sparkles, ArrowRight, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, Smartphone, Fingerprint, Sparkles, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../../lib/apiClient';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -25,6 +25,7 @@ export default function LoginPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Handle Password / Student ID Login
   const handlePasswordLogin = async (e: React.FormEvent) => {
@@ -46,12 +47,14 @@ export default function LoginPage() {
     setAuth({
       user: res.data.user,
       profile: res.data.profile,
-      studentIdCard: res.data.profile?.studentId ? {
-        studentId: res.data.profile.studentId,
-        qrCodeDataUrl: '',
-        verificationUrl: '',
-        validUntil: '',
-      } : undefined,
+      studentIdCard: res.data.profile?.studentId
+        ? {
+            studentId: res.data.profile.studentId,
+            qrCodeDataUrl: '',
+            verificationUrl: '',
+            validUntil: '',
+          }
+        : undefined,
       tokens: res.data.tokens,
     });
 
@@ -75,6 +78,7 @@ export default function LoginPage() {
     }
 
     setOtpSent(true);
+    setSuccessMessage('OTP sent to ' + mobileNumber);
     if (res.data?.debugOtp) {
       setDebugOtp(res.data.debugOtp);
       setOtp(res.data.debugOtp);
@@ -101,294 +105,250 @@ export default function LoginPage() {
     setAuth({
       user: res.data.user,
       profile: res.data.profile,
+      studentIdCard: res.data.studentIdCard,
       tokens: res.data.tokens,
     });
 
     router.push('/dashboard');
   };
 
-  // Handle Biometric Login
-  const handleBiometricLogin = async () => {
-    setLoading(true);
-    setError(null);
-
-    const challengeRes = await apiRequest('/auth/biometric/challenge', {
-      method: 'POST',
-      body: JSON.stringify({ studentIdOrEmail: identifier }),
-    });
-
-    if (!challengeRes.success) {
-      setLoading(false);
-      setError('Biometric challenge initialization failed.');
-      return;
+  // Quick Demo credentials
+  const handleDemoFill = (role: 'student' | 'mentor' | 'admin') => {
+    if (role === 'student') {
+      setIdentifier('vikram.aditya@example.com');
+      setPassword('RoboSpark#2026');
+    } else if (role === 'mentor') {
+      setIdentifier('mentor.rahul@roboverse.io');
+      setPassword('RoboSpark#2026');
+    } else if (role === 'admin') {
+      setIdentifier('admin@roboverse.io');
+      setPassword('Admin@2026!');
     }
-
-    // Verify challenge
-    const verifyRes = await apiRequest('/auth/biometric/verify', {
-      method: 'POST',
-      body: JSON.stringify({
-        studentIdOrEmail: identifier,
-        challenge: challengeRes.data.challenge,
-        signature: 'mock_biometric_signature_verified_2026',
-        publicKey: 'mock_public_key_stored_device',
-      }),
-    });
-
-    setLoading(false);
-    if (!verifyRes.success) {
-      setError(verifyRes.error?.message || 'Biometric authentication was rejected.');
-      return;
-    }
-
-    setAuth({
-      user: verifyRes.data.user,
-      profile: verifyRes.data.profile,
-      tokens: verifyRes.data.tokens,
-    });
-
-    router.push('/dashboard');
-  };
-
-  // Handle Quick Demo Student Fill
-  const handleDemoStudent = () => {
-    setIdentifier('RV-2026-000001');
-    setPassword('RoboSpark#2026');
   };
 
   return (
-    <div className="min-h-screen bg-robo-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative hud-grid-bg">
-      {/* Background Volumetric Glows */}
-      <div className="absolute top-1/4 right-1/4 w-[400px] h-[400px] bg-robo-neon/10 rounded-full blur-[120px] pointer-events-none" />
+    <div className="min-h-screen bg-[#07110D] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative font-sans overflow-hidden selection:bg-[#39FF6A] selection:text-black">
+      {/* Background Grid & Neon Green Glow Orbs */}
+      <div className="absolute inset-0 bg-[radial-gradient(#39FF6A_1px,transparent_1px)] [background-size:32px_32px] opacity-10 pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] bg-[#39FF6A]/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-[450px] h-[450px] bg-[#7FE7D6]/10 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* Top Navigation Back to Home */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-8">
-        <div className="flex justify-center mb-4">
-          <Logo variant="stacked" size="lg" />
+      {/* Top Brand Logo Header */}
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6 relative z-10">
+        <div className="flex justify-center mb-3">
+          <Logo variant="horizontal" size="lg" />
         </div>
-        <h2 className="text-2xl font-bold font-sans tracking-tight text-robo-text">
-          Access Your Control Room
+        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-[#EAF7EF]">
+          Welcome to RoboVerse
         </h2>
-        <p className="text-xs text-robo-textSecondary mt-1">
-          Enter with your email, unique Student ID, or mobile OTP
+        <p className="text-xs text-[#8FA99B] mt-1 font-mono">
+          Log in with your Email, unique Student ID, or Mobile OTP
         </p>
       </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-4xl px-4">
-        <div className="rounded-3xl glass-panel p-8 sm:p-10 border border-robo-borderHighlight/40 shadow-2xl grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-          {/* Left Column: Form Controls */}
-          <div className="md:col-span-7">
-            {/* Login Mode Tabs */}
-            <div className="flex rounded-xl bg-robo-surface p-1 mb-6 border border-robo-borderSubtle">
-              <button
-                type="button"
-                onClick={() => { setActiveTab('password'); setError(null); }}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                  activeTab === 'password'
-                    ? 'bg-robo-neon text-black font-bold shadow-neon-subtle'
-                    : 'text-robo-textSecondary hover:text-robo-text'
-                }`}
-              >
-                <Mail className="w-3.5 h-3.5" />
-                <span>Student ID / Email</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setActiveTab('otp'); setError(null); }}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                  activeTab === 'otp'
-                    ? 'bg-robo-neon text-black font-bold shadow-neon-subtle'
-                    : 'text-robo-textSecondary hover:text-robo-text'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>Mobile OTP</span>
-              </button>
+      {/* Centered Dark Glass Card (R4) */}
+      <div className="sm:mx-auto sm:w-full sm:max-w-lg relative z-10">
+        <div className="rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.2)] backdrop-blur-xl p-8 sm:p-10 shadow-[0_0_50px_rgba(7,17,13,0.9)]">
+          {/* Login Mode Toggle Tabs (Active = Neon Green Capsule) */}
+          <div className="flex rounded-full bg-[#040B08] p-1 mb-6 border border-[rgba(57,255,106,0.2)]">
+            <button
+              type="button"
+              onClick={() => { setActiveTab('password'); setError(null); }}
+              className={`flex-1 py-2 text-xs font-bold rounded-full transition-all flex items-center justify-center gap-1.5 font-mono ${
+                activeTab === 'password'
+                  ? 'bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[#39FF6A] shadow-[0_0_12px_rgba(57,255,106,0.3)]'
+                  : 'text-[#8FA99B] hover:text-[#EAF7EF]'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Email / Student ID</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('otp'); setError(null); }}
+              className={`flex-1 py-2 text-xs font-bold rounded-full transition-all flex items-center justify-center gap-1.5 font-mono ${
+                activeTab === 'otp'
+                  ? 'bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[#39FF6A] shadow-[0_0_12px_rgba(57,255,106,0.3)]'
+                  : 'text-[#8FA99B] hover:text-[#EAF7EF]'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Mobile OTP</span>
+            </button>
+          </div>
+
+          {/* Feedback Messages */}
+          {error && (
+            <div className="mb-4 p-3.5 rounded-2xl bg-[rgba(255,107,107,0.1)] border border-[rgba(255,107,107,0.3)] text-xs text-[#FF6B6B] flex items-center gap-2 font-mono">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
             </div>
+          )}
 
-            {/* Error Notification */}
-            {error && (
-              <div className="mb-4 p-3 rounded-xl bg-robo-red/10 border border-robo-red/40 text-xs text-robo-red flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
+          {successMessage && (
+            <div className="mb-4 p-3.5 rounded-2xl bg-[rgba(57,255,106,0.1)] border border-[rgba(57,255,106,0.3)] text-xs text-[#39FF6A] flex items-center gap-2 font-mono">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {/* TAB 1: Password Form */}
+          {activeTab === 'password' && (
+            <form onSubmit={handlePasswordLogin} className="space-y-4 font-mono text-xs">
+              <div>
+                <label className="block text-xs font-bold text-[#8FA99B] mb-1.5">
+                  Email or Student ID
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8FA99B]" />
+                  <input
+                    type="text"
+                    required
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="e.g. RV-2026-000101 or student@school.edu"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] focus:border-[#39FF6A] text-xs text-[#EAF7EF] focus:outline-none"
+                  />
+                </div>
               </div>
-            )}
 
-            {/* TAB 1: Password Form */}
-            {activeTab === 'password' && (
-              <form onSubmit={handlePasswordLogin} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-robo-textSecondary mb-1.5">
-                    STUDENT ID OR EMAIL ADDRESS
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-[#8FA99B]">
+                    Password
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="e.g. RV-2026-000101 or student@school.edu"
-                      className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text placeholder-robo-textMuted text-sm focus:outline-none focus:border-robo-neon focus:ring-1 focus:ring-robo-neon transition-colors"
-                    />
-                  </div>
+                  <Link
+                    href="/login?forgot=true"
+                    className="text-[11px] font-bold text-[#7FE7D6] hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
                 </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-mono text-robo-textSecondary">
-                      PASSWORD
-                    </label>
-                    <Link
-                      href="/forgot-password"
-                      className="text-xs text-robo-teal hover:text-robo-neon transition-colors"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text placeholder-robo-textMuted text-sm focus:outline-none focus:border-robo-neon focus:ring-1 focus:ring-robo-neon transition-colors pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3 text-robo-textMuted hover:text-robo-text"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8FA99B]" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] focus:border-[#39FF6A] text-xs text-[#EAF7EF] focus:outline-none font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8FA99B] hover:text-[#39FF6A]"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
+              </div>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-robo-neon to-robo-neonHover text-black font-extrabold text-sm shadow-neon-glow hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
-                >
-                  {loading ? (
-                    <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <span>Launch Control Room</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(57,255,106,0.3)] transition-all font-sans"
+              >
+                {loading ? 'Authenticating...' : 'Sign In to RoboVerse'}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          )}
 
-            {/* TAB 2: Mobile OTP Form */}
-            {activeTab === 'otp' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-robo-textSecondary mb-1.5">
-                    REGISTERED MOBILE NUMBER
-                  </label>
-                  <div className="flex gap-2">
+          {/* TAB 2: Mobile OTP Form */}
+          {activeTab === 'otp' && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4 font-mono text-xs">
+              <div>
+                <label className="block text-xs font-bold text-[#8FA99B] mb-1.5">
+                  Registered Mobile Number
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Smartphone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8FA99B]" />
                     <input
                       type="tel"
+                      required
                       value={mobileNumber}
                       onChange={(e) => setMobileNumber(e.target.value)}
                       placeholder="+919876543210"
-                      className="flex-1 px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-neon"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] focus:border-[#39FF6A] text-xs text-[#EAF7EF] focus:outline-none"
                     />
-                    <button
-                      type="button"
-                      onClick={handleSendOtp}
-                      disabled={loading}
-                      className="px-4 py-3 rounded-xl bg-robo-surfaceRaised border border-robo-borderHighlight text-robo-neon text-xs font-mono hover:bg-robo-neon hover:text-black transition-colors"
-                    >
-                      {otpSent ? 'Resend' : 'Send OTP'}
-                    </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={loading}
+                    className="px-4 py-2.5 rounded-xl bg-[rgba(57,255,106,0.15)] text-[#39FF6A] hover:bg-[rgba(57,255,106,0.25)] border border-[#39FF6A]/40 text-xs font-bold shrink-0 transition-colors"
+                  >
+                    {otpSent ? 'Resend' : 'Send OTP'}
+                  </button>
+                </div>
+              </div>
+
+              {otpSent && (
+                <div>
+                  <label className="block text-xs font-bold text-[#8FA99B] mb-1.5">
+                    6-Digit Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    placeholder="e.g. 123456"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] focus:border-[#39FF6A] text-center tracking-widest text-lg font-mono font-bold text-[#39FF6A] focus:outline-none"
+                  />
                   {debugOtp && (
-                    <div className="text-[11px] font-mono text-robo-teal mt-1">
-                      ℹ️ Dev Mode OTP: <span className="font-bold">{debugOtp}</span>
-                    </div>
+                    <p className="text-[11px] text-[#7FE7D6] mt-1.5 font-mono text-center">
+                      Auto-detected Demo OTP: {debugOtp}
+                    </p>
                   )}
                 </div>
-
-                {otpSent && (
-                  <form onSubmit={handleVerifyOtp} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-mono text-robo-textSecondary mb-1.5">
-                        ENTER 6-DIGIT VERIFICATION CODE
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        required
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        placeholder="123456"
-                        className="w-full tracking-widest text-center px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-neon font-mono text-lg focus:outline-none focus:border-robo-neon"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={loading || otp.length < 6}
-                      className="w-full py-3.5 rounded-xl bg-robo-neon text-black font-extrabold text-sm shadow-neon-glow hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-                    >
-                      <span>Verify & Enter Dashboard</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
-
-            {/* Alternative Auth Methods */}
-            <div className="mt-6 pt-6 border-t border-robo-borderSubtle/50 flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={handleBiometricLogin}
-                className="w-full py-2.5 rounded-xl border border-robo-borderSubtle hover:border-robo-teal/50 bg-[#05140D] text-robo-teal text-xs font-medium flex items-center justify-center gap-2 transition-colors"
-              >
-                <Fingerprint className="w-4 h-4" />
-                <span>Sign in with Mobile Biometrics / Passkey</span>
-              </button>
+              )}
 
               <button
-                type="button"
-                onClick={handleDemoStudent}
-                className="w-full py-2 rounded-xl bg-black/40 border border-dashed border-robo-neon/40 text-robo-neon text-[11px] font-mono hover:bg-robo-neon/10 transition-colors"
+                type="submit"
+                disabled={loading || !otpSent}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(57,255,106,0.3)] transition-all font-sans disabled:opacity-50"
               >
-                ⚡ Fill Demo Student Credentials (Auto-Fill)
+                {loading ? 'Verifying OTP...' : 'Verify OTP & Continue'}
+                <ArrowRight className="w-4 h-4" />
               </button>
-            </div>
+            </form>
+          )}
 
-            <div className="mt-6 text-center text-xs text-robo-textSecondary">
-              New to RoboVerse?{' '}
-              <Link href="/register" className="text-robo-neon font-semibold hover:underline">
-                Create free Student ID & Account
-              </Link>
+          {/* Social & Alternative Sign In */}
+          <div className="mt-6 pt-6 border-t border-[rgba(57,255,106,0.1)]">
+            <p className="text-center text-[11px] font-bold text-[#8FA99B] font-mono uppercase tracking-wider mb-3">
+              Quick Evaluator Sign-In
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleDemoFill('student')}
+                className="py-2.5 px-3 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.2)] hover:border-[#39FF6A] text-[#EAF7EF] text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5"
+              >
+                <span>Demo Student</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDemoFill('admin')}
+                className="py-2.5 px-3 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.2)] hover:border-[#39FF6A] text-[#EAF7EF] text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5"
+              >
+                <span>Demo Admin</span>
+              </button>
             </div>
           </div>
 
-          {/* Right Column: 3D Robot Assistant Illustration & Status */}
-          <div className="md:col-span-5 flex flex-col items-center justify-center p-6 rounded-2xl bg-[#040D09]/80 border border-robo-borderSubtle/40 text-center">
-            <div className="relative w-36 h-36 mb-4">
-              <img
-                src="/brand/rituu-avatar-idle.svg"
-                alt="Rituu Robot Assistant"
-                className="w-full h-full animate-float-slow drop-shadow-[0_0_24px_rgba(57,255,106,0.35)]"
-              />
-            </div>
-
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-robo-neon/10 border border-robo-neon/30 text-robo-neon text-[11px] font-mono mb-2">
-              <span className="w-2 h-2 rounded-full bg-robo-neon animate-ping" />
-              <span>RITUU ONLINE</span>
-            </div>
-
-            <h4 className="text-sm font-bold font-sans text-robo-text">
-              &quot;Welcome back, Builder!&quot;
-            </h4>
-            <p className="text-xs text-robo-textMuted mt-1 leading-relaxed max-w-[220px]">
-              Ready to wire new circuits, emulate microcontrollers, and level up your Learning Passport?
+          {/* Footer Register Link */}
+          <div className="mt-6 text-center font-mono text-xs">
+            <p className="text-[#8FA99B]">
+              Don't have an account yet?{' '}
+              <Link href="/register" className="font-bold text-[#39FF6A] hover:underline">
+                Create free student account
+              </Link>
             </p>
           </div>
         </div>

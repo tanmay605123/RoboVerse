@@ -21,6 +21,8 @@
       "@/*": ["./src/*"],
       "@roboverse/shared": ["../../packages/shared/src/index.ts"],
       "@roboverse/shared/*": ["../../packages/shared/src/*"],
+      "@roboverse/components-lib": ["../../packages/components-lib/src/index.ts"],
+      "@roboverse/components-lib/*": ["../../packages/components-lib/src/*"],
       "@roboverse/ui-tokens": ["../../packages/ui-tokens/src/index.ts"],
       "@roboverse/ui-tokens/*": ["../../packages/ui-tokens/src/*"],
       "@roboverse/sim-engine": ["../../packages/sim-engine/src/index.ts"],
