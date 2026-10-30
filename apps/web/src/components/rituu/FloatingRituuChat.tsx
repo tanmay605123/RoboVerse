@@ -3,10 +3,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useRituuStore } from '@/store/useRituuStore';
+import { useRituuStore, RituuChatMode } from '@/store/useRituuStore';
 import { useCircuitStore } from '@/store/useCircuitStore';
 import { RituuAvatar } from './RituuAvatar';
-import { RituuMode } from '@roboverse/shared';
 import {
   Sparkles,
   Send,
@@ -31,6 +30,10 @@ import {
   X,
   Maximize2,
   Minimize2,
+  Square,
+  Wrench,
+  BookOpen,
+  Compass,
 } from 'lucide-react';
 
 const QUICK_SUGGESTIONS = [
@@ -38,6 +41,7 @@ const QUICK_SUGGESTIONS = [
   'How do I calculate resistor value for 5V LED?',
   'Explain Arduino analogRead vs digitalRead',
   'Write code for HC-SR04 ultrasonic sensor',
+  'How do I wire an L298N motor driver?',
 ];
 
 export const FloatingRituuChat: React.FC = () => {
@@ -50,6 +54,8 @@ export const FloatingRituuChat: React.FC = () => {
     avatarState,
     activeMode,
     setMode,
+    hintFirst,
+    setHintFirst,
     messages,
     quota,
     voiceOutputEnabled,
@@ -59,7 +65,7 @@ export const FloatingRituuChat: React.FC = () => {
     uploadedPhotoBase64,
     setUploadedPhoto,
     sendMessage,
-    rateMessage,
+    stopGeneration,
   } = useRituuStore();
 
   const { setArduinoCode } = useCircuitStore();
@@ -108,7 +114,7 @@ export const FloatingRituuChat: React.FC = () => {
       };
 
       recognition.start();
-    } catch (e) {
+    } catch {
       setIsListening(false);
     }
   };
@@ -154,10 +160,12 @@ export const FloatingRituuChat: React.FC = () => {
     }
   };
 
-  // Run snippet in 3D circuit simulator
-  const handleRunInSimulator = (code: string) => {
-    setArduinoCode(code);
-    router.push('/workbench?mode=code');
+  // Apply proposed fix to circuit workbench
+  const handleApplyFix = (codePatch?: string) => {
+    if (codePatch) {
+      setArduinoCode(codePatch);
+      router.push('/workbench?mode=code');
+    }
   };
 
   return (
@@ -177,14 +185,16 @@ export const FloatingRituuChat: React.FC = () => {
                 <span className="w-1.5 h-1.5 rounded-full bg-[#39FF6A] animate-ping" />
               </div>
               <div className="text-[10px] font-mono text-[#8FA99B]">
-                {quota ? `${quota.messagesRemaining} msgs left` : 'AI Robotics Mentor'}
+                {quota
+                  ? `${quota.messagesLimit - quota.messagesUsed} msgs left today`
+                  : 'AI Robotics Mentor'}
               </div>
             </div>
           </button>
         </div>
       )}
 
-      {/* EXPANDED POPUP CHAT PANEL (Dark Glass Control-Room Style R4) */}
+      {/* EXPANDED POPUP CHAT PANEL (Dark Glass Control-Room Style) */}
       {isOpen && (
         <div
           className={`fixed z-50 transition-all font-sans flex flex-col overflow-hidden bg-[#07110D]/95 backdrop-blur-2xl border border-[rgba(57,255,106,0.25)] shadow-[0_0_60px_rgba(0,0,0,0.85)] ${
@@ -206,7 +216,7 @@ export const FloatingRituuChat: React.FC = () => {
                 </div>
                 <div className="text-[10px] font-mono text-[#8FA99B]">
                   {quota
-                    ? `${quota.messagesUsed}/${quota.messagesLimit} msgs used today (${quota.planTier})`
+                    ? `${quota.messagesUsed}/${quota.messagesLimit} msgs used today`
                     : 'Robotics, Circuits & Code'}
                 </div>
               </div>
@@ -253,30 +263,43 @@ export const FloatingRituuChat: React.FC = () => {
             </div>
           </div>
 
-          {/* MENTORSHIP MODE TABS */}
-          <div className="flex items-center gap-1 px-3 py-2 bg-[#0A1F17]/80 border-b border-[rgba(57,255,106,0.12)] text-[10px] font-mono overflow-x-auto shrink-0">
-            <span className="text-[#8FA99B] font-bold mr-1 shrink-0">Mode:</span>
-            {[
-              { id: RituuMode.DEBUG, label: 'Circuit Doctor' },
-              { id: RituuMode.CODE, label: 'Arduino Firmware' },
-              { id: RituuMode.PROJECT_PLANNER, label: 'Kinematics' },
-              { id: RituuMode.LEARN, label: 'Socratic Tutor' },
-            ].map((m) => {
-              const isActive = activeMode === m.id;
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => setMode(m.id)}
-                  className={`px-2.5 py-1 rounded-lg font-bold transition-all shrink-0 ${
-                    isActive
-                      ? 'bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] shadow-[0_0_12px_rgba(57,255,106,0.4)]'
-                      : 'bg-white/5 text-[#8FA99B] hover:text-[#EAF7EF] border border-[rgba(57,255,106,0.1)]'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
+          {/* MENTORSHIP MODE TABS & HINT-FIRST TOGGLE */}
+          <div className="flex items-center justify-between px-3 py-2 bg-[#0A1F17]/80 border-b border-[rgba(57,255,106,0.12)] text-[10px] font-mono shrink-0">
+            <div className="flex items-center gap-1 overflow-x-auto pr-2">
+              <span className="text-[#8FA99B] font-bold mr-1 shrink-0">Mode:</span>
+              {[
+                { id: 'debug', label: 'Debug' },
+                { id: 'code', label: 'Code' },
+                { id: 'plan', label: 'BOM/Plan' },
+                { id: 'learn', label: 'Learn' },
+              ].map((m) => {
+                const isActive = activeMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setMode(m.id as RituuChatMode)}
+                    className={`px-2 py-0.5 rounded-lg font-bold transition-all shrink-0 ${
+                      isActive
+                        ? 'bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] shadow-[0_0_12px_rgba(57,255,106,0.4)]'
+                        : 'bg-white/5 text-[#8FA99B] hover:text-[#EAF7EF] border border-[rgba(57,255,106,0.1)]'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Hint First Toggle */}
+            <label className="flex items-center gap-1.5 cursor-pointer text-[#8FA99B] hover:text-[#EAF7EF] shrink-0">
+              <input
+                type="checkbox"
+                checked={hintFirst}
+                onChange={(e) => setHintFirst(e.target.checked)}
+                className="rounded border-[rgba(57,255,106,0.3)] bg-black/40 text-[#39FF6A] focus:ring-0"
+              />
+              <span className="text-[10px] font-bold">Hint First</span>
+            </label>
           </div>
 
           {/* MESSAGES SCROLL AREA */}
@@ -291,6 +314,14 @@ export const FloatingRituuChat: React.FC = () => {
                   {!isUser && <RituuAvatar state={avatarState} size="sm" showHalo={false} />}
 
                   <div className="max-w-[85%] space-y-1">
+                    {/* Off-Topic Sentinel Banner */}
+                    {msg.isOffTopic && (
+                      <div className="p-2 rounded-xl bg-[#FF9A1F]/10 border border-[#FF9A1F]/30 text-[#FF9A1F] text-[10px] font-mono flex items-center gap-1.5 font-bold mb-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Robotics Scope Sentinel: Question outside robotics</span>
+                      </div>
+                    )}
+
                     <div
                       className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
                         isUser
@@ -309,80 +340,59 @@ export const FloatingRituuChat: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Safety Warning */}
-                      {msg.safetyWarning && (
-                        <div className="mb-2 p-2 rounded-xl bg-[rgba(255,77,77,0.12)] border border-[rgba(255,77,77,0.3)] text-[#FF6B6B] text-[11px] flex items-center gap-1.5 font-bold font-mono">
-                          <ShieldAlert className="w-4 h-4 shrink-0" />
-                          <span>Mains AC / Battery Hazard Warning</span>
-                        </div>
-                      )}
+                      <div className="whitespace-pre-wrap leading-relaxed font-sans">
+                        {msg.content || (
+                          <span className="text-[#8FA99B] font-mono italic animate-pulse">
+                            Thinking & calculating electrical model...
+                          </span>
+                        )}
+                      </div>
 
-                      <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-
-                      {/* Code Snippet Box */}
-                      {msg.codeSnippet && (
-                        <div className="mt-3 rounded-xl overflow-hidden border border-[rgba(57,255,106,0.2)] bg-[#040B08] text-white font-mono text-[11px]">
-                          <div className="flex items-center justify-between px-3 py-1.5 bg-[#0A1F17] border-b border-[rgba(57,255,106,0.15)] text-[#8FA99B]">
-                            <span className="flex items-center gap-1 text-[10px] text-[#39FF6A] font-bold">
-                              <Cpu className="w-3 h-3 text-[#39FF6A]" />
-                              Arduino C++
-                            </span>
-                            <button
-                              onClick={() => handleCopyCode(msg.codeSnippet!, msg.id)}
-                              className="hover:text-[#39FF6A] transition-colors font-sans text-[10px] font-bold"
+                      {/* Tool Call Proposals */}
+                      {msg.toolCalls && msg.toolCalls.length > 0 && (
+                        <div className="mt-3 space-y-2 pt-2 border-t border-[rgba(57,255,106,0.2)]">
+                          {msg.toolCalls.map((call, idx) => (
+                            <div
+                              key={idx}
+                              className="p-2.5 rounded-xl bg-black/40 border border-[#39FF6A]/30 text-xs font-mono"
                             >
-                              {copiedCodeId === msg.id ? 'Copied' : 'Copy'}
-                            </button>
-                          </div>
+                              {call.name === 'propose_fix' && (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-1.5 text-[#39FF6A] font-bold">
+                                    <Wrench className="w-3.5 h-3.5" />
+                                    <span>Proposed Fix: {call.args.title}</span>
+                                  </div>
+                                  <p className="text-[11px] text-white/70">{call.args.description}</p>
+                                  {call.args.code_patch && (
+                                    <button
+                                      onClick={() => handleApplyFix(call.args.code_patch)}
+                                      className="px-3 py-1 rounded-lg bg-[#39FF6A] text-[#07110D] font-bold text-[10px] hover:brightness-110 flex items-center gap-1"
+                                    >
+                                      <Check className="w-3 h-3" /> Apply Fix to Workspace
+                                    </button>
+                                  )}
+                                </div>
+                              )}
 
-                          <pre className="p-3 overflow-x-auto text-[#39FF6A] text-[10px] leading-relaxed">
-                            {msg.codeSnippet}
-                          </pre>
-
-                          <div className="p-2 bg-[#0A1F17]/80 border-t border-[rgba(57,255,106,0.15)] flex justify-end">
-                            <button
-                              onClick={() => handleRunInSimulator(msg.codeSnippet!)}
-                              className="btn-primary-neon px-3 py-1 text-[10px] font-bold flex items-center gap-1 font-mono shadow-xs"
-                            >
-                              <Play className="w-3 h-3 fill-current" />
-                              <span>Run in 3D Lab</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Diagnostics alert */}
-                      {msg.diagnostics && msg.diagnostics.length > 0 && (
-                        <div className="mt-2 p-2 rounded-xl bg-[rgba(255,154,31,0.12)] border border-[rgba(255,154,31,0.3)] text-[#FF9A1F] text-[11px] font-mono">
-                          <div className="flex items-center gap-1 font-bold">
-                            <AlertTriangle className="w-3.5 h-3.5 text-[#FF9A1F]" />
-                            <span>Diagnostic Warning:</span>
-                          </div>
-                          <div>{msg.diagnostics[0].text}</div>
+                              {call.name === 'highlight_wiring_issue' && (
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5 text-[#FF9A1F] font-bold">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    <span>Pin Issue: {call.args.component_id} ({call.args.pin_id})</span>
+                                  </div>
+                                  <p className="text-[11px] text-white/70">{call.args.reason}</p>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
 
-                    {/* Message Rating & Timestamp */}
-                    {!isUser && (
-                      <div className="flex items-center justify-between px-2 text-[9px] text-[#8FA99B] font-mono">
-                        <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => rateMessage(msg.id, 'UP')}
-                            className={`hover:text-[#39FF6A] ${msg.rating === 'UP' ? 'text-[#39FF6A] font-bold' : ''}`}
-                          >
-                            <ThumbsUp className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => rateMessage(msg.id, 'DOWN')}
-                            className={`hover:text-[#FF4D4D] ${msg.rating === 'DOWN' ? 'text-[#FF4D4D] font-bold' : ''}`}
-                          >
-                            <ThumbsDown className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    {/* Timestamp */}
+                    <div className="px-2 text-[9px] text-[#8FA99B] font-mono">
+                      <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
                   </div>
                 </div>
               );
@@ -454,13 +464,25 @@ export const FloatingRituuChat: React.FC = () => {
                 className="flex-1 bg-[#07110D] border border-[rgba(57,255,106,0.2)] rounded-xl px-3 py-2 text-xs text-[#EAF7EF] placeholder:text-[#527063] focus:outline-none focus:border-[#39FF6A] font-mono transition-colors"
               />
 
-              <button
-                type="submit"
-                disabled={!input.trim() && !uploadedPhotoBase64}
-                className="btn-primary-neon px-3.5 py-2 text-xs shadow-neon-pill transition-transform hover:scale-105 disabled:opacity-40"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
+              {avatarState !== 'idle' ? (
+                <button
+                  type="button"
+                  onClick={stopGeneration}
+                  className="p-2 rounded-xl bg-[#FF4D4D]/20 border border-[#FF4D4D]/50 text-[#FF4D4D] hover:bg-[#FF4D4D] hover:text-white transition-all text-xs font-mono font-bold flex items-center gap-1"
+                  title="Stop generating"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>Stop</span>
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!input.trim() && !uploadedPhotoBase64}
+                  className="btn-primary-neon px-3.5 py-2 text-xs shadow-neon-pill transition-transform hover:scale-105 disabled:opacity-40"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              )}
             </form>
           </div>
         </div>

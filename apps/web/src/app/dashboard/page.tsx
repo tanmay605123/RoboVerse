@@ -17,6 +17,8 @@ import { HudRadialGauge } from '../../components/dashboard/HudRadialGauge';
 import { TimelineScrubber } from '../../components/dashboard/TimelineScrubber';
 import { MiniMapCard } from '../../components/dashboard/MiniMapCard';
 import { useAuthStore } from '../../store/useAuthStore';
+import { supabase } from '../../lib/supabaseClient';
+import { StudentIdCard3D } from '../../components/dashboard/StudentIdCard3D';
 import {
   Cpu,
   Code2,
@@ -54,11 +56,12 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, profile, studentIdCard, planTier } = useAuthStore();
+  const { user, profile, studentIdCard, planTier, initialized, isLoading, initAuth } = useAuthStore();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showPassportModal, setShowPassportModal] = useState(false);
 
   // Tabs & filters
   const [activeCategoryTab, setActiveCategoryTab] = useState<
@@ -79,6 +82,13 @@ export default function DashboardPage() {
   const [newTitle, setNewTitle] = useState('');
   const [shareModalItem, setShareModalItem] = useState<{ id: string; title: string } | null>(null);
   const [copiedShareLink, setCopiedShareLink] = useState(false);
+
+  // Initialize auth session from Supabase
+  useEffect(() => {
+    if (!initialized) {
+      initAuth();
+    }
+  }, [initialized, initAuth]);
 
   // Check if first-time user for onboarding
   useEffect(() => {
@@ -318,19 +328,58 @@ export default function DashboardPage() {
   };
 
   // Quick Rituu AI submission
-  const handleQuickAsk = (text?: string) => {
+  const handleQuickAsk = async (text?: string) => {
     const query = text || quickRituuPrompt;
     if (!query.trim()) return;
 
     setIsRituuAsking(true);
-    setRituuQuickReply(null);
+    setRituuQuickReply('');
 
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/rituu/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query, mode: 'auto' }),
+      });
+
+      if (!response.ok) {
+        setIsRituuAsking(false);
+        setRituuQuickReply(
+          `💡 Rituu Insight: For "${query}", wire a 220Ω resistor to Pin 9, configure PWM duty cycle using analogWrite(), and ensure common ground between the external 5V power supply and Arduino GND.`
+        );
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No stream');
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split('\n\n')) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.replace('data: ', ''));
+              if (data.t) {
+                accumulated += data.t;
+                setRituuQuickReply(accumulated);
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+      setIsRituuAsking(false);
+    } catch {
       setIsRituuAsking(false);
       setRituuQuickReply(
         `💡 Rituu Insight: For "${query}", wire a 220Ω resistor to Pin 9, configure PWM duty cycle using analogWrite(), and ensure common ground between the external 5V power supply and Arduino GND.`
       );
-    }, 800);
+    }
   };
 
   // Filter circuits by search query
@@ -361,9 +410,47 @@ export default function DashboardPage() {
         />
 
         {/* Scrollable Page Body */}
-        <main className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-8">
+        <main className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6">
           {/* Top Rotating Challenge Banner */}
           <ChallengeBanner />
+
+          {/* Next Lesson Recommendation Card */}
+          <div className="glass-card p-4 md:p-5 bg-gradient-to-r from-[#0E2A1F]/80 via-[#0A1F17]/90 to-[#0E2A1F]/80 border border-[rgba(57,255,106,0.25)] rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 backdrop-blur-xl relative overflow-hidden shadow-[0_4px_24px_rgba(7,27,19,0.7)]">
+            <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-[#39FF6A] via-[#7FE7D6] to-[#39FF6A]" />
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-[rgba(57,255,106,0.15)] border border-[rgba(57,255,106,0.3)] text-[#39FF6A] flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(57,255,106,0.2)]">
+                <Play className="w-6 h-6 fill-current" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#39FF6A] bg-[rgba(57,255,106,0.12)] px-2 py-0.5 rounded-full border border-[rgba(57,255,106,0.25)]">
+                    NEXT LESSON • MISSION 01
+                  </span>
+                  <span className="text-[10px] font-mono text-[#8FA99B] flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> 15 MIN
+                  </span>
+                  <span className="text-[10px] font-mono text-[#7FE7D6] flex items-center gap-1">
+                    <Zap className="w-3 h-3 fill-current" /> +100 XP
+                  </span>
+                </div>
+                <h3 className="text-sm md:text-base font-bold text-[#EAF7EF] mt-1">
+                  Blink an LED with Arduino Uno R3
+                </h3>
+                <p className="text-xs text-[#8FA99B] font-mono mt-0.5">
+                  Learn digital output pin control, 220Ω resistor safety, and pinMode() C++ logic.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <Link
+                href="/workbench?starter=starter_blink"
+                className="btn-primary-neon px-5 py-2.5 rounded-full text-xs font-bold shadow-[0_0_15px_rgba(57,255,106,0.35)] flex items-center gap-1.5"
+              >
+                <span>Launch in 3D Lab</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
 
           {/* 12-Column Responsive Control-Room Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -444,7 +531,7 @@ export default function DashboardPage() {
                 {/* View 3D Digital Student Passport */}
                 <div className="w-full mt-5">
                   <button
-                    onClick={() => setShowOnboarding(true)}
+                    onClick={() => setShowPassportModal(true)}
                     className="w-full btn-primary-neon py-2 text-xs font-bold shadow-[0_0_14px_rgba(57,255,106,0.35)] flex items-center justify-center gap-1.5"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
@@ -1092,7 +1179,37 @@ export default function DashboardPage() {
       <OnboardingJourneyModal
         isOpen={showOnboarding}
         onClose={handleFinishOnboarding}
+        studentName={studentName}
+        studentId={studentId}
+        schoolName={profile?.schoolOrCollegeName || 'Indian Institute of Robotics'}
       />
+
+      {/* 3D Student ID Passport Card Modal */}
+      {showPassportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-md bg-[#0A1F17]/95 rounded-3xl p-6 border border-[rgba(57,255,106,0.3)] shadow-[0_0_50px_rgba(57,255,106,0.25)]">
+            <button
+              onClick={() => setShowPassportModal(false)}
+              className="absolute top-4 right-4 p-2 rounded-full text-[#8FA99B] hover:text-[#39FF6A] transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="mb-4 text-center">
+              <h3 className="text-base font-extrabold text-[#EAF7EF]">RoboVerse Digital Passport</h3>
+              <p className="text-xs text-[#8FA99B] font-mono">Official Student ID • Tap card to flip & scan verification QR</p>
+            </div>
+            <StudentIdCard3D
+              fullName={studentName}
+              studentId={studentId}
+              school={profile?.schoolOrCollegeName || 'Indian Institute of Robotics'}
+              planName={currentPlan === 'pro' ? 'PRO MAKER' : currentPlan === 'plus' ? 'PLUS BUILDER' : 'FREE EXPLORER'}
+              level={typeof profile?.level === 'number' ? profile.level : 4}
+              xp={profile?.xp || 4850}
+              streak={profile?.streakDays || 18}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

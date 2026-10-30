@@ -23,6 +23,14 @@
     "build:worker": "npm --workspace=@roboverse/worker run build",
     "typecheck:mobile": "npm --workspace=@roboverse/mobile run typecheck",
     "start:mobile": "npm --workspace=@roboverse/mobile run start",
+    "test:qa:components": "node scripts/verify-components-qa.js",
+    "test:rituu:eval": "node scripts/test-rituu-eval.js",
+    "test:nearby:shops": "node scripts/test-nearby-shops.js",
+    "test:store:checkout": "node scripts/test-store-checkout.js",
+    "test:admin:certs": "node scripts/test-admin-certificates.js",
+    "test:security": "node scripts/test-security-audit.js",
+    "test:load": "node scripts/load-test-5k-users.js",
+    "test:all": "npm run test:qa:components && npm run test:rituu:eval && npm run test:nearby:shops && npm run test:store:checkout && npm run test:admin:certs && npm run test:security && npm run test:load && npm run test:sim",
     "lint": "echo 'Linting complete'"
   },
   "keywords": [

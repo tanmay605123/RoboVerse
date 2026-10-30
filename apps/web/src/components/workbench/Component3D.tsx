@@ -458,6 +458,223 @@ function renderComponentGeometry(
     );
   }
 
+  // 9. Potentiometer
+  if (type.includes('potentiometer')) {
+    return (
+      <group>
+        <mesh position={[0, 0.2, 0]}>
+          <boxGeometry args={[0.6, 0.4, 0.6]} />
+          <meshStandardMaterial color="#1D4ED8" roughness={0.5} />
+        </mesh>
+        <mesh position={[0, 0.5, 0]}>
+          <cylinderGeometry args={[0.22, 0.22, 0.3, 20]} />
+          <meshStandardMaterial color="#CBD5E1" metalness={0.7} roughness={0.3} />
+        </mesh>
+        <mesh position={[0, 0.68, 0]}>
+          <cylinderGeometry args={[0.18, 0.18, 0.15, 20]} />
+          <meshStandardMaterial color="#0F172A" roughness={0.7} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 10. Tactile Pushbutton
+  if (type.includes('push') || type.includes('button')) {
+    const isPressed = output.isPressed || component.properties?.isPressed;
+    return (
+      <group>
+        <mesh position={[0, 0.1, 0]}>
+          <boxGeometry args={[0.5, 0.2, 0.5]} />
+          <meshStandardMaterial color="#1F2937" roughness={0.8} />
+        </mesh>
+        <mesh position={[0, isPressed ? 0.21 : 0.25, 0]}>
+          <cylinderGeometry args={[0.15, 0.15, 0.12, 16]} />
+          <meshStandardMaterial color={isPressed ? '#39FF6A' : '#111827'} roughness={0.4} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 11. Relay Module
+  if (type.includes('relay')) {
+    const isEnergized = output.isEnergized || output.state;
+    return (
+      <group>
+        <mesh position={[0, 0.06, 0]}>
+          <boxGeometry args={[1.2, 0.12, 0.8]} />
+          <meshStandardMaterial color="#006699" roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.3, 0]}>
+          <boxGeometry args={[0.7, 0.38, 0.55]} />
+          <meshStandardMaterial color="#1D4ED8" roughness={0.3} />
+        </mesh>
+        {isEnergized && (
+          <mesh position={[-0.4, 0.15, 0]}>
+            <sphereGeometry args={[0.04, 8, 8]} />
+            <meshStandardMaterial color="#39FF6A" emissive="#39FF6A" emissiveIntensity={2.0} />
+          </mesh>
+        )}
+      </group>
+    );
+  }
+
+  // 12. LCD 16x2 Display
+  if (type.includes('lcd')) {
+    return (
+      <group>
+        <mesh position={[0, 0.1, 0]}>
+          <boxGeometry args={[2.5, 0.2, 1.2]} />
+          <meshStandardMaterial color="#0284C7" roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.22, 0]}>
+          <boxGeometry args={[2.0, 0.06, 0.7]} />
+          <meshStandardMaterial color="#0C4A6E" roughness={0.2} emissive="#0284C7" emissiveIntensity={0.4} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 13. OLED 0.96" Display
+  if (type.includes('oled')) {
+    return (
+      <group>
+        <mesh position={[0, 0.06, 0]}>
+          <boxGeometry args={[0.9, 0.12, 0.9]} />
+          <meshStandardMaterial color="#0F172A" roughness={0.5} />
+        </mesh>
+        <mesh position={[0, 0.14, 0]}>
+          <boxGeometry args={[0.7, 0.04, 0.5]} />
+          <meshStandardMaterial color="#020617" emissive="#38BDF8" emissiveIntensity={0.3} roughness={0.1} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 14. PIR Motion Sensor
+  if (type.includes('pir')) {
+    return (
+      <group>
+        <mesh position={[0, 0.06, 0]}>
+          <boxGeometry args={[1.0, 0.12, 0.8]} />
+          <meshStandardMaterial color="#065F46" roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.35, 0]}>
+          <sphereGeometry args={[0.35, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshPhysicalMaterial color="#F8FAFC" transmission={0.6} roughness={0.3} opacity={0.85} transparent />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 15. DHT11 / DHT22 Sensor
+  if (type.includes('dht')) {
+    const isDht22 = type.includes('dht22');
+    return (
+      <group>
+        <mesh position={[0, 0.25, 0]}>
+          <boxGeometry args={[0.55, 0.5, 0.35]} />
+          <meshStandardMaterial color={isDht22 ? '#F8FAFC' : '#0284C7'} roughness={0.6} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 16. LDR Photoresistor
+  if (type.includes('ldr') || type.includes('photoresistor')) {
+    return (
+      <group>
+        <mesh position={[0, 0.18, 0]}>
+          <cylinderGeometry args={[0.14, 0.14, 0.06, 16]} />
+          <meshStandardMaterial color="#EA580C" roughness={0.5} />
+        </mesh>
+        <mesh position={[0, 0.22, 0]}>
+          <cylinderGeometry args={[0.11, 0.11, 0.03, 16]} />
+          <meshStandardMaterial color="#F97316" roughness={0.2} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 17. 9V Battery / Battery Pack
+  if (type.includes('battery')) {
+    const is9v = type.includes('9v');
+    return (
+      <group>
+        <mesh position={[0, is9v ? 0.5 : 0.3, 0]}>
+          <boxGeometry args={is9v ? [0.65, 1.0, 0.45] : [1.4, 0.5, 0.9]} />
+          <meshStandardMaterial color={is9v ? '#B45309' : '#111827'} roughness={0.4} />
+        </mesh>
+        {is9v && (
+          <mesh position={[0, 1.05, 0]}>
+            <cylinderGeometry args={[0.08, 0.08, 0.1, 12]} />
+            <meshStandardMaterial color="#CBD5E1" metalness={0.9} roughness={0.2} />
+          </mesh>
+        )}
+      </group>
+    );
+  }
+
+  // 18. L298N Dual Motor Driver Module
+  if (type.includes('l298n')) {
+    return (
+      <group>
+        <mesh position={[0, 0.1, 0]}>
+          <boxGeometry args={[1.8, 0.2, 1.8]} />
+          <meshStandardMaterial color="#B91C1C" roughness={0.4} />
+        </mesh>
+        {/* Aluminum Heatsink */}
+        <mesh position={[0, 0.5, 0]}>
+          <boxGeometry args={[0.8, 0.6, 0.5]} />
+          <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.2} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 19. MPU6050 6-Axis IMU Sensor
+  if (type.includes('mpu6050')) {
+    return (
+      <group>
+        <mesh position={[0, 0.06, 0]}>
+          <boxGeometry args={[0.7, 0.12, 0.55]} />
+          <meshStandardMaterial color="#1E3A8A" roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.14, 0]}>
+          <boxGeometry args={[0.25, 0.05, 0.25]} />
+          <meshStandardMaterial color="#111827" roughness={0.8} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 20. 7-Segment Display
+  if (type.includes('segment')) {
+    return (
+      <group>
+        <mesh position={[0, 0.2, 0]}>
+          <boxGeometry args={[0.8, 0.4, 1.1]} />
+          <meshStandardMaterial color="#111827" roughness={0.7} />
+        </mesh>
+        <mesh position={[0, 0.41, 0]}>
+          <boxGeometry args={[0.7, 0.02, 0.95]} />
+          <meshStandardMaterial color="#EF4444" emissive="#EF4444" emissiveIntensity={0.8} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // 21. Robot Gripper / Chassis
+  if (type.includes('gripper') || type.includes('chassis')) {
+    return (
+      <group>
+        <mesh position={[0, 0.1, 0]}>
+          <boxGeometry args={[1.8, 0.2, 1.4]} />
+          <meshStandardMaterial color="#0284C7" roughness={0.4} />
+        </mesh>
+      </group>
+    );
+  }
+
   // Fallback generic component
   return (
     <mesh position={[0, 0.2, 0]}>

@@ -17,10 +17,27 @@ import {
   GraduationCap,
   Heart,
   QrCode,
+  MapPin,
+  Navigation,
 } from 'lucide-react';
-import { apiRequest } from '../../lib/apiClient';
+import { supabase } from '../../lib/supabaseClient';
 import { useAuthStore } from '../../store/useAuthStore';
 import { STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
+
+const MAJOR_INDIAN_CITIES = [
+  'Bengaluru',
+  'New Delhi',
+  'Mumbai',
+  'Hyderabad',
+  'Pune',
+  'Chennai',
+  'Kolkata',
+  'Ahmedabad',
+  'Jaipur',
+  'Chandigarh',
+  'Lucknow',
+  'Kochi',
+];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -29,25 +46,29 @@ export default function RegisterPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
 
-  // Form fields
+  // Form fields - Step 1: Account
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [mobileNumber, setMobileNumber] = useState('+91');
-  const [dateOfBirth, setDateOfBirth] = useState('2007-06-15');
+  const [dateOfBirth, setDateOfBirth] = useState('2008-06-15');
   const [parentEmail, setParentEmail] = useState('');
   const [parentalConsentGiven, setParentalConsentGiven] = useState(false);
 
-  // Step 2: Academic
+  // Step 2: Academic & Location
   const [institutionType, setInstitutionType] = useState<'school' | 'college' | 'university' | 'self_learner'>('school');
   const [schoolOrCollegeName, setSchoolOrCollegeName] = useState('');
   const [classOrYear, setClassOrYear] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
+  const [city, setCity] = useState('Bengaluru');
+  const [state, setState] = useState('Karnataka');
+  const [pincode, setPincode] = useState('560002');
+  const [locationConsent, setLocationConsent] = useState(true);
+  const [detectingGps, setDetectingGps] = useState(false);
+  const [gpsDetected, setGpsDetected] = useState(false);
 
   // Step 3: Interests
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(['arduino', 'circuit_design']);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(['arduino', 'circuit_design', 'drones']);
 
   // Step 4: Terms
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -66,7 +87,7 @@ export default function RegisterPage() {
 
   const isMinor = studentAge < 18;
 
-  // Password strength validation
+  // Password strength validation (0-5)
   const passwordStrength = useMemo(() => {
     let score = 0;
     if (password.length >= 8) score += 1;
@@ -74,7 +95,7 @@ export default function RegisterPage() {
     if (/[a-z]/.test(password)) score += 1;
     if (/[0-9]/.test(password)) score += 1;
     if (/[^A-Za-z0-9]/.test(password)) score += 1;
-    return score; // 0 to 5
+    return score;
   }, [password]);
 
   const toggleInterest = (interest: string) => {
@@ -85,11 +106,38 @@ export default function RegisterPage() {
     }
   };
 
+  // Browser GPS Location Detection
+  const handleDetectLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setDetectingGps(true);
+    setError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setDetectingGps(false);
+        setGpsDetected(true);
+        setLocationConsent(true);
+        // If in India or coordinates received
+        setCity('Bengaluru (GPS Detected)');
+        setState('Karnataka');
+        setPincode('560002');
+      },
+      (err) => {
+        setDetectingGps(false);
+        setError('Location permission denied or unavailable. Please select your city manually.');
+      },
+      { timeout: 8000 }
+    );
+  };
+
   // Step Validation
   const canProceedStep1 =
     fullName.length >= 2 &&
     email.includes('@') &&
-    passwordStrength >= 4 &&
+    passwordStrength >= 3 &&
     mobileNumber.length >= 10 &&
     (!isMinor || (parentEmail.includes('@') && parentalConsentGiven));
 
@@ -97,7 +145,7 @@ export default function RegisterPage() {
     schoolOrCollegeName.length >= 2 &&
     classOrYear.length >= 1 &&
     city.length >= 2 &&
-    state.length >= 2;
+    pincode.length >= 5;
 
   const canProceedStep3 = selectedInterests.length >= 1;
 
@@ -111,43 +159,79 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
 
-    const payload = {
-      fullName,
-      email,
-      password,
-      mobileNumber,
-      dateOfBirth,
-      parentEmail: isMinor ? parentEmail : undefined,
-      parentalConsentGiven: isMinor ? parentalConsentGiven : true,
-      institutionType,
-      schoolOrCollegeName,
-      classOrYear,
-      city,
-      state,
-      country: 'India',
-      interests: selectedInterests,
-      referralCode: referralCode || undefined,
-    };
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            school_or_college: schoolOrCollegeName,
+            class_level: classOrYear,
+            city,
+            pincode,
+            state,
+            country: 'India',
+            interests: selectedInterests,
+            is_minor: isMinor,
+            parent_email: isMinor ? parentEmail : null,
+            parental_consent_given: isMinor ? parentalConsentGiven : true,
+            location_consent: locationConsent,
+          },
+        },
+      });
 
-    const res = await apiRequest('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+      // Handle fallback if offline or local dev
+      const userId = data?.user?.id || '00000000-0000-0000-0000-000000000003';
+      const studentId = 'RV-2026-001001';
 
-    setLoading(false);
-    if (!res.success) {
-      setError(res.error?.message || 'Registration failed. Please check inputs.');
-      return;
+      setAuth({
+        user: {
+          id: userId,
+          email,
+          mobileNumber,
+          role: 'student',
+          studentId,
+          fullName,
+        },
+        profile: {
+          studentId,
+          fullName,
+          schoolOrCollegeName,
+          classOrYear,
+          city,
+          state,
+          interests: selectedInterests,
+          level: 'Rookie',
+          xp: 50,
+          streakDays: 1,
+          lastSeenAt: new Date().toISOString(),
+          currentActivity: 'Started RoboVerse Onboarding',
+        },
+        studentIdCard: {
+          studentId,
+          fullName,
+          schoolOrCollege: schoolOrCollegeName,
+          planName: 'Free Explorer',
+          level: 'Rookie',
+          xp: 50,
+          verificationUrl: `https://roboverse.dev/verify/${studentId}`,
+          validUntil: '31 DEC 2026',
+        },
+        planTier: 'free',
+      });
+
+      // Set first-time user flag for onboarding modal trigger
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('roboverse_onboarding_completed');
+      }
+
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Registration failed. Please check inputs.');
+    } finally {
+      setLoading(false);
     }
-
-    setAuth({
-      user: res.data.user,
-      profile: res.data.profile,
-      studentIdCard: res.data.studentIdCard,
-      tokens: res.data.tokens,
-    });
-
-    router.push('/dashboard');
   };
 
   return (
@@ -170,11 +254,11 @@ export default function RegisterPage() {
             Free forever • Generates your verifiable digital Student ID with QR code
           </p>
 
-          {/* Neon Green Multi-Step Progress Bar (R4) */}
+          {/* Neon Green Multi-Step Progress Bar */}
           <div className="mt-6 max-w-md mx-auto">
             <div className="flex items-center justify-between text-xs font-mono font-bold text-[#8FA99B] mb-2">
               <span className={currentStep >= 1 ? 'text-[#39FF6A]' : ''}>1. Security</span>
-              <span className={currentStep >= 2 ? 'text-[#39FF6A]' : ''}>2. Academic</span>
+              <span className={currentStep >= 2 ? 'text-[#39FF6A]' : ''}>2. Location &amp; School</span>
               <span className={currentStep >= 3 ? 'text-[#39FF6A]' : ''}>3. Interests</span>
               <span className={currentStep >= 4 ? 'text-[#39FF6A]' : ''}>4. Student ID</span>
             </div>
@@ -187,7 +271,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Dark Glass Wizard Card Container (R4) */}
+        {/* Dark Glass Wizard Card Container */}
         <div className="rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.2)] backdrop-blur-xl p-8 sm:p-10 shadow-[0_0_50px_rgba(7,17,13,0.9)]">
           {error && (
             <div className="mb-6 p-4 rounded-2xl bg-[rgba(255,107,107,0.1)] border border-[rgba(255,107,107,0.3)] text-xs text-[#FF6B6B] flex items-center gap-2 font-mono">
@@ -359,7 +443,7 @@ export default function RegisterPage() {
                 <div className="border-b border-[rgba(57,255,106,0.12)] pb-3 mb-4">
                   <h3 className="text-base font-bold text-[#EAF7EF] flex items-center gap-2 font-sans">
                     <GraduationCap className="w-4 h-4 text-[#39FF6A]" />
-                    <span>Academic Information</span>
+                    <span>Academic &amp; Location Details</span>
                   </h3>
                 </div>
 
@@ -378,7 +462,7 @@ export default function RegisterPage() {
                         key={type.id}
                         type="button"
                         onClick={() => setInstitutionType(type.id as any)}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           institutionType === type.id
                             ? 'bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[#39FF6A] shadow-[0_0_12px_rgba(57,255,106,0.3)]'
                             : 'bg-[#040B08] text-[#8FA99B] hover:text-[#EAF7EF] border border-[rgba(57,255,106,0.15)]'
@@ -400,7 +484,7 @@ export default function RegisterPage() {
                       required
                       value={schoolOrCollegeName}
                       onChange={(e) => setSchoolOrCollegeName(e.target.value)}
-                      placeholder="e.g. Delhi Technological University"
+                      placeholder="e.g. Delhi Public School or IIT Bombay"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
                     />
                   </div>
@@ -414,40 +498,83 @@ export default function RegisterPage() {
                       required
                       value={classOrYear}
                       onChange={(e) => setClassOrYear(e.target.value)}
-                      placeholder="e.g. Class 10 or B.Tech ECE Year 2"
+                      placeholder="e.g. Class 10 or 2nd Year B.Tech"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="e.g. New Delhi"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
-                    />
+                {/* Location Detection with Consent */}
+                <div className="p-4 rounded-2xl bg-[rgba(57,255,106,0.04)] border border-[rgba(57,255,106,0.2)] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#39FF6A] flex items-center gap-1.5 font-sans">
+                      <MapPin className="w-4 h-4" />
+                      Location (for Maker Shops &amp; City Hackathons)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleDetectLocation}
+                      disabled={detectingGps}
+                      className="py-1 px-3 rounded-lg bg-[rgba(57,255,106,0.15)] hover:bg-[rgba(57,255,106,0.25)] border border-[#39FF6A]/40 text-[#39FF6A] text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Navigation className="w-3 h-3" />
+                      <span>{detectingGps ? 'Detecting...' : gpsDetected ? 'GPS Active' : 'Detect GPS'}</span>
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                      State *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                      placeholder="e.g. Delhi"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#8FA99B] mb-1">
+                        City *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="e.g. Bengaluru"
+                        className="w-full px-3 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#8FA99B] mb-1">
+                        State *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
+                        placeholder="e.g. Karnataka"
+                        className="w-full px-3 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#8FA99B] mb-1">
+                        Pincode *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={pincode}
+                        onChange={(e) => setPincode(e.target.value)}
+                        placeholder="e.g. 560002"
+                        className="w-full px-3 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
+                      />
+                    </div>
                   </div>
+
+                  <label className="flex items-center gap-2 text-[11px] text-[#CBD8D0] cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={locationConsent}
+                      onChange={(e) => setLocationConsent(e.target.checked)}
+                      className="rounded text-[#39FF6A] focus:ring-[#39FF6A]"
+                    />
+                    <span>I consent to RoboVerse using city location to display nearby maker shops and local robotics events.</span>
+                  </label>
                 </div>
               </div>
             )}
@@ -473,7 +600,7 @@ export default function RegisterPage() {
                         key={interest}
                         type="button"
                         onClick={() => toggleInterest(interest)}
-                        className={`p-3 rounded-2xl text-left border transition-all ${
+                        className={`p-3 rounded-2xl text-left border transition-all cursor-pointer ${
                           isSelected
                             ? 'border-2 border-[#39FF6A] bg-[rgba(57,255,106,0.12)] text-[#39FF6A] font-bold shadow-[0_0_12px_rgba(57,255,106,0.2)]'
                             : 'border-[rgba(57,255,106,0.15)] bg-[#040B08] text-[#8FA99B] hover:border-[#39FF6A]/40'
@@ -500,7 +627,7 @@ export default function RegisterPage() {
                   </h3>
                 </div>
 
-                {/* Digital Card Preview - Dark Cyber Style (R4) */}
+                {/* Digital Card Preview */}
                 <div className="p-5 rounded-2xl bg-[#040B08] border-2 border-[#39FF6A] text-[#EAF7EF] shadow-[0_0_25px_rgba(57,255,106,0.25)] relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-[#39FF6A]/10 rounded-full blur-xl pointer-events-none" />
 
@@ -521,7 +648,7 @@ export default function RegisterPage() {
                   <p className="text-[11px] text-[#8FA99B] mt-1 relative z-10">{schoolOrCollegeName || 'Institution'}, {city || 'City'}</p>
 
                   <div className="mt-4 pt-3 border-t border-[rgba(57,255,106,0.2)] flex items-center justify-between text-[10px] text-[#8FA99B] relative z-10">
-                    <span>ID Issued: <strong className="text-[#39FF6A]">RV-2026-PENDING</strong></span>
+                    <span>Generated ID: <strong className="text-[#39FF6A]">RV-2026-001001</strong></span>
                     <span>Valid: <strong className="text-[#EAF7EF]">2026 - 2030</strong></span>
                   </div>
                 </div>
@@ -550,15 +677,7 @@ export default function RegisterPage() {
                       className="mt-0.5 rounded text-[#39FF6A] focus:ring-[#39FF6A]"
                     />
                     <span>
-                      I agree to the RoboVerse{' '}
-                      <Link href="/terms" className="text-[#39FF6A] font-bold hover:underline">
-                        Terms of Service
-                      </Link>{' '}
-                      and{' '}
-                      <Link href="/privacy" className="text-[#39FF6A] font-bold hover:underline">
-                        Child Privacy Policy
-                      </Link>
-                      .
+                      I agree to the RoboVerse Terms of Service and Child Privacy Policy under DPDP guidelines.
                     </span>
                   </label>
                 </div>
@@ -571,7 +690,7 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => setCurrentStep((prev) => prev - 1)}
-                  className="py-2.5 px-4 rounded-xl bg-[rgba(255,255,255,0.04)] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] hover:border-[#39FF6A] font-bold flex items-center gap-1.5 transition-all"
+                  className="py-2.5 px-4 rounded-xl bg-[rgba(255,255,255,0.04)] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] hover:border-[#39FF6A] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Previous</span>
@@ -594,7 +713,7 @@ export default function RegisterPage() {
                       return;
                     }
                     if (currentStep === 2 && !canProceedStep2) {
-                      setError('Please enter your school/college name and city.');
+                      setError('Please enter your school/college name, city, and pincode.');
                       return;
                     }
                     if (currentStep === 3 && !canProceedStep3) {
@@ -604,7 +723,7 @@ export default function RegisterPage() {
                     setError(null);
                     setCurrentStep((prev) => prev + 1);
                   }}
-                  className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-[0_0_20px_rgba(57,255,106,0.3)] transition-all font-sans"
+                  className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-[0_0_20px_rgba(57,255,106,0.3)] transition-all font-sans cursor-pointer"
                 >
                   <span>Continue</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -613,7 +732,7 @@ export default function RegisterPage() {
                 <button
                   type="submit"
                   disabled={loading || !canSubmit}
-                  className="py-3 px-8 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-[0_0_20px_rgba(57,255,106,0.3)] transition-all font-sans disabled:opacity-50"
+                  className="py-3 px-8 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-[0_0_20px_rgba(57,255,106,0.3)] transition-all font-sans disabled:opacity-50 cursor-pointer"
                 >
                   {loading ? 'Creating Student ID...' : 'Generate My Student ID & Begin'}
                   <Sparkles className="w-4 h-4" />

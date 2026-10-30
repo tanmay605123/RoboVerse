@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { mobileApiRequest, setMobileAuthToken } from '../api/client';
+import { getSupabaseClient } from '@roboverse/shared';
 
 interface MobileAuthState {
   isAuthenticated: boolean;
@@ -90,6 +91,70 @@ export const useMobileAuthStore = create<MobileAuthState>((set, get) => ({
   },
 
   loginWithPassword: async (identifier, password) => {
+    try {
+      const supabase = getSupabaseClient();
+      let emailToUse = identifier;
+      const isEmail = identifier.includes('@');
+
+      if (!isEmail) {
+        // Look up by Student ID
+        const { data: profileLookup } = await (supabase.from('profiles') as any)
+          .select('id')
+          .eq('student_id', identifier.toUpperCase())
+          .maybeSingle();
+
+        if (profileLookup?.id) {
+          emailToUse = `${identifier.toLowerCase().replace(/[^a-z0-9]/g, '')}@roboverse.internal`;
+        }
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: emailToUse,
+        password,
+      });
+
+      if (!error && data?.user) {
+        const { data: profileRow } = await (supabase.from('profiles') as any)
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        const studentId = profileRow?.student_id || 'RV-2026-000108';
+        const fullName = profileRow?.full_name || 'Aarav Sharma';
+        const level = typeof profileRow?.level === 'number' ? profileRow.level : 4;
+        const xp = profileRow?.xp ?? 2850;
+
+        setMobileAuthToken(data.session?.access_token || 'supabase_token');
+        set({
+          isAuthenticated: true,
+          accessToken: data.session?.access_token || 'supabase_token',
+          user: data.user,
+          profile: profileRow || {
+            fullName,
+            studentId,
+            schoolOrCollegeName: 'Delhi Robotics Institute',
+            city: 'Delhi',
+            state: 'Delhi',
+          },
+          studentIdCard: {
+            studentId,
+            fullName,
+            avatarUrl: profileRow?.avatar_url || get().studentIdCard.avatarUrl,
+            qrCodeData: get().studentIdCard.qrCodeData,
+            level,
+            xp,
+            planTier: 'PRO',
+            completedProjects: 7,
+            learningHours: 42,
+          },
+          planTier: 'PRO',
+        });
+        return { success: true };
+      }
+    } catch {
+      // Fall through to fallback
+    }
+
     const isEmail = identifier.includes('@');
     const endpoint = isEmail ? '/auth/login' : '/auth/login/student-id';
     const payload = isEmail

@@ -5,10 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppSidebar } from '../../components/layout/AppSidebar';
 import { AppTopBar } from '../../components/layout/AppTopBar';
-import { useRituuStore } from '@/store/useRituuStore';
+import { useRituuStore, RituuChatMode } from '@/store/useRituuStore';
 import { useCircuitStore } from '@/store/useCircuitStore';
 import { RituuAvatar } from '@/components/rituu/RituuAvatar';
-import { RituuMode } from '@roboverse/shared';
 import {
   Sparkles,
   Send,
@@ -31,6 +30,9 @@ import {
   ThumbsUp,
   ThumbsDown,
   ShoppingBag,
+  Square,
+  Wrench,
+  Compass,
 } from 'lucide-react';
 
 const QUICK_PROMPTS = [
@@ -51,9 +53,11 @@ export default function RituuPage() {
   const {
     messages,
     sendMessage,
-    rateMessage,
+    stopGeneration,
     activeMode,
     setMode,
+    hintFirst,
+    setHintFirst,
     avatarState,
     quota,
     fetchQuota,
@@ -170,23 +174,25 @@ export default function RituuPage() {
     }
   };
 
-  // Run snippet in 3D circuit simulator
-  const handleRunInSimulator = (code: string) => {
-    setArduinoCode(code);
-    router.push('/workbench?mode=code');
+  // Apply code patch to workbench
+  const handleApplyFix = (codePatch?: string) => {
+    if (codePatch) {
+      setArduinoCode(codePatch);
+      router.push('/workbench?mode=code');
+    }
   };
 
-  const textUsed = quota?.messagesUsed || 0;
-  const textLimit = quota?.messagesLimit || 20;
-  const textPercent = Math.min(100, Math.round((textUsed / textLimit) * 100));
+  const textUsed = quota?.messagesUsed ?? 0;
+  const textLimit = quota?.messagesLimit ?? 15;
+  const textPercent = Math.min(100, Math.round((textUsed / (textLimit || 1)) * 100));
 
-  const photosUsed = quota?.photosUsed || 0;
-  const photosLimit = quota?.photosLimit || 5;
-  const photosPercent = Math.min(100, Math.round((photosUsed / photosLimit) * 100));
+  const photosUsed = quota?.photosUsed ?? 0;
+  const photosLimit = quota?.photosLimit ?? 3;
+  const photosPercent = Math.min(100, Math.round((photosUsed / (photosLimit || 1)) * 100));
 
   return (
-    <div className="flex h-screen bg-[#07110D] overflow-hidden text-[#EAF7EF] font-sans">
-      {/* 1. App Navigation Sidebar */}
+    <div className="flex h-screen bg-[#07110D] overflow-hidden text-[#EAF7EF]">
+      {/* LEFT MAIN NAVIGATION RAIL */}
       <AppSidebar
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -194,53 +200,48 @@ export default function RituuPage() {
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
-      {/* 2. Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Sticky Bar */}
+        {/* TOP SYSTEM BAR */}
         <AppTopBar
           onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
         />
 
-        {/* Page Workspace Body */}
+        {/* MAIN BODY AREA: DUAL PANEL (Left Mentorship Controls + Center Chat Area) */}
         <div className="flex-1 flex overflow-hidden">
-          {/* LEFT MENTORSHIP & QUOTA CONTROL PANEL */}
-          <aside className="w-72 bg-[#07110D]/95 backdrop-blur-2xl border-r border-[rgba(57,255,106,0.15)] p-5 flex-col justify-between hidden md:flex shrink-0 overflow-y-auto">
-            <div className="space-y-6">
-              {/* Rituu Hero Card */}
-              <div className="p-4 rounded-2xl bg-[#0E2A1F]/50 border border-[rgba(57,255,106,0.25)] text-center shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-                <RituuAvatar state={avatarState} size="lg" className="mx-auto mb-2" />
-                <h3 className="font-extrabold text-base text-[#EAF7EF]">
-                  Rituu AI Mentor
-                </h3>
-                <p className="text-[11px] text-[#8FA99B] font-mono mt-0.5">
-                  Trained strictly on robotics, circuits, microcontrollers &amp; Arduino code.
-                </p>
-                <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#040B08] border border-[rgba(57,255,106,0.3)] text-[10px] font-mono font-bold text-[#39FF6A]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#39FF6A] animate-pulse" />
-                  <span>Google Gemini Flash Active</span>
+          {/* LEFT MENTORSHIP CONTROL DOCK */}
+          <aside className="w-80 border-r border-[rgba(57,255,106,0.15)] bg-[#040B08]/90 p-5 flex flex-col justify-between hidden md:flex shrink-0">
+            <div>
+              {/* Avatar Profile Box */}
+              <div className="flex items-center gap-3.5 pb-5 border-b border-[rgba(57,255,106,0.15)]">
+                <RituuAvatar state={avatarState} size="lg" />
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-base font-black text-[#EAF7EF]">Rituu AI</h2>
+                    <span className="w-2 h-2 rounded-full bg-[#39FF6A] animate-ping" />
+                  </div>
+                  <p className="text-xs text-[#8FA99B] font-mono">Robotics & Vision Mentor</p>
                 </div>
               </div>
 
-              {/* Mentorship Modes */}
-              <div className="space-y-2 font-mono">
-                <div className="text-[10px] font-bold text-[#8FA99B] uppercase tracking-wider">
-                  Mentorship Modes
-                </div>
-
-                <div className="space-y-1.5">
+              {/* Mentorship Mode Switcher */}
+              <div className="mt-5 space-y-2">
+                <span className="text-[11px] font-mono text-[#8FA99B] uppercase font-bold tracking-wider block">
+                  Mentorship Mode
+                </span>
+                <div className="space-y-1.5 font-mono">
                   {[
-                    { id: RituuMode.DEBUG, label: 'Circuit Doctor', icon: Zap, desc: 'Find short circuits, missing resistors & wire faults' },
-                    { id: RituuMode.CODE, label: 'Arduino Firmware', icon: Cpu, desc: 'Generate & debug C++ sketches with live comments' },
-                    { id: RituuMode.PROJECT_PLANNER, label: 'Robot Kinematics', icon: Sliders, desc: 'Motor torque, chassis physics & battery sizing' },
-                    { id: RituuMode.LEARN, label: 'Socratic Tutor', icon: HelpCircle, desc: 'Step-by-step guidance & electrical analogies' },
+                    { id: 'debug', label: 'Circuit Doctor', desc: 'Isolate wiring faults & shorts', icon: AlertTriangle },
+                    { id: 'code', label: 'Arduino Firmware', desc: 'C++ logic, timers & interrupts', icon: Cpu },
+                    { id: 'plan', label: 'BOM & Kinematics', desc: 'Motors, batteries & mechanical', icon: Wrench },
+                    { id: 'learn', label: 'Socratic Tutor', desc: 'Learn electronics first principles', icon: HelpCircle },
                   ].map((m) => {
-                    const Icon = m.icon;
                     const isActive = activeMode === m.id;
+                    const Icon = m.icon;
                     return (
                       <button
                         key={m.id}
-                        onClick={() => setMode(m.id)}
+                        onClick={() => setMode(m.id as RituuChatMode)}
                         className={`w-full text-left p-3 rounded-2xl border transition-all ${
                           isActive
                             ? 'bg-[rgba(57,255,106,0.15)] border-[#39FF6A] text-[#EAF7EF] shadow-[0_0_12px_rgba(57,255,106,0.25)]'
@@ -259,6 +260,20 @@ export default function RituuPage() {
                   })}
                 </div>
               </div>
+
+              {/* Hint First Toggle */}
+              <div className="mt-4 p-3 rounded-2xl bg-black/40 border border-white/5 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-[#EAF7EF] block">Hint-First Mode</span>
+                  <span className="text-[10px] text-[#8FA99B]">Guide with hints before answers</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={hintFirst}
+                  onChange={(e) => setHintFirst(e.target.checked)}
+                  className="rounded border-[rgba(57,255,106,0.3)] bg-[#07110D] text-[#39FF6A] focus:ring-0 w-4 h-4"
+                />
+              </div>
             </div>
 
             {/* Daily Quota Card in Dark Glass Style */}
@@ -266,7 +281,7 @@ export default function RituuPage() {
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-[#EAF7EF]">Daily AI Quota</span>
                 <span className="px-2 py-0.5 rounded-full bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[rgba(57,255,106,0.3)] text-[10px] font-bold">
-                  {quota?.planTier || 'FREE'}
+                  ACTIVE
                 </span>
               </div>
 
@@ -301,15 +316,6 @@ export default function RituuPage() {
                   />
                 </div>
               </div>
-
-              {quota?.planTier === 'FREE' && (
-                <Link
-                  href="/dashboard?tab=plans"
-                  className="block text-center py-2 px-3 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] font-extrabold text-xs shadow-[0_0_12px_rgba(57,255,106,0.4)] hover:brightness-110"
-                >
-                  Upgrade to Pro for Unlimited
-                </Link>
-              )}
             </div>
           </aside>
 
@@ -318,264 +324,169 @@ export default function RituuPage() {
             {/* Chat Top Subheader */}
             <div className="h-14 bg-[#07110D]/90 backdrop-blur-xl border-b border-[rgba(57,255,106,0.15)] px-6 flex items-center justify-between shrink-0 font-mono">
               <div className="flex items-center gap-3">
-                <div className="md:hidden">
-                  <RituuAvatar state={avatarState} size="sm" />
-                </div>
-                <div>
-                  <h2 className="text-xs font-bold text-[#EAF7EF] flex items-center gap-2">
-                    <span>Active Telemetry Session</span>
-                    <span className="w-2 h-2 rounded-full bg-[#39FF6A] shadow-[0_0_6px_#39FF6A]" />
-                  </h2>
-                  <span className="text-[10px] text-[#8FA99B]">
-                    Mode: <strong className="text-[#39FF6A] capitalize">{activeMode.toLowerCase()}</strong>
-                  </span>
+                <span className="text-xs text-[#8FA99B] font-bold uppercase">
+                  Target Language:
+                </span>
+                <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5">
+                  <button
+                    onClick={() => setLang('en')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                      lang === 'en'
+                        ? 'bg-[#39FF6A] text-[#07110D]'
+                        : 'text-[#8FA99B] hover:text-[#EAF7EF]'
+                    }`}
+                  >
+                    English
+                  </button>
+                  <button
+                    onClick={() => setLang('hi')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                      lang === 'hi'
+                        ? 'bg-[#39FF6A] text-[#07110D]'
+                        : 'text-[#8FA99B] hover:text-[#EAF7EF]'
+                    }`}
+                  >
+                    Hindi / Hinglish
+                  </button>
                 </div>
               </div>
 
-              {/* Top Controls: Audio, Language & 3D Lab */}
               <div className="flex items-center gap-2">
-                {/* Language Switcher */}
-                <button
-                  onClick={() => setLang(lang === 'en' ? 'hi' : 'en')}
-                  className="px-3 py-1.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-xs font-bold text-[#EAF7EF] hover:border-[#39FF6A] transition-colors"
-                >
-                  {lang === 'en' ? 'English' : 'हिंदी'}
-                </button>
-
-                {/* Voice Audio Toggle */}
-                <button
-                  onClick={() => setVoiceOutput(!voiceOutputEnabled)}
-                  className={`p-2 rounded-xl border transition-colors ${
-                    voiceOutputEnabled
-                      ? 'bg-[rgba(57,255,106,0.15)] border-[#39FF6A] text-[#39FF6A]'
-                      : 'bg-[#040B08] border-[rgba(57,255,106,0.15)] text-[#8FA99B] hover:text-[#EAF7EF]'
-                  }`}
-                  title={voiceOutputEnabled ? 'Voice Output ON' : 'Voice Output OFF'}
-                >
-                  {voiceOutputEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                </button>
-
-                {/* Clear Chat */}
                 <button
                   onClick={clearChat}
-                  className="p-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.15)] text-[#8FA99B] hover:text-[#FF4D4D] transition-colors"
-                  title="Clear Chat Conversation"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-[#8FA99B] hover:text-[#FF4D4D] transition-colors"
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Clear Chat</span>
                 </button>
-
-                <Link
-                  href="/workbench"
-                  className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] font-extrabold rounded-xl text-xs shadow-[0_0_14px_rgba(57,255,106,0.4)] hover:brightness-110"
-                >
-                  <Layers className="w-4 h-4" />
-                  <span>3D Circuit Lab</span>
-                </Link>
               </div>
             </div>
 
-            {/* Messages Scroll Area */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-4xl w-full mx-auto">
-              {messages.map((msg) => {
-                const isUser = msg.sender === 'user';
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
-                  >
-                    {!isUser && <RituuAvatar state={avatarState} size="md" showHalo={false} />}
+            {/* Messages Scroll View */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="max-w-4xl mx-auto space-y-5">
+                {messages.map((msg) => {
+                  const isUser = msg.sender === 'user';
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-3.5 ${isUser ? 'justify-end' : 'justify-start'}`}
+                    >
+                      {!isUser && <RituuAvatar state={avatarState} size="md" />}
 
-                    <div className="max-w-[85%] sm:max-w-[78%] space-y-2">
-                      <div
-                        className={`p-4 sm:p-5 rounded-3xl leading-relaxed text-xs sm:text-sm ${
-                          isUser
-                            ? 'bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] font-medium rounded-tr-none shadow-[0_0_15px_rgba(57,255,106,0.25)] border border-[#39FF6A]'
-                            : 'glass-panel bg-[#0E2A1F]/60 text-[#EAF7EF] border border-[rgba(57,255,106,0.2)] rounded-tl-none shadow-[0_8px_32px_rgba(0,0,0,0.5)]'
-                        }`}
-                      >
-                        {/* Attached Photo Preview */}
-                        {msg.photoUrl && (
-                          <div className="mb-3 rounded-2xl overflow-hidden border border-[rgba(57,255,106,0.3)] max-h-60 bg-black/40">
-                            <img
-                              src={msg.photoUrl}
-                              alt="Uploaded breadboard circuit"
-                              className="w-full h-full object-cover"
-                            />
+                      <div className="max-w-[85%] space-y-1">
+                        {/* Off-Topic Sentinel Banner */}
+                        {msg.isOffTopic && (
+                          <div className="p-2.5 rounded-2xl bg-[#FF9A1F]/10 border border-[#FF9A1F]/30 text-[#FF9A1F] text-xs font-mono flex items-center gap-2 font-bold mb-1">
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
+                            <span>Robotics Scope Sentinel: Question outside robotics</span>
                           </div>
                         )}
 
-                        {/* Safety Warning Badge */}
-                        {msg.safetyWarning && (
-                          <div className="mb-3 p-3 rounded-2xl bg-rose-950/60 border border-rose-500/50 text-rose-300 text-xs flex items-center gap-2">
-                            <ShieldAlert className="w-5 h-5 shrink-0 text-rose-400" />
-                            <span>
-                              <strong>Safety Notice:</strong> Mains AC and battery puncturing are strictly hazardous.
-                            </span>
-                          </div>
-                        )}
+                        <div
+                          className={`p-4 rounded-3xl text-sm leading-relaxed ${
+                            isUser
+                              ? 'bg-gradient-to-r from-[rgba(57,255,106,0.18)] to-[rgba(43,217,91,0.22)] text-[#EAF7EF] border border-[#39FF6A]/60 shadow-[0_0_20px_rgba(57,255,106,0.2)] rounded-tr-none'
+                              : 'bg-[#0E2A1F]/80 text-[#EAF7EF] border border-[rgba(57,255,106,0.2)] rounded-tl-none shadow-[0_4px_24px_rgba(0,0,0,0.4)] backdrop-blur-md'
+                          }`}
+                        >
+                          {/* Attached Photo */}
+                          {msg.photoUrl && (
+                            <div className="mb-3 rounded-2xl overflow-hidden border border-[rgba(57,255,106,0.3)] max-h-60">
+                              <img
+                                src={msg.photoUrl}
+                                alt="Uploaded circuit"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
 
-                        {/* Message Text Content */}
-                        <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-
-                        {/* Code Snippet Box */}
-                        {msg.codeSnippet && (
-                          <div className="mt-4 rounded-2xl overflow-hidden border border-[rgba(57,255,106,0.25)] bg-[#040B08] text-white font-mono text-xs shadow-inner">
-                            <div className="flex items-center justify-between px-4 py-2 bg-[#0E2A1F] border-b border-[rgba(57,255,106,0.15)] text-[#CBD8D0]">
-                              <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#39FF6A]">
-                                <Cpu className="w-3.5 h-3.5" />
-                                Arduino C++ Sketch
+                          <div className="whitespace-pre-wrap leading-relaxed font-sans">
+                            {msg.content || (
+                              <span className="text-[#8FA99B] font-mono italic animate-pulse">
+                                Calculating electrical netlist & inspecting pin connections...
                               </span>
-                              <button
-                                onClick={() => handleCopyCode(msg.codeSnippet!, msg.id)}
-                                className="flex items-center gap-1 hover:text-[#39FF6A] transition-colors text-xs font-mono font-bold"
-                              >
-                                {copiedCodeId === msg.id ? (
-                                  <>
-                                    <Check className="w-3.5 h-3.5 text-[#39FF6A]" />
-                                    <span className="text-[#39FF6A]">Copied</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3.5 h-3.5" />
-                                    <span>Copy</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-
-                            <pre className="p-4 overflow-x-auto text-[#39FF6A] leading-relaxed font-mono text-[11px]">
-                              {msg.codeSnippet}
-                            </pre>
-
-                            <div className="p-2.5 bg-[#0E2A1F]/80 border-t border-[rgba(57,255,106,0.15)] flex justify-end">
-                              <button
-                                onClick={() => handleRunInSimulator(msg.codeSnippet!)}
-                                className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] font-extrabold rounded-xl text-xs shadow-[0_0_12px_rgba(57,255,106,0.4)] hover:brightness-110 font-mono"
-                              >
-                                <Play className="w-3.5 h-3.5 fill-current" />
-                                <span>Run in 3D Circuit Lab</span>
-                              </button>
-                            </div>
+                            )}
                           </div>
-                        )}
 
-                        {/* Diagnostics Hardware Warning */}
-                        {msg.diagnostics && msg.diagnostics.length > 0 && (
-                          <div className="mt-3 p-3 rounded-2xl bg-[#040B08] border border-[#FF9A1F]/50 text-[#FF9A1F] text-xs font-mono">
-                            <div className="flex items-center gap-1.5 font-bold mb-0.5">
-                              <AlertTriangle className="w-4 h-4 text-[#FF9A1F]" />
-                              <span>Circuit Diagnostic Warning:</span>
-                            </div>
-                            <div>{msg.diagnostics[0].text}</div>
-                          </div>
-                        )}
-
-                        {/* Suggested Components linking to TechSavyyy */}
-                        {msg.suggestedComponents && msg.suggestedComponents.length > 0 && (
-                          <div className="mt-4 pt-3 border-t border-[rgba(57,255,106,0.12)] space-y-2">
-                            <span className="text-[10px] font-mono font-bold text-[#8FA99B] uppercase block">
-                              RECOMMENDED HARDWARE (TECHSAVYYY STORE):
-                            </span>
-                            <div className="space-y-1.5">
-                              {msg.suggestedComponents.map((comp, idx) => (
+                          {/* Tool Call Proposals */}
+                          {msg.toolCalls && msg.toolCalls.length > 0 && (
+                            <div className="mt-4 space-y-2.5 pt-3 border-t border-[rgba(57,255,106,0.2)] font-mono">
+                              {msg.toolCalls.map((call, idx) => (
                                 <div
                                   key={idx}
-                                  className="flex items-center justify-between p-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.15)] text-xs"
+                                  className="p-3 rounded-2xl bg-black/50 border border-[#39FF6A]/30 text-xs"
                                 >
-                                  <span className="font-semibold text-[#EAF7EF]">
-                                    {comp.name}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-[#39FF6A] font-mono">
-                                      ₹{comp.priceInr}
-                                    </span>
-                                    <Link
-                                      href="/store"
-                                      className="px-2.5 py-1 rounded-lg bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[rgba(57,255,106,0.3)] font-mono font-bold text-[10px] flex items-center gap-1 hover:bg-[#39FF6A] hover:text-[#07110D] transition-colors"
-                                    >
-                                      <ShoppingBag className="w-3 h-3" />
-                                      <span>View in Store</span>
-                                    </Link>
-                                  </div>
+                                  {call.name === 'propose_fix' && (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2 text-[#39FF6A] font-bold">
+                                        <Wrench className="w-4 h-4" />
+                                        <span>Proposed Fix: {call.args.title}</span>
+                                      </div>
+                                      <p className="text-white/70">{call.args.description}</p>
+                                      {call.args.code_patch && (
+                                        <button
+                                          onClick={() => handleApplyFix(call.args.code_patch)}
+                                          className="px-3.5 py-1.5 rounded-xl bg-[#39FF6A] text-[#07110D] font-bold text-xs hover:brightness-110 flex items-center gap-1.5"
+                                        >
+                                          <Check className="w-3.5 h-3.5" /> Apply Code to Circuit Lab
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {call.name === 'highlight_wiring_issue' && (
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-1.5 text-[#FF9A1F] font-bold">
+                                        <AlertTriangle className="w-3.5 h-3.5" />
+                                        <span>Pin Fault: {call.args.component_id} ({call.args.pin_id})</span>
+                                      </div>
+                                      <p className="text-white/70">{call.args.reason}</p>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Message Footer */}
-                      {!isUser && (
-                        <div className="flex items-center justify-between px-2 text-[10px] text-[#8FA99B] font-mono">
-                          <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => rateMessage(msg.id, 'UP')}
-                              className={`flex items-center gap-1 hover:text-[#39FF6A] transition-colors ${
-                                msg.rating === 'UP' ? 'text-[#39FF6A] font-bold' : ''
-                              }`}
-                            >
-                              <ThumbsUp className="w-3 h-3" />
-                              <span>Helpful</span>
-                            </button>
-                            <span>•</span>
-                            <button
-                              onClick={() => rateMessage(msg.id, 'DOWN')}
-                              className={`flex items-center gap-1 hover:text-[#FF4D4D] transition-colors ${
-                                msg.rating === 'DOWN' ? 'text-[#FF4D4D] font-bold' : ''
-                              }`}
-                            >
-                              <ThumbsDown className="w-3 h-3" />
-                              <span>Needs Work</span>
-                            </button>
-                          </div>
+                          )}
                         </div>
-                      )}
+
+                        <div className="px-2 text-[10px] text-[#8FA99B] font-mono">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
             </div>
 
-            {/* Bottom Input & Quick Prompts Area */}
-            <div className="p-4 bg-[#07110D]/95 backdrop-blur-xl border-t border-[rgba(57,255,106,0.15)] shrink-0 space-y-3">
-              <div className="max-w-4xl mx-auto space-y-3">
-                {/* Quick Prompts Chips */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-mono">
-                  <span className="text-[10px] font-bold text-[#8FA99B] shrink-0 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-[#39FF6A]" />
-                    QUICK ASKS:
-                  </span>
-                  {QUICK_PROMPTS.map((prompt) => (
-                    <button
-                      key={prompt}
-                      onClick={() => setInput(prompt)}
-                      className="px-3 py-1 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.15)] text-[#CBD8D0] text-xs hover:border-[#39FF6A] hover:text-[#39FF6A] transition-colors shrink-0 whitespace-nowrap"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
+            {/* Quick Suggestions Chips */}
+            <div className="px-6 py-2 bg-[#040B08]/90 border-t border-[rgba(57,255,106,0.12)] flex items-center gap-2 overflow-x-auto text-xs font-mono shrink-0">
+              {QUICK_PROMPTS.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => setInput(q)}
+                  className="px-3 py-1.5 rounded-full bg-white/5 text-[#CBD8D0] border border-[rgba(57,255,106,0.15)] hover:border-[#39FF6A] hover:text-[#39FF6A] transition-colors shrink-0 whitespace-nowrap"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
 
-                {/* Photo attachment notification */}
+            {/* Input Form Bar */}
+            <div className="p-4 bg-[#040B08]/95 border-t border-[rgba(57,255,106,0.15)] shrink-0">
+              <div className="max-w-4xl mx-auto">
                 {uploadedPhotoBase64 && (
-                  <div className="p-2.5 bg-[#040B08] border border-[rgba(57,255,106,0.3)] rounded-xl flex items-center justify-between text-xs font-mono">
-                    <div className="flex items-center gap-2 text-[#39FF6A] font-bold">
-                      <ImageIcon className="w-4 h-4" />
-                      <span>Circuit photo attached ready for Gemini Vision diagnostics</span>
-                    </div>
-                    <button
-                      onClick={() => setUploadedPhoto(null)}
-                      className="text-[#8FA99B] hover:text-[#FF4D4D] font-bold"
-                    >
+                  <div className="mb-2 p-2 rounded-xl bg-[rgba(57,255,106,0.1)] border border-[rgba(57,255,106,0.3)] text-xs font-mono text-[#39FF6A] flex items-center justify-between">
+                    <span>Circuit photo attached for Vision diagnosis</span>
+                    <button onClick={() => setUploadedPhoto(null)} className="font-bold hover:text-[#FF4D4D]">
                       Remove
                     </button>
                   </div>
                 )}
 
-                {/* Form Input Bar */}
-                <form onSubmit={handleSend} className="flex items-center gap-2 sm:gap-3">
+                <form onSubmit={handleSend} className="flex items-center gap-2.5">
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -584,48 +495,54 @@ export default function RituuPage() {
                     onChange={handlePhotoSelect}
                   />
 
-                  {/* Photo Upload Button */}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-3 rounded-2xl bg-[#040B08] hover:bg-[#0E2A1F] text-[#8FA99B] hover:text-[#39FF6A] border border-[rgba(57,255,106,0.2)] transition-colors shrink-0"
+                    className="p-2.5 rounded-xl bg-white/5 text-[#8FA99B] hover:text-[#39FF6A] border border-[rgba(57,255,106,0.15)] transition-colors"
                     title="Upload Circuit Breadboard Photo"
                   >
                     <ImageIcon className="w-5 h-5" />
                   </button>
 
-                  {/* Speech to Text Microphone Button */}
                   <button
                     type="button"
                     onClick={toggleSpeechRecognition}
-                    className={`p-3 rounded-2xl border transition-colors shrink-0 ${
+                    className={`p-2.5 rounded-xl border transition-colors ${
                       isListening
-                        ? 'bg-rose-950/60 border-rose-500 text-rose-400 animate-pulse'
-                        : 'bg-[#040B08] border-[rgba(57,255,106,0.2)] text-[#8FA99B] hover:text-[#39FF6A]'
+                        ? 'bg-[rgba(255,77,77,0.15)] border-[#FF4D4D] text-[#FF4D4D] animate-pulse'
+                        : 'bg-white/5 border-[rgba(57,255,106,0.15)] text-[#8FA99B] hover:text-[#39FF6A]'
                     }`}
-                    title={isListening ? 'Listening...' : 'Voice Input (Mic)'}
+                    title={isListening ? 'Listening...' : 'Voice Input'}
                   >
                     {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
                   </button>
 
-                  {/* Text Input */}
                   <input
                     type="text"
-                    placeholder="Ask Rituu about circuit wiring, Arduino code, motor torque, or robot kinematics..."
+                    placeholder="Ask Rituu about circuit wiring, motor sizing, or Arduino C++..."
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    className="flex-1 bg-[#040B08] border border-[rgba(57,255,106,0.2)] rounded-2xl px-4 py-3 text-xs sm:text-sm text-[#EAF7EF] placeholder-[#527063] font-mono focus:outline-none focus:border-[#39FF6A] transition-colors"
+                    className="flex-1 bg-[#07110D] border border-[rgba(57,255,106,0.25)] rounded-2xl px-4 py-2.5 text-sm text-[#EAF7EF] placeholder:text-[#527063] focus:outline-none focus:border-[#39FF6A] font-mono transition-colors"
                   />
 
-                  {/* Send Button */}
-                  <button
-                    type="submit"
-                    disabled={!input.trim() && !uploadedPhotoBase64}
-                    className="px-5 sm:px-6 py-3 bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] font-extrabold rounded-2xl text-xs sm:text-sm shadow-[0_0_15px_rgba(57,255,106,0.4)] hover:brightness-110 flex items-center gap-2 shrink-0 disabled:opacity-40"
-                  >
-                    <Send className="w-4 h-4 stroke-[3]" />
-                    <span className="hidden sm:inline">Ask Rituu</span>
-                  </button>
+                  {avatarState !== 'idle' ? (
+                    <button
+                      type="button"
+                      onClick={stopGeneration}
+                      className="px-4 py-2.5 rounded-2xl bg-[#FF4D4D]/20 border border-[#FF4D4D]/50 text-[#FF4D4D] hover:bg-[#FF4D4D] hover:text-white transition-all text-xs font-mono font-bold flex items-center gap-1.5"
+                    >
+                      <Square className="w-4 h-4 fill-current" />
+                      <span>Stop</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={!input.trim() && !uploadedPhotoBase64}
+                      className="btn-primary-neon px-5 py-2.5 text-sm shadow-neon-pill transition-transform hover:scale-105 disabled:opacity-40"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  )}
                 </form>
               </div>
             </div>

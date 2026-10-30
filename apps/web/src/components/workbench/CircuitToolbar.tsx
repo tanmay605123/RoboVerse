@@ -21,7 +21,10 @@ import {
   Send,
   FlipHorizontal,
   Check,
+  GraduationCap,
+  Sparkles,
 } from 'lucide-react';
+import { useRituuStore } from '@/store/useRituuStore';
 
 export const WIRE_COLOR_OPTIONS = [
   { id: 'green', color: '#39FF6A', label: 'Signal (Neon Green)' },
@@ -55,6 +58,8 @@ interface CircuitToolbarProps {
   onSelectWireStyle: (style: WireStyle) => void;
   onFlip: () => void;
   // Right side actions
+  isCurriculumOpen?: boolean;
+  onToggleCurriculum?: () => void;
   isCodeOpen: boolean;
   onToggleCode: () => void;
   isSimulating: boolean;
@@ -82,6 +87,8 @@ export const CircuitToolbar: React.FC<CircuitToolbarProps> = ({
   wireStyle,
   onSelectWireStyle,
   onFlip,
+  isCurriculumOpen = false,
+  onToggleCurriculum,
   isCodeOpen,
   onToggleCode,
   isSimulating,
@@ -286,6 +293,36 @@ export const CircuitToolbar: React.FC<CircuitToolbarProps> = ({
 
       {/* RIGHT TOOLBAR: Code, Simulation & Send To controls */}
       <div className="flex items-center gap-2">
+        {/* "Simple Lab (16 Lessons)" button */}
+        {onToggleCurriculum && (
+          <button
+            onClick={onToggleCurriculum}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono font-bold transition-all border ${
+              isCurriculumOpen
+                ? 'bg-[#39FF6A] text-[#07110D] border-transparent shadow-[0_0_12px_#39FF6A]'
+                : 'bg-[#040B08] text-[#39FF6A] border-[rgba(57,255,106,0.3)] hover:bg-[#39FF6A]/10'
+            }`}
+            title="Open Simple Lab 16-Lesson Beginner Curriculum"
+          >
+            <GraduationCap className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Simple Lab</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#39FF6A]/20 text-[#39FF6A]">16</span>
+          </button>
+        )}
+
+        {/* Ask Rituu AI */}
+        <button
+          onClick={() => {
+            const rituu = useRituuStore.getState();
+            rituu.setOpen(true);
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#39FF6A]/10 text-[#39FF6A] border border-[#39FF6A]/30 hover:border-[#39FF6A] text-xs font-mono font-bold transition-all shadow-[0_0_12px_rgba(57,255,106,0.15)]"
+          title="Ask Rituu AI Mentor"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">Ask Rituu</span>
+        </button>
+
         {/* "Code" button (toggles Monaco / Blockly drawer) */}
         <button
           onClick={onToggleCode}

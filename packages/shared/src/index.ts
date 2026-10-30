@@ -6,5 +6,7 @@ export * from './types/usage';
 export * from './types/simulator';
 export * from './types/rituu';
 export * from './types/api';
+export * from './types/database.types';
 export * from './data/componentsCatalog';
 export * from './client/apiClient';
+export * from './client/supabaseClient';

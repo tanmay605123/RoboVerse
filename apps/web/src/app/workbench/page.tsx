@@ -11,6 +11,7 @@ import { ComponentListView } from '@/components/workbench/ComponentListView';
 import { ComponentPaletteDrawer } from '@/components/workbench/ComponentPaletteDrawer';
 import { ArduinoEditorDrawer } from '@/components/workbench/ArduinoEditorDrawer';
 import { CircuitDiagnosticsBar } from '@/components/workbench/CircuitDiagnosticsBar';
+import { BeginnerCurriculumDrawer } from '@/components/workbench/BeginnerCurriculumDrawer';
 
 export default function WorkbenchPage() {
   const {
@@ -46,6 +47,7 @@ export default function WorkbenchPage() {
   } = useCircuitStore();
 
   const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false);
+  const [isCurriculumOpen, setIsCurriculumOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -148,6 +150,8 @@ export default function WorkbenchPage() {
         wireStyle={wireStyle as WireStyle}
         onSelectWireStyle={(style) => setWireStyle(style)}
         onFlip={() => selectedComponentId && flipComponent(selectedComponentId)}
+        isCurriculumOpen={isCurriculumOpen}
+        onToggleCurriculum={() => setIsCurriculumOpen(!isCurriculumOpen)}
         isCodeOpen={isCodeOpen}
         onToggleCode={toggleCodeOpen}
         isSimulating={isSimulating}
@@ -187,6 +191,15 @@ export default function WorkbenchPage() {
                 onClose={() => toggleCodeOpen()}
               />
             )}
+
+            {/* Right: Beginner Curriculum Drawer (16 Lessons) */}
+            <BeginnerCurriculumDrawer
+              isOpen={isCurriculumOpen}
+              onClose={() => setIsCurriculumOpen(false)}
+              onOpenCodeEditor={() => {
+                if (!isCodeOpen) toggleCodeOpen();
+              }}
+            />
 
             {/* Right: Component Palette (Small Glass Tiles, 3-Column Grid, Search, Starters) */}
             <ComponentPaletteDrawer

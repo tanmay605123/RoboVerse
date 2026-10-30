@@ -3,35 +3,20 @@
 import React, { useState } from 'react';
 import { useCircuitStore } from '@/store/useCircuitStore';
 import { Download, Printer, ZoomIn, ZoomOut, Maximize2, FileText, Check } from 'lucide-react';
+import { getComponentSchematic } from '@roboverse/components-lib';
 
 export const SchematicSheetView: React.FC = () => {
   const { components, wires, isSimulating } = useCircuitStore();
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isPdfDownloading, setIsPdfDownloading] = useState(false);
 
-  // Generate Reference Designators
+  // Generate Reference Designators according to IEEE Std 315 prefixes
   const componentRefs: Record<string, string> = {};
-  const counters: Record<string, number> = {
-    U: 0,
-    R: 0,
-    D: 0,
-    BAT: 0,
-    C: 0,
-    SW: 0,
-    SERVO: 0,
-    PING: 0,
-    POT: 0,
-  };
+  const counters: Record<string, number> = {};
 
   components.forEach((c) => {
-    let prefix = 'U';
-    if (c.typeId.includes('resistor')) prefix = 'R';
-    else if (c.typeId.includes('led')) prefix = 'D';
-    else if (c.typeId.includes('battery')) prefix = 'BAT';
-    else if (c.typeId.includes('push') || c.typeId.includes('switch')) prefix = 'SW';
-    else if (c.typeId.includes('servo')) prefix = 'SERVO';
-    else if (c.typeId.includes('ultrasonic')) prefix = 'PING';
-    else if (c.typeId.includes('potentiometer')) prefix = 'POT';
+    const schemDef = getComponentSchematic(c.typeId);
+    const prefix = schemDef.prefix || 'U';
 
     counters[prefix] = (counters[prefix] || 0) + 1;
     componentRefs[c.id] = `${prefix}${counters[prefix]}`;
@@ -131,127 +116,49 @@ export const SchematicSheetView: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-4">
             {components.map((comp) => {
               const refDes = componentRefs[comp.id] || 'U1';
-              const isResistor = comp.typeId.includes('resistor');
-              const isLed = comp.typeId.includes('led');
-              const isArduino = comp.typeId.includes('arduino');
-              const isBattery = comp.typeId.includes('battery');
-              const isUltrasonic = comp.typeId.includes('ultrasonic');
-              const isServo = comp.typeId.includes('servo');
+              const schem = getComponentSchematic(comp.typeId);
+              const displayVal = comp.properties?.resistanceOhms
+                ? `${comp.properties.resistanceOhms}Ω`
+                : comp.properties?.voltage
+                ? `${comp.properties.voltage}V`
+                : comp.properties?.colorName
+                ? `${comp.properties.colorName} LED`
+                : comp.name;
 
               return (
                 <div
                   key={comp.id}
-                  className="p-3 border-2 border-dashed border-gray-300 rounded-xl relative bg-white"
+                  className="p-3 border-2 border-dashed border-gray-300 rounded-xl relative bg-white flex flex-col justify-between min-h-[140px]"
                 >
                   {/* Reference Designator Pill */}
                   <div className="flex items-center justify-between pb-1.5 border-b border-gray-200">
                     <span className="text-xs font-black text-brand-navy">{refDes}</span>
-                    <span className="text-[10px] text-gray-500 font-mono truncate max-w-[100px]">
+                    <span className="text-[10px] text-gray-500 font-mono truncate max-w-[120px]" title={comp.name}>
                       {comp.name}
                     </span>
                   </div>
 
-                  {/* Standard Schematic Graphic */}
-                  <div className="py-4 flex justify-center items-center">
-                    {/* Resistor IEEE Zig-zag */}
-                    {isResistor && (
-                      <div className="flex flex-col items-center">
-                        <svg width="120" height="30" className="text-brand-navy">
-                          <line x1="5" y1="15" x2="25" y2="15" stroke="currentColor" strokeWidth="2" />
-                          <path
-                            d="M 25,15 L 32,5 L 42,25 L 52,5 L 62,25 L 72,5 L 82,25 L 92,15 L 115,15"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        <span className="text-[10px] font-mono font-bold mt-1">
-                          {comp.properties?.resistanceOhms ?? 220}Ω
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Diode / LED Symbol */}
-                    {isLed && (
-                      <div className="flex flex-col items-center">
-                        <svg width="90" height="40" className="text-brand-navy">
-                          <line x1="5" y1="20" x2="30" y2="20" stroke="currentColor" strokeWidth="2" />
-                          <polygon points="30,8 30,32 50,20" fill="none" stroke="currentColor" strokeWidth="2" />
-                          <line x1="50" y1="8" x2="50" y2="32" stroke="currentColor" strokeWidth="2.5" />
-                          <line x1="50" y1="20" x2="85" y2="20" stroke="currentColor" strokeWidth="2" />
-                          {/* Light Emission Rays */}
-                          <line x1="42" y1="10" x2="55" y2="2" stroke="currentColor" strokeWidth="1.5" />
-                          <polygon points="55,2 50,3 53,6" fill="currentColor" />
-                          <line x1="48" y1="14" x2="61" y2="6" stroke="currentColor" strokeWidth="1.5" />
-                          <polygon points="61,6 56,7 59,10" fill="currentColor" />
-                        </svg>
-                        <span className="text-[10px] font-mono font-bold mt-1 text-rose-500">
-                          {comp.properties?.colorName ?? 'Red'} LED
-                        </span>
-                      </div>
-                    )}
-
-                    {/* DC Battery Symbol */}
-                    {isBattery && (
-                      <div className="flex flex-col items-center">
-                        <svg width="80" height="35" className="text-brand-navy">
-                          <line x1="5" y1="17.5" x2="30" y2="17.5" stroke="currentColor" strokeWidth="2" />
-                          <line x1="30" y1="6" x2="30" y2="29" stroke="currentColor" strokeWidth="3" />
-                          <line x1="40" y1="10" x2="40" y2="25" stroke="currentColor" strokeWidth="2" />
-                          <line x1="50" y1="6" x2="50" y2="29" stroke="currentColor" strokeWidth="3" />
-                          <line x1="60" y1="10" x2="60" y2="25" stroke="currentColor" strokeWidth="2" />
-                          <line x1="60" y1="17.5" x2="75" y2="17.5" stroke="currentColor" strokeWidth="2" />
-                          <text x="24" y="10" fontSize="8" fontWeight="bold">+</text>
-                        </svg>
-                        <span className="text-[10px] font-mono font-bold mt-1">
-                          {comp.properties?.voltage ?? 9.0}V DC
-                        </span>
-                      </div>
-                    )}
-
-                    {/* MCU Box Symbol */}
-                    {isArduino && (
-                      <div className="w-full border-2 border-brand-navy rounded-lg p-2 text-center bg-gray-50">
-                        <span className="text-[11px] font-black tracking-wider block">ATMEGA328P</span>
-                        <div className="flex justify-between text-[9px] font-mono mt-2 pt-1 border-t border-gray-300">
-                          <span>D13 (SCK)</span>
-                          <span>5V / GND</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Sonar Sensor Symbol */}
-                    {isUltrasonic && (
-                      <div className="w-full border-2 border-brand-navy rounded-lg p-2 text-center bg-blue-50">
-                        <span className="text-[11px] font-bold block">HC-SR04 SONAR</span>
-                        <div className="flex justify-between text-[8px] font-mono mt-1 text-gray-600">
-                          <span>VCC</span>
-                          <span>TRIG</span>
-                          <span>ECHO</span>
-                          <span>GND</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Servo Symbol */}
-                    {isServo && (
-                      <div className="w-full border-2 border-brand-navy rounded-lg p-2 text-center bg-amber-50">
-                        <span className="text-[11px] font-bold block">SG90 SERVO</span>
-                        <div className="flex justify-between text-[8px] font-mono mt-1 text-gray-600">
-                          <span>GND</span>
-                          <span>5V</span>
-                          <span>PWM</span>
-                        </div>
-                      </div>
-                    )}
+                  {/* Standard Schematic Graphic (IEEE Std 315) */}
+                  <div className="py-2 flex justify-center items-center overflow-hidden">
+                    <svg
+                      width="120"
+                      height="70"
+                      viewBox="0 0 120 70"
+                      className="text-brand-navy"
+                      dangerouslySetInnerHTML={{
+                        __html: schem.renderSvg({ refDes, value: displayVal }),
+                      }}
+                    />
                   </div>
 
-                  {/* Net Labels */}
-                  <div className="flex items-center justify-between text-[9px] font-mono text-gray-500 pt-1 border-t border-gray-100">
-                    <span>NET_1</span>
-                    <span>NET_GND</span>
+                  {/* Standard Port Labels */}
+                  <div className="flex items-center justify-between text-[8px] font-mono text-gray-500 pt-1 border-t border-gray-100">
+                    <span className="truncate max-w-[80px]">
+                      {schem.ports[0]?.name ? `PIN: ${schem.ports[0].name}` : 'NET_1'}
+                    </span>
+                    <span className="text-[7px] text-gray-400 uppercase font-sans">
+                      {schem.standard.split(' ')[0]}
+                    </span>
                   </div>
                 </div>
               );

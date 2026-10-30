@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@google/genai": "^2.32.0",
     "@monaco-editor/react": "^4.7.0",
     "@react-three/drei": "^9.105.6",
     "@react-three/fiber": "^8.16.6",
@@ -16,6 +17,7 @@
     "@roboverse/shared": "*",
     "@roboverse/sim-engine": "*",
     "@roboverse/ui-tokens": "*",
+    "@supabase/supabase-js": "^2.118.0",
     "@tanstack/react-query": "^5.37.1",
     "avr8js": "^0.21.1",
     "canvas-confetti": "^1.9.3",
