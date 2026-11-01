@@ -21,7 +21,13 @@ export function getSupabaseClient(config?: SupabaseConfig): SupabaseClient<Datab
   const anonKey =
     config?.supabaseAnonKey ||
     (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY : '') ||
-    'mock-anon-key-roboverse-2026';
+    '';
+
+  if (!url || !anonKey) {
+    throw new Error(
+      'Missing Supabase configuration. Set NEXT_PUBLIC_SUPABASE_URL/EXPO_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY/EXPO_PUBLIC_SUPABASE_ANON_KEY.'
+    );
+  }
 
   cachedClient = createClient<Database>(url, anonKey, {
     auth: {
