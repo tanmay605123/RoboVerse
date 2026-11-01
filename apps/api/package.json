@@ -9,6 +9,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
+    "prisma:ensure-schema": "node scripts/ensure-schema.cjs",
     "prisma:seed": "tsx prisma/seed.ts",
     "seed:postgres": "tsx prisma/seed.ts",
     "test": "jest --runInBand --detectOpenHandles"
