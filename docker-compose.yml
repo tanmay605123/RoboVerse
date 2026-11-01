@@ -1,22 +1,6 @@
 version: '3.8'
 
 services:
-  mongo:
-    image: mongo:7.0
-    container_name: roboverse_mongo
-    environment:
-      MONGO_INITDB_DATABASE: roboverse
-    ports:
-      - '27017:27017'
-    volumes:
-      - roboverse_mongodata:/data/db
-    restart: unless-stopped
-    healthcheck:
-      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:7-alpine
     container_name: roboverse_redis
@@ -41,8 +25,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      MONGODB_URI: mongodb://mongo:27017/roboverse
-      DATABASE_URL: mongodb://mongo:27017/roboverse
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379
       CLIENT_WEB_URL: http://localhost:3000
       CLIENT_MOBILE_URL: http://localhost:8081
@@ -55,8 +38,6 @@ services:
       GEMINI_MODEL: gemini-1.5-flash
       GEMINI_MODEL_PRO: gemini-1.5-pro
     depends_on:
-      mongo:
-        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -68,15 +49,12 @@ services:
     container_name: roboverse_worker
     environment:
       NODE_ENV: production
-      MONGODB_URI: mongodb://mongo:27017/roboverse
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379
     depends_on:
-      mongo:
-        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  roboverse_mongodata:
   roboverse_redisdata:

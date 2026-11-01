@@ -2,15 +2,7 @@ import request from 'supertest';
 import { app } from '../src/app';
 import { inMemoryDb } from '../src/lib/db';
 import { UserRole, PlanTier, BillingCycle } from '@roboverse/shared';
-import { getMongoHealthStatus } from '../src/lib/mongoose';
-import {
-  UserModel,
-  StudentIDModel,
-  ShopModel,
-  ComponentDefModel,
-  SampleProjectModel,
-  AuditLogModel,
-} from '../src/models';
+import { getPostgresHealthStatus } from '../src/lib/postgres';
 
 describe('Phase 1: Production Server Skeleton, Auth, Role-Based Redirect, 2FA Admin, Dynamic UPI QR & Plans', () => {
   let studentToken: string;
@@ -88,12 +80,12 @@ describe('Phase 1: Production Server Skeleton, Auth, Role-Based Redirect, 2FA Ad
   // 1. Production Server Skeleton & Health Checks
   // ==========================================
   describe('1. Production Server Skeleton & Health Checks', () => {
-    it('should return 200 and healthy status with memory, MongoDB, and Redis telemetry', async () => {
+    it('should return 200 and healthy status with memory, PostgreSQL, and Redis telemetry', async () => {
       const res = await request(app).get('/api/health');
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('healthy');
       expect(res.body.app).toBe('RoboVerse Core API');
-      expect(res.body.database.type).toBe('MongoDB');
+      expect(res.body.database.type).toBe('PostgreSQL (Supabase)');
       expect(res.body.redis.status).toBe('active');
       expect(res.body.memory).toBeDefined();
     });
@@ -113,24 +105,13 @@ describe('Phase 1: Production Server Skeleton, Auth, Role-Based Redirect, 2FA Ad
   });
 
   // ==========================================
-  // 2. MongoDB Mongoose Models & Schemas
+  // 2. Supabase PostgreSQL connection
   // ==========================================
-  describe('2. MongoDB Mongoose Models & Schemas', () => {
-    it('should have Mongoose schemas compiled and accessible', () => {
-      expect(UserModel.modelName).toBe('User');
-      expect(StudentIDModel.modelName).toBe('StudentID');
-      expect(ShopModel.modelName).toBe('Shop');
-      expect(ComponentDefModel.modelName).toBe('ComponentDef');
-      expect(SampleProjectModel.modelName).toBe('SampleProject');
-      expect(AuditLogModel.modelName).toBe('AuditLog');
-    });
-
-    it('should inspect health check status from mongoose connection helper', () => {
-      const status = getMongoHealthStatus();
+  describe('2. Supabase PostgreSQL connection', () => {
+    it('should expose PostgreSQL health telemetry', async () => {
+      const status = await getPostgresHealthStatus();
       expect(status).toHaveProperty('status');
-      expect(status).toHaveProperty('readyState');
-      expect(status).toHaveProperty('host');
-      expect(status).toHaveProperty('dbName');
+      expect(status.provider).toContain('Supabase');
     });
   });
 

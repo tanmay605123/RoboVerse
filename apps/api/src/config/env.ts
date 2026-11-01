@@ -11,9 +11,8 @@ export const ENV = {
   CLIENT_WEB_URL: process.env.CLIENT_WEB_URL || 'http://localhost:3000',
   CLIENT_MOBILE_URL: process.env.CLIENT_MOBILE_URL || 'http://localhost:8081',
   
-  // Database & Redis
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/roboverse',
-  DATABASE_URL: process.env.DATABASE_URL || 'mongodb://localhost:27017/roboverse',
+  // Supabase PostgreSQL & Redis
+  DATABASE_URL: process.env.DATABASE_URL || '',
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
   
   // JWT Secrets

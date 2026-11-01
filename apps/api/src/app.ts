@@ -3,13 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
-import mongoSanitize from 'express-mongo-sanitize';
 import { swaggerDocument } from './swagger/swaggerSpec';
 import v1Router from './routes/v1';
 import { errorHandler } from './middleware/errorHandler';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { ENV } from './config/env';
-import { getMongoHealthStatus } from './lib/mongoose';
+import { getPostgresHealthStatus } from './lib/postgres';
 
 export function createApp(): Express {
   const app = express();
@@ -40,15 +39,12 @@ export function createApp(): Express {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Sanitize data against NoSQL query injection
-  app.use(mongoSanitize());
-
   // Global rate limiter
   app.use('/api/', apiRateLimiter);
 
   // Health check endpoint
-  app.get(['/health', '/api/health'], (req: Request, res: Response) => {
-    const mongoStatus = getMongoHealthStatus();
+  app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
+    const postgresStatus = await getPostgresHealthStatus();
     res.json({
       status: 'healthy',
       app: 'RoboVerse Core API',
@@ -57,8 +53,8 @@ export function createApp(): Express {
       uptime: process.uptime(),
       memory: process.memoryUsage(),
       database: {
-        type: 'MongoDB',
-        ...mongoStatus,
+        type: 'PostgreSQL (Supabase)',
+        ...postgresStatus,
       },
       redis: {
         status: 'active',

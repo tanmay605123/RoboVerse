@@ -24,7 +24,6 @@ import { generateStudentIdRecord } from '../../lib/studentId';
 import { redis } from '../../lib/redis';
 import { inMemoryDb } from '../../lib/db';
 import { usageService } from '../../lib/usage';
-import { UserModel, StudentProfileModel, StudentIDModel } from '../../models';
 
 export function getRoleRedirectPath(role: UserRole | string): string {
   switch (role) {

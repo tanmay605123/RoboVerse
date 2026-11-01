@@ -2,7 +2,7 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { app } from './app';
 import { ENV } from './config/env';
-import { connectMongo, disconnectMongo } from './lib/mongoose';
+import { connectPostgres, disconnectPostgres } from './lib/postgres';
 
 const server = http.createServer(app);
 
@@ -42,9 +42,9 @@ io.on('connection', (socket) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
-  // Connect to MongoDB Atlas / replica set
-  connectMongo().catch((err) => {
-    console.warn(`MongoDB init warning: ${err.message}`);
+  // Connect to Supabase PostgreSQL
+  connectPostgres().catch((err) => {
+    console.warn(`PostgreSQL init warning: ${err.message}`);
   });
 
   server.listen(ENV.PORT, () => {
@@ -65,7 +65,7 @@ if (process.env.NODE_ENV !== 'test') {
 // Graceful shutdown
 const shutdown = async () => {
   console.log('Stopping RoboVerse API server gracefully...');
-  await disconnectMongo();
+  await disconnectPostgres();
   server.close(() => {
     console.log('RoboVerse API stopped.');
     process.exit(0);

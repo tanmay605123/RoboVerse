@@ -9,7 +9,6 @@ import { comparePassword, hashPassword } from '../../lib/password';
 import { generateAuthTokens } from '../../lib/jwt';
 import { redis } from '../../lib/redis';
 import { logAuditEvent, inMemoryAuditLogs } from '../../lib/auditLog';
-import { AdminUserModel, UserModel, AuditLogModel, AdminRole } from '../../models';
 
 const router = Router();
 

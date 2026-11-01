@@ -12,8 +12,7 @@
     "@roboverse/shared": "*",
     "bullmq": "^5.81.5",
     "dotenv": "^16.4.5",
-    "ioredis": "^5.4.1",
-    "mongoose": "^8.4.1"
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",

@@ -1,6 +1,5 @@
 import { Request } from 'express';
-import mongoose from 'mongoose';
-import { AuditLogModel } from '../models';
+import { prisma } from './db';
 
 export interface AuditLogParams {
   actorId: string;
@@ -68,25 +67,23 @@ export async function logAuditEvent(params: AuditLogParams): Promise<void> {
     inMemoryAuditLogs.pop();
   }
 
-  // Persist to MongoDB if connected
-  if (mongoose.connection && mongoose.connection.readyState === 1) {
+  // Persist to Supabase PostgreSQL when configured
+  if (process.env.DATABASE_URL) {
     try {
-      await AuditLogModel.create({
-        actorId: params.actorId,
-        actorRole: params.actorRole,
-        actorEmail: params.actorEmail,
-        action: params.action,
-        targetEntity: params.targetEntity,
-        targetId: params.targetId,
-        ipAddress,
-        userAgent,
-        details: params.details || {},
-        timestamp: new Date(),
-      });
+      await prisma.$executeRaw`
+        INSERT INTO public.audit_log (actor_id, action, target_type, target_id, metadata)
+        VALUES (NULL, ${`${params.action} [${params.actorRole}]`}, ${params.targetEntity || 'system'}, ${params.targetId || null}, ${JSON.stringify({
+          actorId: params.actorId,
+          actorEmail: params.actorEmail,
+          ipAddress,
+          userAgent,
+          details: params.details || {},
+        })}::jsonb)
+      `;
     } catch (err: any) {
-      // If Mongo fails, in-memory log remains available
+      // If PostgreSQL fails, in-memory log remains available
       if (process.env.NODE_ENV !== 'test') {
-        console.warn(`AuditLog Mongo persist note: ${err.message}`);
+        console.warn(`AuditLog PostgreSQL persist note: ${err.message}`);
       }
     }
   }
