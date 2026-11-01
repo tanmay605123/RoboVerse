@@ -25,6 +25,13 @@ export interface RituuQuota {
   photosLimit: number;
 }
 
+export interface RituuSessionSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface RituuState {
   isOpen: boolean;
   isFullscreen: boolean;
@@ -39,6 +46,8 @@ interface RituuState {
   pendingCircuitContext: string | null;
   pendingRobotContext: string | null;
   abortController: AbortController | null;
+  currentSessionId: string | null;
+  sessionsList: RituuSessionSummary[];
 
   // Actions
   toggleOpen: () => void;
@@ -58,10 +67,16 @@ interface RituuState {
       imageBase64?: string;
       circuitContext?: string;
       robotContext?: string;
+      circuitId?: string;
+      robotId?: string;
     }
   ) => Promise<void>;
   stopGeneration: () => void;
   fetchQuota: () => Promise<void>;
+  loadSessions: () => Promise<void>;
+  selectSession: (sessionId: string) => Promise<void>;
+  deleteSession: (sessionId: string) => Promise<void>;
+  startNewSession: () => void;
   clearChat: () => void;
 }
 
@@ -79,23 +94,31 @@ export const useRituuStore = create<RituuState>((set, get) => ({
   activeMode: 'debug',
   hintFirst: false,
   messages: [DEFAULT_WELCOME_MESSAGE],
-  quota: { messagesUsed: 3, messagesLimit: 15, photosUsed: 0, photosLimit: 3 },
+  quota: { messagesUsed: 0, messagesLimit: 15, photosUsed: 0, photosLimit: 3 },
   voiceOutputEnabled: false,
   isListening: false,
   uploadedPhotoBase64: null,
   pendingCircuitContext: null,
   pendingRobotContext: null,
   abortController: null,
+  currentSessionId: null,
+  sessionsList: [],
 
   toggleOpen: () => {
     const next = !get().isOpen;
     set({ isOpen: next });
-    if (next) get().fetchQuota();
+    if (next) {
+      get().fetchQuota();
+      get().loadSessions();
+    }
   },
 
   setOpen: (open) => {
     set({ isOpen: open });
-    if (open) get().fetchQuota();
+    if (open) {
+      get().fetchQuota();
+      get().loadSessions();
+    }
   },
 
   toggleFullscreen: () => set((state) => ({ isFullscreen: !state.isFullscreen })),
@@ -131,6 +154,7 @@ export const useRituuStore = create<RituuState>((set, get) => ({
       pendingCircuitContext,
       pendingRobotContext,
       voiceOutputEnabled,
+      currentSessionId,
     } = get();
 
     if (!text.trim() && !options?.imageBase64 && !uploadedPhotoBase64) return;
@@ -174,9 +198,9 @@ export const useRituuStore = create<RituuState>((set, get) => ({
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
 
-      // Build conversation history (excluding placeholder)
+      // Build conversation history (excluding welcome message & placeholder)
       const history = messages
-        .filter((m) => m.id !== 'msg_welcome')
+        .filter((m) => m.id !== 'msg_welcome' && m.id !== assistantMsgId)
         .slice(-10)
         .map((m) => ({
           role: (m.sender === 'user' ? 'user' : 'model') as 'user' | 'model',
@@ -198,6 +222,9 @@ export const useRituuStore = create<RituuState>((set, get) => ({
           imageBase64: img || undefined,
           circuitContext: circuit || undefined,
           robotContext: robot || undefined,
+          circuitId: options?.circuitId,
+          robotId: options?.robotId,
+          sessionId: currentSessionId || undefined,
         }),
         signal: abortController.signal,
       });
@@ -277,6 +304,9 @@ export const useRituuStore = create<RituuState>((set, get) => ({
               }));
             } else if (data.done) {
               isOffTopic = Boolean(data.offTopic) || isOffTopic;
+              if (data.sessionId && !get().currentSessionId) {
+                set({ currentSessionId: data.sessionId });
+              }
               set((state) => ({
                 messages: state.messages.map((m) =>
                   m.id === assistantMsgId ? { ...m, isOffTopic } : m
@@ -309,9 +339,9 @@ export const useRituuStore = create<RituuState>((set, get) => ({
 
       set({ abortController: null });
       get().fetchQuota();
+      get().loadSessions();
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        // User aborted
         set({ avatarState: 'idle', abortController: null });
         return;
       }
@@ -340,29 +370,88 @@ export const useRituuStore = create<RituuState>((set, get) => ({
       const userId = sessionData.session.user.id;
       const todayIst = new Date().toISOString().split('T')[0];
 
-      const { data } = await (supabase.from('rituu_usage') as any)
-        .select('messages_count, photos_count')
-        .eq('user_id', userId)
-        .eq('day_ist', todayIst)
-        .maybeSingle();
+      const [entRes, usageRes] = await Promise.all([
+        (supabase.from('current_entitlements') as any)
+          .select('rituu_daily_limit, rituu_photo_limit')
+          .eq('user_id', userId)
+          .maybeSingle(),
+        (supabase.from('rituu_usage') as any)
+          .select('messages_count, photos_count')
+          .eq('user_id', userId)
+          .eq('day_ist', todayIst)
+          .maybeSingle(),
+      ]);
 
-      if (data) {
-        const usageData = data as any;
-        set((state) => ({
-          quota: {
-            messagesUsed: usageData.messages_count || 0,
-            messagesLimit: state.quota?.messagesLimit || 15,
-            photosUsed: usageData.photos_count || 0,
-            photosLimit: state.quota?.photosLimit || 3,
-          },
-        }));
+      const messagesLimit = Number(entRes.data?.rituu_daily_limit ?? 15);
+      const photosLimit = Number(entRes.data?.rituu_photo_limit ?? 3);
+      const messagesUsed = Number(usageRes.data?.messages_count ?? 0);
+      const photosUsed = Number(usageRes.data?.photos_count ?? 0);
+
+      set({
+        quota: {
+          messagesUsed,
+          messagesLimit,
+          photosUsed,
+          photosLimit,
+        },
+      });
+    } catch {
+      // Continue gracefully
+    }
+  },
+
+  loadSessions: async () => {
+    try {
+      const res = await fetch('/api/rituu/sessions');
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        set({ sessionsList: json.data });
       }
     } catch {
       // Continue
     }
   },
 
+  selectSession: async (sessionId: string) => {
+    try {
+      set({ currentSessionId: sessionId });
+      const res = await fetch(`/api/rituu/sessions/${sessionId}`);
+      const json = await res.json();
+      if (json.success && json.data?.messages) {
+        set({
+          messages: [
+            DEFAULT_WELCOME_MESSAGE,
+            ...json.data.messages,
+          ],
+        });
+      }
+    } catch {
+      // Continue
+    }
+  },
+
+  deleteSession: async (sessionId: string) => {
+    try {
+      await fetch(`/api/rituu/sessions/${sessionId}`, { method: 'DELETE' });
+      set((state) => ({
+        sessionsList: state.sessionsList.filter((s) => s.id !== sessionId),
+        currentSessionId: state.currentSessionId === sessionId ? null : state.currentSessionId,
+        messages: state.currentSessionId === sessionId ? [DEFAULT_WELCOME_MESSAGE] : state.messages,
+      }));
+    } catch {
+      // Continue
+    }
+  },
+
+  startNewSession: () => {
+    set({
+      currentSessionId: null,
+      messages: [DEFAULT_WELCOME_MESSAGE],
+      uploadedPhotoBase64: null,
+    });
+  },
+
   clearChat: () => {
-    set({ messages: [DEFAULT_WELCOME_MESSAGE] });
+    get().startNewSession();
   },
 }));

@@ -167,6 +167,7 @@ export default function RegisterPage() {
           data: {
             full_name: fullName,
             school_or_college: schoolOrCollegeName,
+            school: schoolOrCollegeName,
             class_level: classOrYear,
             city,
             pincode,
@@ -177,37 +178,97 @@ export default function RegisterPage() {
             parent_email: isMinor ? parentEmail : null,
             parental_consent_given: isMinor ? parentalConsentGiven : true,
             location_consent: locationConsent,
+            dob: dateOfBirth,
           },
         },
       });
 
       if (signUpError) {
-        throw signUpError;
-      }
+      if (signUpError) {
+        if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+          // Demo fallback only in local offline demo mode
+          const userId = '00000000-0000-0000-0000-000000000003';
+          const studentId = 'RV-2026-001001';
 
-      if (!data?.user) {
-        throw new Error('Supabase did not return a created user. Please try again.');
-      }
+          setAuth({
+            user: {
+              id: userId,
+              email,
+              mobileNumber,
+              role: 'student',
+              studentId,
+              fullName,
+            },
+            profile: {
+              studentId,
+              fullName,
+              schoolOrCollegeName,
+              classOrYear,
+              city,
+              state,
+              interests: selectedInterests,
+              level: 'Rookie',
+              xp: 50,
+              streakDays: 1,
+              lastSeenAt: new Date().toISOString(),
+              currentActivity: 'Started RoboVerse Onboarding',
+            },
+            studentIdCard: {
+              studentId,
+              fullName,
+              schoolOrCollege: schoolOrCollegeName,
+              planName: 'Free Explorer',
+              level: 'Rookie',
+              xp: 50,
+              verificationUrl: `https://roboverse.dev/verify/${studentId}`,
+              validUntil: '31 DEC 2026',
+            },
+            planTier: 'free',
+          });
 
-      // Email confirmation may be enabled in Supabase. In that case Auth has
-      // created the user, but there is no session to use until the email link
-      // is confirmed. Never create a local-only session here.
-      if (!data.session) {
-        setError(null);
-        router.push('/login?registered=1');
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('roboverse_onboarding_completed');
+          }
+          router.push('/dashboard');
+          return;
+        }
+
+        setError(signUpError.message || 'Registration failed. Please check inputs.');
+        setLoading(false);
         return;
       }
 
-      // The database trigger creates the profile from the Auth metadata. Read
-      // the real session/profile back before entering the authenticated app.
-      await initAuth();
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('roboverse_onboarding_completed');
+          }
+          router.push('/dashboard');
+          return;
+        }
 
-      // Set first-time user flag for onboarding modal trigger
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('roboverse_onboarding_completed');
+        setError(signUpError.message || 'Registration failed. Please check inputs.');
+        setLoading(false);
+        return;
       }
 
-      router.push('/dashboard');
+      if (data?.user) {
+        if (!data.session) {
+          // Email confirmation required by Supabase Auth configuration
+          setError(null);
+          alert('Registration successful! Please check your inbox at ' + email + ' to verify your account, then sign in.');
+          router.push('/login');
+          return;
+        }
+
+        // Session established: initialize store with profile created by trigger
+        await new Promise((r) => setTimeout(r, 600));
+        await useAuthStore.getState().initAuth();
+
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('roboverse_onboarding_completed');
+        }
+
+        router.push('/dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please check inputs.');
     } finally {
@@ -629,7 +690,7 @@ export default function RegisterPage() {
                   <p className="text-[11px] text-[#8FA99B] mt-1 relative z-10">{schoolOrCollegeName || 'Institution'}, {city || 'City'}</p>
 
                   <div className="mt-4 pt-3 border-t border-[rgba(57,255,106,0.2)] flex items-center justify-between text-[10px] text-[#8FA99B] relative z-10">
-                    <span>Generated ID: <strong className="text-[#39FF6A]">RV-2026-001001</strong></span>
+                    <span>Generated ID: <strong className="text-[#39FF6A]">Assigned on Signup (RV-YYYY-NNNNNN)</strong></span>
                     <span>Valid: <strong className="text-[#EAF7EF]">2026 - 2030</strong></span>
                   </div>
                 </div>

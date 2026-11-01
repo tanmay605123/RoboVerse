@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, notFound } from 'next/navigation';
 import { AppSidebar } from '../../components/layout/AppSidebar';
 import { AppTopBar } from '../../components/layout/AppTopBar';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -220,10 +220,15 @@ export default function AdminPage() {
     }, 600);
   };
 
-  const isAdmin = user?.role === 'admin' || (user?.role as string) === 'ADMIN' || demoBypassActive;
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+  const isAdmin = user?.role === 'admin' || (user?.role as string) === 'ADMIN' || (isDemo && demoBypassActive);
 
-  // 403 Forbidden Screen if not admin
-  if (isAuthenticated && !isAdmin) {
+  // Non-admins and signed-out visitors get 404 in production
+  if (!isAuthenticated || !isAdmin) {
+    if (!isDemo) {
+      notFound();
+    }
+
     return (
       <div className="flex h-screen overflow-hidden bg-[#07110D] text-[#EAF7EF] font-sans">
         <AppSidebar
@@ -246,12 +251,12 @@ export default function AdminPage() {
                 403 Forbidden: Admin Role Required
               </h2>
               <p className="text-xs text-[#8FA99B] leading-relaxed">
-                You are currently signed in as a student (<strong className="text-white">{user?.email}</strong>). The Master Control Center is restricted to RoboVerse Operations &amp; Faculty Administrators.
+                You are currently signed in as a student (<strong className="text-white">{user?.email || 'Anonymous'}</strong>). The Master Control Center is restricted to RoboVerse Operations &amp; Faculty Administrators.
               </p>
               <div className="pt-3 space-y-2">
                 <button
                   onClick={() => setDemoBypassActive(true)}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs shadow transition-all font-sans"
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs shadow transition-all font-sans cursor-pointer"
                 >
                   Unlock Admin Control Room (Demo Mode)
                 </button>

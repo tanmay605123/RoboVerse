@@ -54,6 +54,10 @@ function calculateHaversineDistanceM(
   return Math.round(R * c);
 }
 
+// 24-hour in-memory cell cache
+const cellCache = new Map<string, { places: any[]; timestamp: number }>();
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -157,116 +161,130 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // 2. Fetch Google Places API (New) Text Search if GOOGLE_MAPS_SERVER_KEY is set
-    const googleApiKey = Deno.env.get('GOOGLE_MAPS_SERVER_KEY');
+    // 2. Fetch Google Places API (New) Text Search with STRICT field mask & cell cache
+    const googleApiKey =
+      Deno.env.get('GOOGLE_PLACES_SERVER_KEY') || Deno.env.get('GOOGLE_MAPS_SERVER_KEY');
+
     if (googleApiKey) {
       try {
-        const textQuery = query
-          ? `${query} electronic components shop`
-          : 'electronic components shop OR arduino OR robotics kit OR electronics spare parts';
+        const cellLat = Math.round(lat * 100) / 100;
+        const cellLng = Math.round(lng * 100) / 100;
+        const cacheKey = `${cellLat}_${cellLng}_${radius_m}_${(query || '').toLowerCase().trim()}`;
 
-        const placesResponse = await fetch(
-          'https://places.googleapis.com/v1/places:searchText',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': googleApiKey,
-              'X-Goog-FieldMask':
-                'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryType',
-            },
-            body: JSON.stringify({
-              textQuery,
-              locationBias: {
-                circle: {
-                  center: { latitude: lat, longitude: lng },
-                  radius: radius_m,
-                },
+        let places: any[] = [];
+        const cached = cellCache.get(cacheKey);
+
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+          places = cached.places;
+        } else {
+          const textQuery = query
+            ? `${query} electronic components shop OR robotics parts OR स्पेयर पार्ट्स`
+            : 'electronic components shop OR arduino OR robotics kit OR electronics spare parts OR रोबोटिक्स';
+
+          const placesResponse = await fetch(
+            'https://places.googleapis.com/v1/places:searchText',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': googleApiKey,
+                // STRICT FIELD MASK: Highest priced field sets pricing tier. Phone/hours fetched on demand.
+                'X-Goog-FieldMask':
+                  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryType',
               },
-              languageCode: 'en',
-              regionCode: 'IN',
-              maxResultCount: 15,
-            }),
+              body: JSON.stringify({
+                textQuery,
+                locationBias: {
+                  circle: {
+                    center: { latitude: lat, longitude: lng },
+                    radius: radius_m,
+                  },
+                },
+                languageCode: 'en',
+                regionCode: 'IN',
+                maxResultCount: 15,
+              }),
+            }
+          );
+
+          if (placesResponse.ok) {
+            const placesData = await placesResponse.json();
+            places = placesData.places || [];
+            cellCache.set(cacheKey, { places, timestamp: Date.now() });
           }
-        );
+        }
 
-        if (placesResponse.ok) {
-          const placesData = await placesResponse.json();
-          const places = placesData.places || [];
+        for (const place of places) {
+          const pLat = place.location?.latitude;
+          const pLng = place.location?.longitude;
+          if (!pLat || !pLng) continue;
 
-          for (const place of places) {
-            const pLat = place.location?.latitude;
-            const pLng = place.location?.longitude;
-            if (!pLat || !pLng) continue;
+          const placeId = place.id;
+          const placeName = place.displayName?.text || 'Electronics Shop';
 
-            const placeId = place.id;
-            const placeName = place.displayName?.text || 'Electronics Shop';
-
-            // Check if already merged by name or distance < 150m
-            let isDuplicate = false;
-            for (const [, existing] of mergedShopsMap) {
-              const distBetween = calculateHaversineDistanceM(
-                existing.latitude,
-                existing.longitude,
-                pLat,
-                pLng
-              );
-              if (
-                distBetween < 150 ||
-                existing.name.toLowerCase().includes(placeName.toLowerCase()) ||
-                placeName.toLowerCase().includes(existing.name.toLowerCase())
-              ) {
-                isDuplicate = true;
-                if (!existing.google_place_id) existing.google_place_id = placeId;
-                if (!existing.google_maps_uri && place.googleMapsUri) {
-                  existing.google_maps_uri = place.googleMapsUri;
-                }
-                break;
+          // Check if already merged by name or distance < 150m or place_id
+          let isDuplicate = false;
+          for (const [, existing] of mergedShopsMap) {
+            const distBetween = calculateHaversineDistanceM(
+              existing.latitude,
+              existing.longitude,
+              pLat,
+              pLng
+            );
+            if (
+              existing.google_place_id === placeId ||
+              distBetween < 150 ||
+              existing.name.toLowerCase().includes(placeName.toLowerCase()) ||
+              placeName.toLowerCase().includes(existing.name.toLowerCase())
+            ) {
+              isDuplicate = true;
+              if (!existing.google_place_id) existing.google_place_id = placeId;
+              if (!existing.google_maps_uri && place.googleMapsUri) {
+                existing.google_maps_uri = place.googleMapsUri;
               }
+              break;
             }
+          }
 
-            if (!isDuplicate) {
-              const distM = calculateHaversineDistanceM(lat, lng, pLat, pLng);
-              const distKm = Number((distM / 1000).toFixed(1));
-              const travelMins = Math.max(3, Math.round((distKm / 20) * 60 + 2));
+          if (!isDuplicate) {
+            const distM = calculateHaversineDistanceM(lat, lng, pLat, pLng);
+            const distKm = Number((distM / 1000).toFixed(1));
+            const travelMins = Math.max(3, Math.round((distKm / 20) * 60 + 2));
 
-              mergedShopsMap.set(placeId, {
-                id: placeId,
-                name: placeName,
-                phone: 'Call via Google Maps',
-                address: place.formattedAddress || 'Local Electronics Market',
-                city: 'Nearby',
-                state: 'India',
-                pincode: '',
-                latitude: pLat,
-                longitude: pLng,
-                distance_meters: distM,
-                distance_km: distKm,
-                travel_time_mins: travelMins,
-                opening_hours: '10:00 AM - 8:00 PM (Mon-Sat)',
-                categories: ['General Electronics', 'Components'],
-                is_verified: false,
-                verified_status: 'google_places',
-                rating: place.rating || 4.2,
-                review_count: place.userRatingCount || 10,
-                google_maps_uri:
-                  place.googleMapsUri ||
-                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    placeName
-                  )}`,
-                google_place_id: placeId,
-                photos: [],
-                stocked_components: ['General Electronics', 'Wires', 'Components'],
-                source: 'google_places',
-              });
-            }
+            mergedShopsMap.set(placeId, {
+              id: placeId,
+              name: placeName,
+              phone: 'Tap to view hours & contact',
+              address: place.formattedAddress || 'Local Electronics Market',
+              city: 'Nearby',
+              state: 'India',
+              pincode: '',
+              latitude: pLat,
+              longitude: pLng,
+              distance_meters: distM,
+              distance_km: distKm,
+              travel_time_mins: travelMins,
+              opening_hours: '10:00 AM - 8:00 PM (Mon-Sat)',
+              categories: ['General Electronics', 'Components'],
+              is_verified: false,
+              verified_status: 'google_places',
+              rating: place.rating || 4.2,
+              review_count: place.userRatingCount || 10,
+              google_maps_uri:
+                place.googleMapsUri ||
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  placeName
+                )}`,
+              google_place_id: placeId,
+              photos: [],
+              stocked_components: ['General Electronics', 'Wires', 'Components'],
+              source: 'google_places',
+            });
           }
         }
       } catch (placesErr) {
-        console.warn('Google Places API fetch error:', placesErr);
+        console.warn('Google Places API fetch error, fallback to verified registry:', placesErr);
       }
-    } else {
-      // Note: GOOGLE_MAPS_SERVER_KEY not provided. Serving verified directory.
     }
 
     const shopsList = Array.from(mergedShopsMap.values()).sort(

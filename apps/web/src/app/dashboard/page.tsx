@@ -56,7 +56,7 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, profile, studentIdCard, planTier, initialized, isLoading, isAuthenticated, initAuth } = useAuthStore();
+  const { user, profile, studentIdCard, planTier, entitlements, initialized, isLoading, isAuthenticated, initAuth } = useAuthStore();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -149,64 +149,90 @@ export default function DashboardPage() {
     },
   ];
 
-  // My Saved Circuits state (Tinkercad-style fun names)
-  const [circuits, setCircuits] = useState([
-    {
-      id: 'proj_mighty_bombul',
-      title: 'Sizzling Blad-Kieran',
-      category: 'Circuits',
-      timeAgo: '13 days ago',
-      isPublic: false,
-      remixCount: 4,
-      likeCount: 18,
-      componentsCount: 7,
-      thumbnailUrl: null,
-    },
-    {
-      id: 'proj_sonar_radar',
-      title: 'Ultrasonic Sonar Distance Radar',
-      category: 'Circuits',
-      timeAgo: '2 days ago',
-      isPublic: true,
-      remixCount: 12,
-      likeCount: 45,
-      componentsCount: 5,
-      thumbnailUrl: null,
-    },
-    {
-      id: 'proj_servo_gripper',
-      title: 'Precision SG90 Servo Gripper',
-      category: 'Circuits',
-      timeAgo: '5 days ago',
-      isPublic: false,
-      remixCount: 1,
-      likeCount: 9,
-      componentsCount: 4,
-      thumbnailUrl: null,
-    },
-    {
-      id: 'proj_smart_lamp',
-      title: 'Automatic LDR Smart Night Lamp',
-      category: 'Circuits',
-      timeAgo: '8 days ago',
-      isPublic: true,
-      remixCount: 8,
-      likeCount: 31,
-      componentsCount: 6,
-      thumbnailUrl: null,
-    },
-    {
-      id: 'proj_dht11_weather',
-      title: 'Brave Snicket-Amur',
-      category: 'Circuits',
-      timeAgo: '10 days ago',
-      isPublic: true,
-      remixCount: 6,
-      likeCount: 22,
-      componentsCount: 5,
-      thumbnailUrl: null,
-    },
-  ]);
+  // My Saved Circuits state
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+  const [circuits, setCircuits] = useState<any[]>(
+    isDemo
+      ? [
+          {
+            id: 'proj_mighty_bombul',
+            title: 'Sizzling Blad-Kieran',
+            category: 'Circuits',
+            timeAgo: '13 days ago',
+            isPublic: false,
+            remixCount: 4,
+            likeCount: 18,
+            componentsCount: 7,
+            thumbnailUrl: null,
+          },
+          {
+            id: 'proj_sonar_radar',
+            title: 'Ultrasonic Sonar Distance Radar',
+            category: 'Circuits',
+            timeAgo: '2 days ago',
+            isPublic: true,
+            remixCount: 12,
+            likeCount: 45,
+            componentsCount: 5,
+            thumbnailUrl: null,
+          },
+        ]
+      : []
+  );
+
+  // Load real circuits and certificates from database
+  useEffect(() => {
+    if (!user) return;
+    const loadUserData = async () => {
+      try {
+        const { data: dbCircuits } = await (supabase.from('circuit_projects') as any)
+          .select('id, name, is_public, remix_count, likes_count, thumbnail_url, updated_at')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false });
+
+        if (dbCircuits && dbCircuits.length > 0) {
+          setCircuits(
+            dbCircuits.map((p: any) => ({
+              id: p.id,
+              title: p.name || 'Untitled Circuit',
+              category: 'Circuits',
+              timeAgo: new Date(p.updated_at).toLocaleDateString(),
+              isPublic: !!p.is_public,
+              remixCount: p.remix_count || 0,
+              likeCount: p.likes_count || 0,
+              componentsCount: 5,
+              thumbnailUrl: p.thumbnail_url || null,
+            }))
+          );
+        }
+
+        const { data: dbCerts } = await (supabase.from('certificates') as any)
+          .select('id, certificate_code, metadata, issued_at, courses(title)')
+          .eq('user_id', user.id)
+          .order('issued_at', { ascending: false });
+
+        if (dbCerts && dbCerts.length > 0) {
+          setCertificates(
+            dbCerts.map((c: any) => ({
+              id: c.id,
+              title: c.courses?.title || 'Verified Robotics Credential',
+              track: 'Foundation Track',
+              issueDate: new Date(c.issued_at).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              }),
+              verificationHash: c.certificate_code,
+              badge: 'Verified Credential',
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load user circuits/certificates:', err);
+      }
+    };
+    loadUserData();
+  }, [user]);
 
   // Code Projects state
   const codeProjects = [
@@ -262,24 +288,20 @@ export default function DashboardPage() {
   ];
 
   // Certificates state
-  const certificates = [
-    {
-      id: 'cert_rover_2026',
-      title: 'Autonomous Mobile Robotics & PID Control',
-      track: 'Capstone Certification',
-      issueDate: 'October 12, 2026',
-      verificationHash: 'sha256:7f3a9e2d09c8112a44',
-      badge: 'Verified Credential',
-    },
-    {
-      id: 'cert_arduino_essentials',
-      title: 'Arduino Electronics & Sensor Telemetry Specialist',
-      track: 'Foundation Track',
-      issueDate: 'September 28, 2026',
-      verificationHash: 'sha256:91c2b8e0147fab2955',
-      badge: 'Verified Credential',
-    },
-  ];
+  const [certificates, setCertificates] = useState<any[]>(
+    isDemo
+      ? [
+          {
+            id: 'cert_rover_2026',
+            title: 'Autonomous Mobile Robotics & PID Control',
+            track: 'Capstone Certification',
+            issueDate: 'October 12, 2026',
+            verificationHash: 'sha256:7f3a9e2d09c8112a44',
+            badge: 'Verified Credential',
+          },
+        ]
+      : []
+  );
 
   // City Hackathons data
   const hackathonsByCity = {
@@ -393,9 +415,9 @@ export default function DashboardPage() {
     c.title.toLowerCase().includes(searchFilter.toLowerCase())
   );
 
-  const studentName = profile?.fullName || 'Aarav Sharma';
-  const studentId = studentIdCard?.studentId || 'RV-2026-000101';
-  const currentPlan = planTier || 'PRO';
+  const studentName = profile?.fullName || user?.email?.split('@')[0] || 'RoboVerse Explorer';
+  const studentId = profile?.studentId || studentIdCard?.studentId || 'RV-XXXX-XXXXXX';
+  const currentPlan = entitlements?.badge || (planTier ? String(planTier).toUpperCase() : 'FREE');
 
   return (
     <div className="flex h-screen bg-[#07110D] overflow-hidden text-[#EAF7EF] font-sans">

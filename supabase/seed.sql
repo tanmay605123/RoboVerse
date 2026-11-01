@@ -1056,72 +1056,23 @@ VALUES
 )
 ON CONFLICT (id) DO NOTHING;
 
--- 10. Sample Verified Maker Shops (PostGIS Coordinates Across Major Indian Tech Hubs)
-INSERT INTO public.shops (name, phone, address, city, state, pincode, location, opening_hours, verified_status, rating, categories)
+-- 10. Platform Configuration (app_config) & Feature Flags
+INSERT INTO public.app_config (key, value, is_public, description)
 VALUES
-(
-  'SP Road Robotics & Electronics Hub',
-  '+91 80 2223 8899',
-  '#42, Sadar Patrappa Road, Near City Market',
-  'Bengaluru',
-  'Karnataka',
-  '560002',
-  ST_SetSRID(ST_MakePoint(77.5833, 12.9644), 4326)::geography,
-  '10:00 AM - 8:30 PM (Mon-Sat)',
-  'verified',
-  4.9,
-  ARRAY['Arduino', 'Sensors', 'BLDC Motors', 'Chassis', 'LiPo Batteries']
-),
-(
-  'Lajpat Rai Market Electronics Emporium',
-  '+91 11 2386 1122',
-  'Shop 118, Old Lajpat Rai Market, Chandni Chowk',
-  'Delhi',
-  'Delhi',
-  '110006',
-  ST_SetSRID(ST_MakePoint(77.2355, 28.6562), 4326)::geography,
-  '10:30 AM - 8:00 PM (Mon-Sat)',
-  'verified',
-  4.8,
-  ARRAY['Microcontrollers', 'Soldering Kits', 'Sensors', 'Relays', 'Displays']
-),
-(
-  'Lamington Road Tech Components Center',
-  '+91 22 2387 4455',
-  'Dr. Dadasaheb Bhadkamkar Marg, Grant Road East',
-  'Mumbai',
-  'Maharashtra',
-  '400007',
-  ST_SetSRID(ST_MakePoint(72.8164, 18.9616), 4326)::geography,
-  '10:00 AM - 8:00 PM (Mon-Sat)',
-  'verified',
-  4.7,
-  ARRAY['Robotics Kits', 'Raspberry Pi', 'Motors', 'Tools', 'ESP32']
-),
-(
-  'Gujarati Galli Maker Spares Hub',
-  '+91 40 2475 9933',
-  'Gujarati Galli, Bank Street, Koti',
-  'Hyderabad',
-  'Telangana',
-  '500095',
-  ST_SetSRID(ST_MakePoint(78.4867, 17.3850), 4326)::geography,
-  '10:00 AM - 8:00 PM (Mon-Sat)',
-  'verified',
-  4.6,
-  ARRAY['Sensors', 'Breadboards', 'Batteries', 'Arduino', 'Wires']
-),
-(
-  'Budhwar Peth Robotics & Electronic Store',
-  '+91 20 2445 6677',
-  'Appa Balwant Chowk, Budhwar Peth',
-  'Pune',
-  'Maharashtra',
-  '411002',
-  ST_SetSRID(ST_MakePoint(73.8562, 18.5167), 4326)::geography,
-  '10:00 AM - 8:00 PM (Mon-Sat)',
-  'verified',
-  4.7,
-  ARRAY['Servos', 'Microcontrollers', 'Sensors', 'Drone Parts', 'Tools']
-)
-ON CONFLICT DO NOTHING;
+  ('legal_name', 'RoboVerse Technologies Pvt Ltd', true, 'Registered corporate legal entity name'),
+  ('gstin', '07AABCR9920A1Z2', true, 'Official 18% GST Identification Number in India'),
+  ('address', 'Tech Tower 4, Cyber City, Gurugram, Haryana - 122002', true, 'Corporate headquarters and fulfillment warehouse'),
+  ('support_email', 'support@roboverse.education', true, 'Official customer support & pedagogical inquiries desk')
+ON CONFLICT (key) DO UPDATE SET
+  value = EXCLUDED.value,
+  description = EXCLUDED.description;
+
+INSERT INTO public.feature_flags (key, enabled, description, rollout_pct)
+VALUES
+  ('rituu_ai_chat', true, 'AI robotics mentor streaming chat and multimodal image inspection', 100),
+  ('upi_qr_payments', true, 'Dynamic single-use UPI QR code generation via Razorpay API', 100),
+  ('hardware_store', true, 'TechSavyyy verified hardware component store and checkout', 100),
+  ('maker_radar', true, 'PostGIS spatial and Google Places Maker Radar store finder', 100)
+ON CONFLICT (key) DO UPDATE SET
+  enabled = EXCLUDED.enabled;
+

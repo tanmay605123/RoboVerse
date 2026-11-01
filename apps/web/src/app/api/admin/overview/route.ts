@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,9 +41,37 @@ const FALLBACK_METRICS: AdminMetrics = {
 
 export async function GET(req: Request) {
   try {
-    let metricsData: AdminMetrics = { ...FALLBACK_METRICS, serverTimestamp: new Date().toISOString() };
+    const supabase = createServerSupabaseClient();
+    const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
-    // Query Supabase admin_overview RPC
+    // Verify session
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user && !isDemo) {
+      return NextResponse.json({ success: false, error: { message: 'Unauthorized' } }, { status: 404 });
+    }
+
+    let metricsData: AdminMetrics = {
+      totalStudents: 0,
+      onlineNow: 0,
+      active24h: 0,
+      active7d: 0,
+      workingOnProjects: 0,
+      projectsCreated: 0,
+      enrollmentsCount: 0,
+      certificatesIssued: 0,
+      rituuMessagesToday: 0,
+      rituuOfftopicToday: 0,
+      rituuOfftopicRatePct: 0,
+      totalRevenueInr: 0,
+      ordersCount: 0,
+      openShopReports: 0,
+      serverTimestamp: new Date().toISOString(),
+    };
+
+    if (isDemo) {
+      metricsData = { ...FALLBACK_METRICS, serverTimestamp: new Date().toISOString() };
+    }
+
     try {
       const { data: dbOverview, error } = await (supabase.rpc as any)('admin_overview');
       if (!error && dbOverview) {
@@ -52,25 +80,25 @@ export async function GET(req: Request) {
         const ratePct = totalMsg > 0 ? Number(((offTopic / totalMsg) * 100).toFixed(1)) : 0;
 
         metricsData = {
-          totalStudents: Number(dbOverview.total_students || FALLBACK_METRICS.totalStudents),
-          onlineNow: Number(dbOverview.online_now || FALLBACK_METRICS.onlineNow),
-          active24h: Number(dbOverview.active_24h || FALLBACK_METRICS.active24h),
-          active7d: Number(dbOverview.active_7d || FALLBACK_METRICS.active7d),
-          workingOnProjects: Number(dbOverview.working_on_projects || FALLBACK_METRICS.workingOnProjects),
-          projectsCreated: Number(dbOverview.projects_created || FALLBACK_METRICS.projectsCreated),
-          enrollmentsCount: Number(dbOverview.enrollments_count || FALLBACK_METRICS.enrollmentsCount),
-          certificatesIssued: Number(dbOverview.certificates_issued || FALLBACK_METRICS.certificatesIssued),
-          rituuMessagesToday: totalMsg || FALLBACK_METRICS.rituuMessagesToday,
-          rituuOfftopicToday: offTopic || FALLBACK_METRICS.rituuOfftopicToday,
-          rituuOfftopicRatePct: ratePct || FALLBACK_METRICS.rituuOfftopicRatePct,
-          totalRevenueInr: Number(dbOverview.total_revenue_inr || FALLBACK_METRICS.totalRevenueInr),
-          ordersCount: Number(dbOverview.orders_count || FALLBACK_METRICS.ordersCount),
-          openShopReports: Number(dbOverview.open_shop_reports || FALLBACK_METRICS.openShopReports),
+          totalStudents: Number(dbOverview.total_students || 0),
+          onlineNow: Number(dbOverview.online_now || 0),
+          active24h: Number(dbOverview.active_24h || 0),
+          active7d: Number(dbOverview.active_7d || 0),
+          workingOnProjects: Number(dbOverview.working_on_projects || 0),
+          projectsCreated: Number(dbOverview.projects_created || 0),
+          enrollmentsCount: Number(dbOverview.enrollments_count || 0),
+          certificatesIssued: Number(dbOverview.certificates_issued || 0),
+          rituuMessagesToday: totalMsg,
+          rituuOfftopicToday: offTopic,
+          rituuOfftopicRatePct: ratePct,
+          totalRevenueInr: Number(dbOverview.total_revenue_inr || 0),
+          ordersCount: Number(dbOverview.orders_count || 0),
+          openShopReports: Number(dbOverview.open_shop_reports || 0),
           serverTimestamp: new Date().toISOString(),
         };
       }
     } catch (dbErr) {
-      // In local development or reviewer demo without admin session, fall back gracefully
+      // In local dev without DB connection, keep empty or demo metrics
     }
 
     return NextResponse.json({

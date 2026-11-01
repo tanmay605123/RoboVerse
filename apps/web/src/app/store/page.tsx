@@ -105,7 +105,7 @@ const CATEGORIES = [
 ];
 
 function StoreContent() {
-  const { user, profile, studentIdCard, planTier, isAuthenticated } = useAuthStore();
+  const { user, profile, studentIdCard, planTier, entitlements, isAuthenticated } = useAuthStore();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -169,6 +169,14 @@ function StoreContent() {
   // Check URL Search Params on mount for jump from Lab BOM (e.g. ?component_id=... or ?kit=...)
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // Load Razorpay Checkout SDK if not present
+      if (!(window as any).Razorpay) {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
+      }
+
       const params = new URLSearchParams(window.location.search);
       const compId = params.get('component_id');
       const kitParam = params.get('kit');
@@ -224,9 +232,9 @@ function StoreContent() {
     loadCatalog();
   }, [selectedCategory, searchQuery, sortBy]);
 
-  // Plan discount: Pro = 10%, Plus = 5%, Free = 0%
-  const tierString = String(planTier).toUpperCase();
-  const discountPct = tierString === 'PRO' ? 10 : tierString === 'PLUS' ? 5 : 0;
+  // Plan discount derived from current_entitlements single source of truth
+  const tierString = entitlements?.badge || String(planTier).toUpperCase();
+  const discountPct = entitlements?.storeDiscountPercent ?? (tierString === 'PRO' ? 10 : tierString === 'PLUS' ? 5 : 0);
 
   // Cart operations
   const addToCart = (product: Product) => {
@@ -383,6 +391,32 @@ function StoreContent() {
         setUpiQrModalOpen(true);
       } else {
         // Standard Razorpay Checkout
+        if (typeof window !== 'undefined' && (window as any).Razorpay) {
+          try {
+            const rzp = new (window as any).Razorpay({
+              key: orderData.razorpayKeyId,
+              amount: Math.round(orderData.totalInr * 100),
+              currency: 'INR',
+              name: 'RoboVerse TechSavyyy',
+              description: `Order ${orderData.orderNumber}`,
+              order_id: orderData.razorpayOrderId,
+              handler: function (response: any) {
+                handleOrderVerified({ ...orderData, paymentId: response.razorpay_payment_id });
+              },
+              prefill: {
+                name: shippingAddress.fullName,
+                contact: shippingAddress.phone,
+                email: user?.email || '',
+              },
+              theme: { color: '#39FF6A' },
+            });
+            setCheckoutModalOpen(false);
+            rzp.open();
+            return;
+          } catch {
+            // Fallback if Razorpay popup fails to initialize
+          }
+        }
         // In dev / sandbox without external Razorpay popup script, verify directly
         handleOrderVerified(orderData);
       }
