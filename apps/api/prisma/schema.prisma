@@ -1,13 +1,16 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas   = ["public", "auth"]
 }
 
 enum UserRole {
+  @@schema("public")
   FREE_STUDENT
   PLUS_STUDENT
   PRO_STUDENT
@@ -18,12 +21,14 @@ enum UserRole {
 }
 
 enum UserStatus {
+  @@schema("public")
   ACTIVE
   PENDING_VERIFICATION
   SUSPENDED
 }
 
 enum PlanTier {
+  @@schema("public")
   FREE
   PLUS
   PRO
@@ -31,6 +36,7 @@ enum PlanTier {
 }
 
 enum BillingCycle {
+  @@schema("public")
   MONTHLY
   QUARTERLY
   YEARLY
@@ -38,6 +44,7 @@ enum BillingCycle {
 }
 
 enum SubscriptionStatus {
+  @@schema("public")
   ACTIVE
   TRIALING
   PAUSED
@@ -47,6 +54,7 @@ enum SubscriptionStatus {
 }
 
 enum PaymentStatus {
+  @@schema("public")
   CREATED
   AUTHORIZED
   CAPTURED
@@ -55,6 +63,7 @@ enum PaymentStatus {
 }
 
 model User {
+  @@schema("public")
   id                    String            @id @default(uuid())
   email                 String            @unique
   passwordHash          String?
@@ -98,6 +107,7 @@ model User {
 }
 
 model StudentProfile {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String            @unique
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -123,6 +133,7 @@ model StudentProfile {
 }
 
 model StudentID {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String            @unique
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -136,6 +147,7 @@ model StudentID {
 }
 
 model Plan {
+  @@schema("public")
   id                    String            @id // plan_free, plan_plus, plan_pro, plan_institution
   tier                  PlanTier          @unique
   name                  String
@@ -151,6 +163,7 @@ model Plan {
 }
 
 model Subscription {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -175,6 +188,7 @@ model Subscription {
 }
 
 model Payment {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id])
@@ -198,6 +212,7 @@ model Payment {
 }
 
 model Coupon {
+  @@schema("public")
   id                    String            @id @default(uuid())
   code                  String            @unique
   discountPercentage    Float?
@@ -214,6 +229,7 @@ model Coupon {
 }
 
 model UsageMeter {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -230,6 +246,7 @@ model UsageMeter {
 }
 
 model Course {
+  @@schema("public")
   id                    String            @id @default(uuid())
   title                 String
   slug                  String            @unique
@@ -248,6 +265,7 @@ model Course {
 }
 
 model Lesson {
+  @@schema("public")
   id                    String            @id @default(uuid())
   courseId              String
   course                Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -266,6 +284,7 @@ model Lesson {
 }
 
 model Quiz {
+  @@schema("public")
   id                    String            @id @default(uuid())
   title                 String
   questionsJson         String            @db.Text
@@ -275,6 +294,7 @@ model Quiz {
 }
 
 model Progress {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -290,6 +310,7 @@ model Progress {
 }
 
 model Badge {
+  @@schema("public")
   id                    String            @id @default(uuid())
   name                  String
   slug                  String            @unique
@@ -300,6 +321,7 @@ model Badge {
 }
 
 model Certificate {
+  @@schema("public")
   id                    String            @id @default(uuid())
   certificateNumber     String            @unique // e.g. RV-CERT-2026-00123
   userId                String
@@ -317,6 +339,7 @@ model Certificate {
 }
 
 model CircuitProject {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -341,6 +364,7 @@ model CircuitProject {
 }
 
 model Component {
+  @@schema("public")
   id                    String            @id @default(uuid())
   name                  String
   category              String
@@ -355,6 +379,7 @@ model Component {
 }
 
 model Simulation {
+  @@schema("public")
   id                    String            @id @default(uuid())
   projectId             String
   project               CircuitProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -365,6 +390,7 @@ model Simulation {
 }
 
 model ChatSession {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -380,6 +406,7 @@ model ChatSession {
 }
 
 model ChatMessage {
+  @@schema("public")
   id                    String            @id @default(uuid())
   sessionId             String
   session               ChatSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -397,6 +424,7 @@ model ChatMessage {
 }
 
 model LiveClass {
+  @@schema("public")
   id                    String            @id @default(uuid())
   title                 String
   description           String
@@ -412,6 +440,7 @@ model LiveClass {
 }
 
 model Enrollment {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -424,6 +453,7 @@ model Enrollment {
 }
 
 model Project {
+  @@schema("public")
   id                    String            @id @default(uuid())
   title                 String
   slug                  String            @unique
@@ -437,6 +467,7 @@ model Project {
 }
 
 model Submission {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -455,6 +486,7 @@ model Submission {
 }
 
 model Event {
+  @@schema("public")
   id                    String            @id @default(uuid())
   title                 String
   organizer             String
@@ -473,6 +505,7 @@ model Event {
 }
 
 model Notification {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -487,6 +520,7 @@ model Notification {
 }
 
 model Shop {
+  @@schema("public")
   id                    String            @id @default(uuid())
   name                  String
   address               String
@@ -505,6 +539,7 @@ model Shop {
 }
 
 model Product {
+  @@schema("public")
   id                    String            @id @default(uuid())
   title                 String
   slug                  String            @unique
@@ -525,6 +560,7 @@ model Product {
 }
 
 model Order {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id])
@@ -542,6 +578,7 @@ model Order {
 }
 
 model OrderItem {
+  @@schema("public")
   id                    String            @id @default(uuid())
   orderId               String
   order                 Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -553,6 +590,7 @@ model OrderItem {
 }
 
 model Cart {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String            @unique
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -561,6 +599,7 @@ model Cart {
 }
 
 model Review {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id])
@@ -572,6 +611,7 @@ model Review {
 }
 
 model Post {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -585,6 +625,7 @@ model Post {
 }
 
 model Comment {
+  @@schema("public")
   id                    String            @id @default(uuid())
   postId                String
   post                  Post              @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -595,6 +636,7 @@ model Comment {
 }
 
 model Institution {
+  @@schema("public")
   id                    String            @id @default(uuid())
   name                  String
   code                  String            @unique
@@ -609,6 +651,7 @@ model Institution {
 }
 
 model Batch {
+  @@schema("public")
   id                    String            @id @default(uuid())
   institutionId         String
   institution           Institution       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
@@ -621,6 +664,7 @@ model Batch {
 }
 
 model Class {
+  @@schema("public")
   id                    String            @id @default(uuid())
   name                  String
   section               String?
@@ -639,6 +683,7 @@ model Class {
 }
 
 model ClassEnrollment {
+  @@schema("public")
   id                    String            @id @default(uuid())
   classId               String
   class                 Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
@@ -651,6 +696,7 @@ model ClassEnrollment {
 }
 
 model Assignment {
+  @@schema("public")
   id                    String            @id @default(uuid())
   classId               String
   class                 Class             @relation(fields: [classId], references: [id], onDelete: Cascade)
@@ -665,6 +711,7 @@ model Assignment {
 }
 
 model ProjectVersion {
+  @@schema("public")
   id                    String            @id @default(uuid())
   projectId             String
   project               CircuitProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -681,6 +728,7 @@ model ProjectVersion {
 }
 
 model Collection {
+  @@schema("public")
   id                    String            @id @default(uuid())
   userId                String
   user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
