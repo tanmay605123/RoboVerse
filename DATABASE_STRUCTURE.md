@@ -132,5 +132,5 @@ These tables are created by the SQL migrations under `supabase/migrations/` and 
 - Do not expect a backend signup to appear in `auth.users`; it writes Prisma `public."User"` instead.
 - Do not expect a Supabase signup to appear in Prisma `public."User"`; it writes `auth.users` and the trigger-created `public.profiles` instead.
 - The password columns in both systems must contain hashes managed by their respective auth implementation. Never log or copy plaintext passwords.
-- `DATABASE_URL` is used by Prisma on the backend. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are public browser configuration and are needed by Supabase frontend features; they are not PostgreSQL passwords.
+- `DATABASE_URL` is used by Prisma on the backend. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are public browser configuration and are needed by Supabase frontend features; `NEXT_PUBLIC_SUPABASE_ANON_KEY` remains a legacy fallback only. Neither is a PostgreSQL password.
 - The backend should use the Supabase pooler hostname in `DATABASE_URL` on Render. Direct IPv6 database hosts can fail with `No route to host` on some networks.

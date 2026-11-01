@@ -3,7 +3,8 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import type { Database, DbUserRole } from '@roboverse/shared';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
 export async function middleware(request: NextRequest) {
@@ -18,8 +19,8 @@ export async function middleware(request: NextRequest) {
   // here when their public credentials are configured.
   let supabase: any = null;
   let user: any = null;
-  if (supabaseUrl && supabaseAnonKey) {
-    supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+  if (supabaseUrl && supabaseKey) {
+    supabase = createServerClient<Database>(supabaseUrl, supabaseKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
