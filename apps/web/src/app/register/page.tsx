@@ -184,13 +184,12 @@ export default function RegisterPage() {
       });
 
       if (signUpError) {
-      if (signUpError) {
         if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
           // Demo fallback only in local offline demo mode
           const userId = '00000000-0000-0000-0000-000000000003';
           const studentId = 'RV-2026-001001';
 
-          setAuth({
+          useAuthStore.getState().setAuth({
             user: {
               id: userId,
               email,
@@ -225,18 +224,6 @@ export default function RegisterPage() {
             },
             planTier: 'free',
           });
-
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('roboverse_onboarding_completed');
-          }
-          router.push('/dashboard');
-          return;
-        }
-
-        setError(signUpError.message || 'Registration failed. Please check inputs.');
-        setLoading(false);
-        return;
-      }
 
           if (typeof window !== 'undefined') {
             localStorage.removeItem('roboverse_onboarding_completed');

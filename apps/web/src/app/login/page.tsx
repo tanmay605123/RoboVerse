@@ -104,7 +104,6 @@ function LoginForm() {
       });
 
       if (authError) {
-      if (authError) {
         // Fallback ONLY in DEMO_MODE for local testing without internet
         if (
           (isDemo || demoAuthEnabled) &&
