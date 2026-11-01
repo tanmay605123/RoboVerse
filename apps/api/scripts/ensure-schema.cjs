@@ -8,7 +8,7 @@ const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
 async function main() {
   const [{ planTable }] = await prisma.$queryRawUnsafe(
-    `SELECT to_regclass('public."Plan"') AS "planTable"`
+    `SELECT to_regclass('public."Plan"')::text AS "planTable"`
   );
 
   if (planTable) {
