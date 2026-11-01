@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import type { Database, DbUserRole } from '@roboverse/shared';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://aqxtykwncclxymzxvgif.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxeHR5a3duY2NseHltenp2Z2lmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNzg3NTksImV4cCI6MjEwODk1NDc1OX0.mock_public_key';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
 export async function middleware(request: NextRequest) {
@@ -13,29 +13,32 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
+  // Backend JWT sessions are stored in browser localStorage and cannot be
+  // inspected by edge middleware. Supabase cookie sessions are still checked
+  // here when their public credentials are configured.
+  let supabase: any = null;
+  let user: any = null;
+  if (supabaseUrl && supabaseAnonKey) {
+    supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options as CookieOptions)
+          );
+        },
       },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({
-          request,
-        });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options as CookieOptions)
-        );
-      },
-    },
-  });
+    });
+
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  }
 
   const { pathname, search } = request.nextUrl;
-
-  // Refresh auth session
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   // 1. ADMIN PROTECTION (/admin and /api/admin/*)
   const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/');
@@ -103,9 +106,9 @@ export async function middleware(request: NextRequest) {
 
   if (isProtectedUserPath) {
     if (!user) {
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('returnUrl', pathname + search);
-      return NextResponse.redirect(loginUrl);
+      // Backend JWT auth is restored by useAuthStore on the client. The page
+      // performs the final redirect if neither auth system has a session.
+      return response;
     }
     return response;
   }

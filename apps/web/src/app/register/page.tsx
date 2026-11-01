@@ -20,8 +20,8 @@ import {
   MapPin,
   Navigation,
 } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
 import { useAuthStore } from '../../store/useAuthStore';
+import { apiRequest } from '../../lib/apiClient';
 import { STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
 
 const MAJOR_INDIAN_CITIES = [
@@ -41,7 +41,6 @@ const MAJOR_INDIAN_CITIES = [
 
 export default function RegisterPage() {
   const router = useRouter();
-  const initAuth = useAuthStore((s) => s.initAuth);
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
@@ -160,30 +159,29 @@ export default function RegisterPage() {
     setError(null);
 
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            school_or_college: schoolOrCollegeName,
-            school: schoolOrCollegeName,
-            class_level: classOrYear,
-            city,
-            pincode,
-            state,
-            country: 'India',
-            interests: selectedInterests,
-            is_minor: isMinor,
-            parent_email: isMinor ? parentEmail : null,
-            parental_consent_given: isMinor ? parentalConsentGiven : true,
-            location_consent: locationConsent,
-            dob: dateOfBirth,
-          },
-        },
+      const response = await apiRequest<any>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          fullName,
+          email: email.trim().toLowerCase(),
+          password,
+          mobileNumber: mobileNumber.trim(),
+          dateOfBirth,
+          parentEmail: isMinor ? parentEmail : '',
+          parentalConsentGiven: isMinor ? parentalConsentGiven : true,
+          institutionType,
+          schoolOrCollegeName,
+          classOrYear,
+          city,
+          state,
+          country: 'India',
+          interests: selectedInterests,
+          acceptedTerms,
+          referralCode,
+        }),
       });
 
-      if (signUpError) {
+      if (!response.success || !response.data?.user || !response.data?.tokens?.accessToken) {
         if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
           // Demo fallback only in local offline demo mode
           const userId = '00000000-0000-0000-0000-000000000003';
@@ -232,30 +230,19 @@ export default function RegisterPage() {
           return;
         }
 
-        setError(signUpError.message || 'Registration failed. Please check inputs.');
+        setError(response.error?.message || 'Registration failed. Please check inputs.');
         setLoading(false);
         return;
       }
 
-      if (data?.user) {
-        if (!data.session) {
-          // Email confirmation required by Supabase Auth configuration
-          setError(null);
-          alert('Registration successful! Please check your inbox at ' + email + ' to verify your account, then sign in.');
-          router.push('/login');
-          return;
-        }
-
-        // Session established: initialize store with profile created by trigger
-        await new Promise((r) => setTimeout(r, 600));
-        await useAuthStore.getState().initAuth();
-
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('roboverse_onboarding_completed');
-        }
-
-        router.push('/dashboard');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('roboverse_access_token', response.data.tokens.accessToken);
+        localStorage.setItem('roboverse_refresh_token', response.data.tokens.refreshToken);
+        localStorage.removeItem('roboverse_onboarding_completed');
       }
+
+      useAuthStore.getState().setBackendAuth(response.data);
+      router.push(response.data.redirectTo || '/dashboard');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please check inputs.');
     } finally {

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuthStore } from '../../store/useAuthStore';
+import { apiRequest } from '../../lib/apiClient';
 import type { DbUserRole } from '@roboverse/shared';
 
 function LoginForm() {
@@ -83,23 +84,37 @@ function LoginForm() {
     setSuccessMessage(null);
 
     try {
-      let emailToUse = identifier.trim();
+      // Email/password accounts are owned by the backend auth service. Its
+      // transaction creates the public.User row used by Prisma.
+      const backendResponse = await apiRequest<any>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ identifier: identifier.trim(), password }),
+      });
 
-      // If user typed a Student ID (e.g. RV-2026-001001), look up email
-      if (emailToUse.toUpperCase().startsWith('RV-')) {
-        const { data: profileLookup } = await (supabase.from('profiles') as any)
-          .select('id')
-          .eq('student_id', emailToUse.toUpperCase())
-          .maybeSingle();
-
-        if (profileLookup?.id) {
-          // If profile found, query auth email via RPC or use normalized email
-          emailToUse = `${emailToUse.toLowerCase().replace(/[^a-z0-9]/g, '')}@roboverse.internal`;
+      if (backendResponse.success && backendResponse.data?.user && backendResponse.data?.tokens?.accessToken) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('roboverse_access_token', backendResponse.data.tokens.accessToken);
+          localStorage.setItem('roboverse_refresh_token', backendResponse.data.tokens.refreshToken);
         }
+        useAuthStore.getState().setBackendAuth(backendResponse.data);
+        const role = (backendResponse.data.user.role === 'ADMIN'
+          ? 'admin'
+          : backendResponse.data.user.role === 'MENTOR_TEACHER'
+            ? 'teacher'
+            : backendResponse.data.user.role === 'INSTITUTION_ADMIN'
+              ? 'institution_admin'
+              : backendResponse.data.user.role === 'STORE_ADMIN'
+                ? 'store_admin'
+                : 'student') as DbUserRole;
+        setSuccessMessage('Welcome back, ' + (backendResponse.data.profile?.fullName || identifier));
+        navigateByRole(role);
+        return;
       }
 
+      // Compatibility fallback for legacy Supabase Auth accounts created
+      // before the backend auth path was enabled.
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: emailToUse,
+        email: identifier.trim().toLowerCase(),
         password,
       });
 
@@ -157,7 +172,7 @@ function LoginForm() {
           return;
         }
 
-        setError(authError.message || 'Login failed. Please verify credentials.');
+        setError(backendResponse.error?.message || authError.message || 'Login failed. Please verify credentials.');
         setLoading(false);
         return;
       }

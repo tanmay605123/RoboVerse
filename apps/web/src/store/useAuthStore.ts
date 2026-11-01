@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabaseClient';
+import { apiRequest } from '@/lib/apiClient';
 import type { DbUserRole, DbPlanTier } from '@roboverse/shared';
 import { PlanTier } from '@roboverse/shared';
 
@@ -59,6 +60,47 @@ export interface EntitlementsData {
   expiresAt: string | null;
 }
 
+export interface BackendAuthData {
+  user: {
+    id: string;
+    email: string;
+    mobileNumber?: string | null;
+    role: string;
+    referralCode?: string | null;
+  };
+  profile?: {
+    fullName?: string | null;
+    dateOfBirth?: string | null;
+    institutionType?: string | null;
+    schoolOrCollegeName?: string | null;
+    classOrYear?: string | null;
+    city?: string | null;
+    state?: string | null;
+    country?: string | null;
+    interests?: string[] | null;
+    avatarUrl?: string | null;
+    level?: number | string | null;
+    xp?: number | null;
+    streakDays?: number | null;
+    totalLearningHours?: number | null;
+    parentEmail?: string | null;
+    parentalConsentGiven?: boolean | null;
+  } | null;
+  studentId?: string | null;
+  studentIdCard?: {
+    studentId: string;
+    qrCodeDataUrl?: string;
+    verificationUrl?: string;
+    validUntil?: string;
+  } | null;
+  planTier?: string;
+  tokens?: {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+  };
+}
+
 const DEFAULT_ENTITLEMENTS: EntitlementsData = {
   planTier: 'free',
   planName: 'RoboVerse Explorer',
@@ -92,8 +134,90 @@ interface AuthState {
     entitlements?: Partial<EntitlementsData>;
     projectCount?: number;
   }) => void;
+  setBackendAuth: (data: BackendAuthData) => void;
   refreshProfile: () => Promise<void>;
   logout: () => Promise<void>;
+}
+
+function mapBackendRole(role: string): DbUserRole {
+  switch (role) {
+    case 'ADMIN':
+      return 'admin';
+    case 'MENTOR_TEACHER':
+      return 'teacher';
+    case 'INSTITUTION_ADMIN':
+      return 'institution_admin';
+    case 'STORE_ADMIN':
+      return 'store_admin';
+    default:
+      return 'student';
+  }
+}
+
+function backendAuthState(data: BackendAuthData) {
+  const role = mapBackendRole(data.user.role);
+  const profile = data.profile;
+  const studentId = data.studentId || data.studentIdCard?.studentId || 'RV-XXXX-XXXXXX';
+  const fullName = profile?.fullName || data.user.email.split('@')[0] || 'RoboVerse Explorer';
+  const tier = String(data.planTier || 'free').toLowerCase();
+  const planName = tier === 'pro' ? 'Pro Engineer' : tier === 'plus' ? 'Plus Builder' : 'Free Explorer';
+  const profileData: StudentProfileData = {
+    studentId,
+    fullName,
+    institutionType: profile?.institutionType || undefined,
+    schoolOrCollegeName: profile?.schoolOrCollegeName || 'RoboVerse Learning Hub',
+    classOrYear: profile?.classOrYear || 'General',
+    city: profile?.city || 'India',
+    state: profile?.state || '',
+    pincode: '',
+    interests: profile?.interests || [],
+    avatarUrl: profile?.avatarUrl || undefined,
+    level: String(profile?.level ?? 'Rookie'),
+    xp: profile?.xp ?? 50,
+    streakDays: profile?.streakDays ?? 1,
+    lastSeenAt: new Date().toISOString(),
+    currentActivity: 'Exploring RoboVerse Labs',
+    totalLearningHours: profile?.totalLearningHours ?? 0,
+    dob: profile?.dateOfBirth || undefined,
+    isMinor: profile?.parentalConsentGiven === true,
+  };
+
+  const card = data.studentIdCard;
+  const studentIdCard: StudentIdCardData = {
+    studentId,
+    fullName,
+    schoolOrCollege: profileData.schoolOrCollegeName,
+    planName,
+    level: profileData.level,
+    xp: profileData.xp,
+    qrCodeDataUrl: card?.qrCodeDataUrl,
+    verificationUrl: card?.verificationUrl || `/verify/student/${studentId}`,
+    validUntil: card?.validUntil || '31 DEC 2026',
+  };
+
+  return {
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      mobileNumber: data.user.mobileNumber || undefined,
+      role,
+      studentId,
+      fullName,
+    },
+    profile: profileData,
+    studentIdCard,
+    planTier: tier,
+    entitlements: {
+      ...DEFAULT_ENTITLEMENTS,
+      planTier: tier,
+      badge: tier.toUpperCase(),
+      planName,
+    },
+    projectCount: 0,
+    isAuthenticated: true,
+    isLoading: false,
+    initialized: true,
+  };
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -110,12 +234,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initAuth: async () => {
     try {
       set({ isLoading: true });
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
+      let session: any = null;
+      let sessionError: any = null;
 
-      if (error || !session?.user) {
+      // Supabase remains supported for existing OAuth/OTP accounts. Email and
+      // password accounts created by the backend are restored from the JWT.
+      try {
+        const result = await supabase.auth.getSession();
+        session = result.data.session;
+        sessionError = result.error;
+      } catch (error) {
+        sessionError = error;
+      }
+
+      if (sessionError || !session?.user) {
+        const backendSession = await apiRequest<BackendAuthData>('/auth/me');
+        if (backendSession.success && backendSession.data?.user) {
+          set(backendAuthState(backendSession.data));
+          return;
+        }
         set({
           user: null,
           profile: null,
@@ -267,11 +404,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
+  setBackendAuth: (data) => {
+    set(backendAuthState(data));
+  },
+
   refreshProfile: async () => {
     await get().initAuth();
   },
 
   logout: async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('roboverse_access_token');
+      localStorage.removeItem('roboverse_refresh_token');
+    }
     try {
       await supabase.auth.signOut();
     } catch (err) {

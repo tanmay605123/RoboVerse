@@ -4,7 +4,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const API_BACKEND_URL = process.env.API_BACKEND_URL || 'https://secretary-blogs-hired-lined.trycloudflare.com/api/v1';
+const API_BACKEND_URL =
+  process.env.API_BACKEND_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? 'https://roboverse-backend.onrender.com/api/v1'
+    : 'http://localhost:4000/api/v1');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
