@@ -33,6 +33,9 @@ import {
   Square,
   Wrench,
   Compass,
+  Plus,
+  Trash2,
+  MessageSquare,
 } from 'lucide-react';
 
 const QUICK_PROMPTS = [
@@ -68,6 +71,12 @@ export default function RituuPage() {
     uploadedPhotoBase64,
     setUploadedPhoto,
     clearChat,
+    currentSessionId,
+    sessionsList,
+    loadSessions,
+    selectSession,
+    deleteSession,
+    startNewSession,
   } = useRituuStore();
 
   const { setArduinoCode } = useCircuitStore();
@@ -80,7 +89,8 @@ export default function RituuPage() {
 
   useEffect(() => {
     fetchQuota();
-  }, [fetchQuota]);
+    loadSessions();
+  }, [fetchQuota, loadSessions]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -210,10 +220,10 @@ export default function RituuPage() {
         {/* MAIN BODY AREA: DUAL PANEL (Left Mentorship Controls + Center Chat Area) */}
         <div className="flex-1 flex overflow-hidden">
           {/* LEFT MENTORSHIP CONTROL DOCK */}
-          <aside className="w-80 border-r border-[rgba(57,255,106,0.15)] bg-[#040B08]/90 p-5 flex flex-col justify-between hidden md:flex shrink-0">
-            <div>
+          <aside className="w-80 border-r border-[rgba(57,255,106,0.15)] bg-[#040B08]/90 p-5 flex flex-col justify-between hidden md:flex shrink-0 overflow-y-auto">
+            <div className="space-y-4">
               {/* Avatar Profile Box */}
-              <div className="flex items-center gap-3.5 pb-5 border-b border-[rgba(57,255,106,0.15)]">
+              <div className="flex items-center gap-3.5 pb-4 border-b border-[rgba(57,255,106,0.15)]">
                 <RituuAvatar state={avatarState} size="lg" />
                 <div>
                   <div className="flex items-center gap-1.5">
@@ -224,8 +234,17 @@ export default function RituuPage() {
                 </div>
               </div>
 
+              {/* Start New Chat Button */}
+              <button
+                onClick={startNewSession}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-2xl bg-gradient-to-r from-[rgba(57,255,106,0.15)] to-[rgba(127,231,214,0.1)] border border-[#39FF6A]/40 text-[#39FF6A] hover:bg-[rgba(57,255,106,0.25)] font-mono text-xs font-bold transition-all shadow-[0_0_12px_rgba(57,255,106,0.15)]"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Robotics Session</span>
+              </button>
+
               {/* Mentorship Mode Switcher */}
-              <div className="mt-5 space-y-2">
+              <div className="space-y-2">
                 <span className="text-[11px] font-mono text-[#8FA99B] uppercase font-bold tracking-wider block">
                   Mentorship Mode
                 </span>
@@ -262,7 +281,7 @@ export default function RituuPage() {
               </div>
 
               {/* Hint First Toggle */}
-              <div className="mt-4 p-3 rounded-2xl bg-black/40 border border-white/5 flex items-center justify-between">
+              <div className="p-3 rounded-2xl bg-black/40 border border-white/5 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-[#EAF7EF] block">Hint-First Mode</span>
                   <span className="text-[10px] text-[#8FA99B]">Guide with hints before answers</span>
@@ -274,10 +293,55 @@ export default function RituuPage() {
                   className="rounded border-[rgba(57,255,106,0.3)] bg-[#07110D] text-[#39FF6A] focus:ring-0 w-4 h-4"
                 />
               </div>
+
+              {/* Recent Saved Sessions */}
+              {sessionsList && sessionsList.length > 0 && (
+                <div className="space-y-1.5 font-mono pt-2 border-t border-[rgba(57,255,106,0.1)]">
+                  <span className="text-[11px] font-mono text-[#8FA99B] uppercase font-bold tracking-wider block">
+                    Saved Sessions ({sessionsList.length})
+                  </span>
+                  <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                    {sessionsList.map((s) => {
+                      const isCurrent = currentSessionId === s.id;
+                      return (
+                        <div
+                          key={s.id}
+                          className={`flex items-center justify-between p-2 rounded-xl border text-xs transition-colors ${
+                            isCurrent
+                              ? 'bg-[rgba(57,255,106,0.15)] border-[#39FF6A] text-[#EAF7EF]'
+                              : 'bg-black/30 border-white/5 text-[#8FA99B] hover:text-[#EAF7EF]'
+                          }`}
+                        >
+                          <button
+                            onClick={() => selectSession(s.id)}
+                            className="flex items-center gap-2 truncate text-left flex-1 min-w-0"
+                            title={s.title}
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[#39FF6A]" />
+                            <span className="truncate">{s.title || 'Robotics Chat'}</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm('Delete this chat session?')) {
+                                deleteSession(s.id);
+                              }
+                            }}
+                            className="p-1 hover:text-[#FF4D4D] text-[#527063] transition-colors ml-1 shrink-0"
+                            title="Delete session"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Daily Quota Card in Dark Glass Style */}
-            <div className="mt-6 p-4 rounded-2xl bg-[#040B08] border border-[rgba(57,255,106,0.15)] space-y-3 font-mono">
+            <div className="mt-6 p-4 rounded-2xl bg-[#040B08] border border-[rgba(57,255,106,0.15)] space-y-3 font-mono shrink-0">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-[#EAF7EF]">Daily AI Quota</span>
                 <span className="px-2 py-0.5 rounded-full bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[rgba(57,255,106,0.3)] text-[10px] font-bold">
@@ -353,11 +417,19 @@ export default function RituuPage() {
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={startNewSession}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[rgba(57,255,106,0.15)] border border-[#39FF6A]/40 text-xs text-[#39FF6A] hover:bg-[rgba(57,255,106,0.25)] transition-colors"
+                  title="Start a new robotics mentorship session"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">New Chat</span>
+                </button>
+                <button
                   onClick={clearChat}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-[#8FA99B] hover:text-[#FF4D4D] transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Clear Chat</span>
+                  <span>Clear</span>
                 </button>
               </div>
             </div>

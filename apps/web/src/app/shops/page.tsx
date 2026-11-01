@@ -62,13 +62,27 @@ export interface ShopItem {
 }
 
 const CITY_PRESETS = [
-  { name: 'Bengaluru (SP Road)', lat: 12.9644, lng: 77.5833 },
-  { name: 'Delhi (Lajpat Rai Market)', lat: 28.6562, lng: 77.2355 },
-  { name: 'Mumbai (Lamington Road)', lat: 18.9616, lng: 72.8164 },
-  { name: 'Hyderabad (Koti Electronics)', lat: 17.385, lng: 78.4867 },
-  { name: 'Pune (Budhwar Peth)', lat: 18.5167, lng: 73.8562 },
-  { name: 'Chennai (Ritchie Street)', lat: 13.0674, lng: 80.2707 },
+  { name: 'Bengaluru (SP Road)', lat: 12.9644, lng: 77.5833, pincode: '560002' },
+  { name: 'Delhi (Lajpat Rai Market)', lat: 28.6562, lng: 77.2355, pincode: '110006' },
+  { name: 'Mumbai (Lamington Road)', lat: 18.9616, lng: 72.8164, pincode: '400007' },
+  { name: 'Hyderabad (Koti Electronics)', lat: 17.385, lng: 78.4867, pincode: '500095' },
+  { name: 'Pune (Budhwar Peth)', lat: 18.5167, lng: 73.8562, pincode: '411002' },
+  { name: 'Chennai (Ritchie Street)', lat: 13.0674, lng: 80.2707, pincode: '600002' },
+  { name: 'Kolkata (Chandni Chowk)', lat: 22.5697, lng: 88.3533, pincode: '700001' },
+  { name: 'Ahmedabad (Relief Road)', lat: 23.0225, lng: 72.5714, pincode: '380001' },
 ];
+
+const PINCODE_MAP: Record<string, { lat: number; lng: number; name: string }> = {
+  '560002': { lat: 12.9644, lng: 77.5833, name: 'Bengaluru (SP Road / 560002)' },
+  '110006': { lat: 28.6562, lng: 77.2355, name: 'Delhi (Lajpat Rai Market / 110006)' },
+  '400007': { lat: 18.9616, lng: 72.8164, name: 'Mumbai (Lamington Road / 400007)' },
+  '500095': { lat: 17.385, lng: 78.4867, name: 'Hyderabad (Koti / 500095)' },
+  '411002': { lat: 18.5167, lng: 73.8562, name: 'Pune (Budhwar Peth / 411002)' },
+  '600002': { lat: 13.0674, lng: 80.2707, name: 'Chennai (Ritchie Street / 600002)' },
+  '700001': { lat: 22.5697, lng: 88.3533, name: 'Kolkata (Chandni Chowk / 700001)' },
+  '380001': { lat: 23.0225, lng: 72.5714, name: 'Ahmedabad (Relief Road / 380001)' },
+  '302001': { lat: 26.9124, lng: 75.7873, name: 'Jaipur (Indira Bazar / 302001)' },
+};
 
 const RADIUS_OPTIONS = [
   { label: '1 km', value: 1000 },
@@ -176,10 +190,65 @@ export default function ShopsPage() {
     setGpsError(null);
   };
 
-  // Search submission
+  // Search submission with Pincode & City detection
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      loadNearbyShops();
+      return;
+    }
+
+    // Check for 6-digit Indian pincode
+    const pincodeMatch = trimmed.match(/\b([1-9][0-9]{5})\b/);
+    if (pincodeMatch) {
+      const pin = pincodeMatch[1];
+      const found = PINCODE_MAP[pin];
+      if (found) {
+        setCurrentCoords({ lat: found.lat, lng: found.lng });
+        setLocationName(found.name);
+      }
+    } else {
+      // Check for city name in preset hubs
+      const lower = trimmed.toLowerCase();
+      const matchedCity = CITY_PRESETS.find(
+        (c) =>
+          lower.includes(c.name.toLowerCase().split(' ')[0]) ||
+          (c.pincode && lower.includes(c.pincode))
+      );
+      if (matchedCity) {
+        setCurrentCoords({ lat: matchedCity.lat, lng: matchedCity.lng });
+        setLocationName(matchedCity.name);
+      }
+    }
+
     loadNearbyShops();
+  };
+
+  // On demand details fetch
+  const handleSelectShop = async (shop: ShopItem) => {
+    setSelectedShopId(shop.id);
+    if (shop.google_place_id && shop.phone === 'Tap to view hours & contact') {
+      try {
+        const res = await fetch(`/api/shops/details?place_id=${encodeURIComponent(shop.google_place_id)}`);
+        if (res.ok) {
+          const det = await res.json();
+          setShops((prev) =>
+            prev.map((s) =>
+              s.id === shop.id
+                ? {
+                    ...s,
+                    phone: det.phone || 'Call via Google Maps',
+                    opening_hours: det.openingHours ? det.openingHours.join('; ') : s.opening_hours,
+                  }
+                : s
+            )
+          );
+        }
+      } catch {
+        // Continue gracefully
+      }
+    }
   };
 
   // Crowdsource confirm open
@@ -376,7 +445,7 @@ export default function ShopsPage() {
                   return (
                     <div
                       key={shop.id}
-                      onClick={() => setSelectedShopId(shop.id)}
+                      onClick={() => handleSelectShop(shop)}
                       className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-[#39FF6A]/10 border-[#39FF6A] shadow-[0_0_16px_rgba(57,255,106,0.2)]'
@@ -390,11 +459,11 @@ export default function ShopsPage() {
                           </h4>
                           {shop.is_verified ? (
                             <span className="flex items-center gap-0.5 px-2 py-0.2 rounded-full bg-[#39FF6A]/20 text-[#39FF6A] text-[10px] font-mono font-bold shrink-0">
-                              <ShieldCheck className="w-3 h-3" /> Verified
+                              <ShieldCheck className="w-3 h-3" /> Verified by RoboVerse
                             </span>
                           ) : (
                             <span className="px-2 py-0.2 rounded-full bg-white/5 text-[#8FA99B] text-[10px] font-mono shrink-0">
-                              Google Maps
+                              From Google Maps
                             </span>
                           )}
                         </div>

@@ -49,6 +49,15 @@ function calculateHaversineDistanceM(
   return Math.round(R * c);
 }
 
+// 24-hour server-side cell cache for Google Places search results
+// Grid cell: round lat/lng to 2 decimals (~1.1 km cell) to prevent repeat queries
+interface CellCacheEntry {
+  places: any[];
+  timestamp: number;
+}
+const placesCellCache = new Map<string, CellCacheEntry>();
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 // Verified Indian Robotics and Electronics Markets Fallback Registry
 const INDIAN_MARKETS_SEEDED = [
   {
@@ -160,7 +169,7 @@ export async function GET(req: NextRequest) {
 
     const mergedShopsMap = new Map<string, MergedShop>();
 
-    // 1. Try Supabase PostGIS RPC
+    // 1. Fetch verified shops from Supabase PostGIS RPC nearby_shops
     try {
       const { data: dbShops, error } = await (supabase.rpc as any)('nearby_shops', {
         lat,
@@ -213,13 +222,12 @@ export async function GET(req: NextRequest) {
         }
       }
     } catch {
-      // Continue to seeded registry
+      // Continue gracefully to seeded registry and Google Places
     }
 
-    // 2. Add seeded registry shops within radius (or all if radius is large)
+    // 2. Add seeded registry shops within radius (or nearest hubs if map is sparse)
     for (const seed of INDIAN_MARKETS_SEEDED) {
       const distM = calculateHaversineDistanceM(lat, lng, seed.latitude, seed.longitude);
-      // Include if within radius, or if result list is still empty auto-widen to nearest tech hub
       if (distM <= radiusM * 1.5 || mergedShopsMap.size < 2) {
         const distKm = Number((distM / 1000).toFixed(1));
         const travelMins = Math.max(3, Math.round((distKm / 20) * 60 + 2));
@@ -243,113 +251,132 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 3. Google Places API (New) Text Search if GOOGLE_MAPS_SERVER_KEY is available
-    const serverKey = process.env.GOOGLE_MAPS_SERVER_KEY;
+    // 3. Google Places API (New) Text Search with STRICT field mask & 24h cell caching
+    const serverKey =
+      process.env.GOOGLE_PLACES_SERVER_KEY || process.env.GOOGLE_MAPS_SERVER_KEY;
+
     if (serverKey) {
       try {
-        const textQuery = query
-          ? `${query} electronic components shop`
-          : 'electronic components shop OR arduino OR robotics kit';
+        // Grid cell key rounded to 2 decimals (~1.1 km)
+        const cellLat = Math.round(lat * 100) / 100;
+        const cellLng = Math.round(lng * 100) / 100;
+        const cacheKey = `${cellLat}_${cellLng}_${radiusM}_${query.toLowerCase().trim()}`;
 
-        const placesRes = await fetch(
-          'https://places.googleapis.com/v1/places:searchText',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': serverKey,
-              'X-Goog-FieldMask':
-                'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryType',
-            },
-            body: JSON.stringify({
-              textQuery,
-              locationBias: {
-                circle: {
-                  center: { latitude: lat, longitude: lng },
-                  radius: radiusM,
-                },
+        let places: any[] = [];
+        const cached = placesCellCache.get(cacheKey);
+
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+          places = cached.places;
+        } else {
+          // Indian market multi-lingual query variants
+          const textQuery = query
+            ? `${query} electronic components shop OR robotics parts OR स्पेयर पार्ट्स`
+            : 'electronic components shop OR arduino OR robotics kit OR electronics spare parts OR रोबोटिक्स';
+
+          const placesRes = await fetch(
+            'https://places.googleapis.com/v1/places:searchText',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': serverKey,
+                // STRICT FIELD MASK: Highest priced field sets pricing tier. Phone/hours fetched on demand via /details
+                'X-Goog-FieldMask':
+                  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryType',
               },
-              languageCode: 'en',
-              regionCode: 'IN',
-              maxResultCount: 15,
-            }),
+              body: JSON.stringify({
+                textQuery,
+                locationBias: {
+                  circle: {
+                    center: { latitude: lat, longitude: lng },
+                    radius: radiusM,
+                  },
+                },
+                languageCode: 'en',
+                regionCode: 'IN',
+                maxResultCount: 15,
+              }),
+            }
+          );
+
+          if (placesRes.ok) {
+            const placesData = await placesRes.json();
+            places = placesData.places || [];
+            placesCellCache.set(cacheKey, { places, timestamp: Date.now() });
           }
-        );
+        }
 
-        if (placesRes.ok) {
-          const placesData = await placesRes.json();
-          const places = placesData.places || [];
+        for (const place of places) {
+          const pLat = place.location?.latitude;
+          const pLng = place.location?.longitude;
+          if (!pLat || !pLng) continue;
 
-          for (const place of places) {
-            const pLat = place.location?.latitude;
-            const pLng = place.location?.longitude;
-            if (!pLat || !pLng) continue;
+          const placeName = place.displayName?.text || 'Electronics Store';
+          const placeId = place.id;
 
-            const placeName = place.displayName?.text || 'Electronics Store';
-            const placeId = place.id;
-
-            // Deduplication
-            let isDuplicate = false;
-            for (const existing of Array.from(mergedShopsMap.values())) {
-              const distBetween = calculateHaversineDistanceM(
-                existing.latitude,
-                existing.longitude,
-                pLat,
-                pLng
-              );
-              if (
-                distBetween < 150 ||
-                existing.name.toLowerCase().includes(placeName.toLowerCase()) ||
-                placeName.toLowerCase().includes(existing.name.toLowerCase())
-              ) {
-                isDuplicate = true;
-                if (!existing.google_place_id) existing.google_place_id = placeId;
-                if (!existing.google_maps_uri && place.googleMapsUri) {
-                  existing.google_maps_uri = place.googleMapsUri;
-                }
-                break;
+          // Deduplication: Check if already in list by google_place_id OR name match + distance < 150m
+          let isDuplicate = false;
+          for (const existing of Array.from(mergedShopsMap.values())) {
+            const distBetween = calculateHaversineDistanceM(
+              existing.latitude,
+              existing.longitude,
+              pLat,
+              pLng
+            );
+            if (
+              existing.google_place_id === placeId ||
+              distBetween < 150 ||
+              existing.name.toLowerCase().includes(placeName.toLowerCase()) ||
+              placeName.toLowerCase().includes(existing.name.toLowerCase())
+            ) {
+              isDuplicate = true;
+              if (!existing.google_place_id) existing.google_place_id = placeId;
+              if (!existing.google_maps_uri && place.googleMapsUri) {
+                existing.google_maps_uri = place.googleMapsUri;
               }
+              break;
             }
+          }
 
-            if (!isDuplicate) {
-              const distM = calculateHaversineDistanceM(lat, lng, pLat, pLng);
-              const distKm = Number((distM / 1000).toFixed(1));
-              const travelMins = Math.max(3, Math.round((distKm / 20) * 60 + 2));
+          if (!isDuplicate) {
+            const distM = calculateHaversineDistanceM(lat, lng, pLat, pLng);
+            const distKm = Number((distM / 1000).toFixed(1));
+            const travelMins = Math.max(3, Math.round((distKm / 20) * 60 + 2));
 
-              mergedShopsMap.set(placeId, {
-                id: placeId,
-                name: placeName,
-                phone: 'Call via Google Maps',
-                address: place.formattedAddress || 'Local Market',
-                city: 'Nearby',
-                state: 'India',
-                pincode: '',
-                latitude: pLat,
-                longitude: pLng,
-                distance_meters: distM,
-                distance_km: distKm,
-                travel_time_mins: travelMins,
-                opening_hours: '10:00 AM - 8:00 PM (Mon-Sat)',
-                categories: ['General Electronics', 'Hardware Components'],
-                is_verified: false,
-                verified_status: 'google_places',
-                rating: place.rating || 4.2,
-                review_count: place.userRatingCount || 10,
-                google_maps_uri:
-                  place.googleMapsUri ||
-                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    placeName
-                  )}`,
-                google_place_id: placeId,
-                photos: [],
-                stocked_components: ['General Electronics', 'Wiring & Cables', 'Components'],
-                source: 'google_places',
-              });
-            }
+            mergedShopsMap.set(placeId, {
+              id: placeId,
+              name: placeName,
+              phone: 'Tap to view hours & contact',
+              address: place.formattedAddress || 'Local Market',
+              city: 'Nearby',
+              state: 'India',
+              pincode: '',
+              latitude: pLat,
+              longitude: pLng,
+              distance_meters: distM,
+              distance_km: distKm,
+              travel_time_mins: travelMins,
+              opening_hours: '10:00 AM - 8:00 PM (Mon-Sat)',
+              categories: ['General Electronics', 'Hardware Components'],
+              is_verified: false,
+              verified_status: 'google_places',
+              rating: place.rating || 4.2,
+              review_count: place.userRatingCount || 10,
+              google_maps_uri:
+                place.googleMapsUri ||
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  placeName
+                )}`,
+              google_place_id: placeId,
+              photos: [],
+              stocked_components: ['General Electronics', 'Wiring & Cables', 'Components'],
+              source: 'google_places',
+            });
           }
         }
       } catch (err) {
-        console.warn('Google Places fetch failed:', err);
+        // Fallback: Never throw an error if Google Places API fails
+        console.warn('Google Places fetch failed, fallback to verified registry:', err);
       }
     }
 

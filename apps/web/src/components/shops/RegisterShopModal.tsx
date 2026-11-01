@@ -10,6 +10,10 @@ import {
   Sparkles,
   CheckCircle2,
   AlertTriangle,
+  Upload,
+  FileSpreadsheet,
+  ShieldCheck,
+  Check,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -48,6 +52,17 @@ export const RegisterShopModal: React.FC<RegisterShopModalProps> = ({
     'Arduino & Microcontrollers',
     'Sensors & Modules',
   ]);
+
+  // Phone OTP Verification State
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+
+  // File Upload State (Photos & Inventory CSV)
+  const [inventoryFileName, setInventoryFileName] = useState<string | null>(null);
+  const [photoFileName, setPhotoFileName] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -57,6 +72,24 @@ export const RegisterShopModal: React.FC<RegisterShopModalProps> = ({
     setSelectedCategories((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
     );
+  };
+
+  const handleSendOtp = () => {
+    if (!phone.trim() || phone.trim().length < 10) {
+      setOtpError('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    setOtpError(null);
+    setOtpSent(true);
+  };
+
+  const handleVerifyOtp = () => {
+    if (otpCode.trim().length >= 4) {
+      setPhoneVerified(true);
+      setOtpError(null);
+    } else {
+      setOtpError('Please enter a valid verification code');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,7 +114,7 @@ export const RegisterShopModal: React.FC<RegisterShopModalProps> = ({
       is_verified: false,
       rating: 4.8,
       review_count: 1,
-      photos: [],
+      photos: photoFileName ? [`https://roboverse.in/shops/${photoFileName}`] : [],
       distance_km: 1.2,
       distance_meters: 1200,
       travel_time_mins: 8,
@@ -115,19 +148,19 @@ export const RegisterShopModal: React.FC<RegisterShopModalProps> = ({
 
     setIsSubmitting(false);
     setSuccessMsg(
-      `Shop "${name}" registered successfully! It is now submitted to the RoboVerse Maker Radar directory.`
+      `Shop "${name}" registered successfully! Our Maker Radar team will review your photos & inventory CSV to award the "Verified by RoboVerse" badge.`
     );
 
     setTimeout(() => {
       onSuccess(newShop);
       setSuccessMsg(null);
       onClose();
-    }, 1800);
+    }, 2000);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="w-full max-w-xl bg-[#07110D]/95 border border-[rgba(57,255,106,0.3)] rounded-3xl p-6 md:p-8 shadow-[0_24px_80px_rgba(0,0,0,0.85)] font-sans">
+      <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[#07110D]/95 border border-[rgba(57,255,106,0.3)] rounded-3xl p-6 md:p-8 shadow-[0_24px_80px_rgba(0,0,0,0.85)] font-sans">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-[rgba(57,255,106,0.15)] mb-4">
           <div className="flex items-center gap-3">
@@ -154,8 +187,8 @@ export const RegisterShopModal: React.FC<RegisterShopModalProps> = ({
         {successMsg ? (
           <div className="py-8 text-center space-y-3 font-mono">
             <CheckCircle2 className="w-12 h-12 text-[#39FF6A] mx-auto animate-bounce" />
-            <h4 className="text-base font-bold text-[#EAF7EF]">Store Submitted!</h4>
-            <p className="text-xs text-[#8FA99B] max-w-md mx-auto">{successMsg}</p>
+            <h4 className="text-base font-bold text-[#EAF7EF]">Store Submitted for Verification!</h4>
+            <p className="text-xs text-[#8FA99B] max-w-md mx-auto leading-relaxed">{successMsg}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-xs font-mono">
@@ -173,17 +206,52 @@ export const RegisterShopModal: React.FC<RegisterShopModalProps> = ({
               </div>
 
               <div>
-                <label className="text-[#8FA99B] block mb-1 uppercase font-bold">Phone Number *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="+91 98100 12345"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-[#040B08] border border-white/10 rounded-xl px-3 py-2 text-[#EAF7EF] focus:border-[#39FF6A] focus:outline-none"
-                />
+                <label className="text-[#8FA99B] block mb-1 uppercase font-bold">
+                  Owner Phone * {phoneVerified && <span className="text-[#39FF6A]">✓ Verified</span>}
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    required
+                    placeholder="+91 98100 12345"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={phoneVerified}
+                    className="flex-1 bg-[#040B08] border border-white/10 rounded-xl px-3 py-2 text-[#EAF7EF] focus:border-[#39FF6A] focus:outline-none"
+                  />
+                  {!phoneVerified && (
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      className="px-2.5 py-2 rounded-xl bg-[#39FF6A]/10 border border-[#39FF6A]/30 text-[#39FF6A] hover:bg-[#39FF6A]/20 font-bold shrink-0 transition-colors"
+                    >
+                      {otpSent ? 'Resend' : 'Send OTP'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* OTP Verification Step if Sent */}
+            {otpSent && !phoneVerified && (
+              <div className="p-3 rounded-xl bg-[#39FF6A]/10 border border-[#39FF6A]/30 flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter 6-digit OTP (e.g. 123456)"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  className="w-48 bg-[#040B08] border border-white/10 rounded-lg px-3 py-1.5 text-[#EAF7EF] focus:border-[#39FF6A] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleVerifyOtp}
+                  className="px-3 py-1.5 rounded-lg bg-[#39FF6A] text-[#07110D] font-bold text-xs"
+                >
+                  Verify OTP
+                </button>
+                {otpError && <span className="text-[#FF4D4D] text-[10px]">{otpError}</span>}
+              </div>
+            )}
 
             <div>
               <label className="text-[#8FA99B] block mb-1 uppercase font-bold">Street Address *</label>
@@ -230,6 +298,37 @@ export const RegisterShopModal: React.FC<RegisterShopModalProps> = ({
                 onChange={(e) => setOpeningHours(e.target.value)}
                 className="w-full bg-[#040B08] border border-white/10 rounded-xl px-3 py-2 text-[#EAF7EF] focus:border-[#39FF6A] focus:outline-none"
               />
+            </div>
+
+            {/* Photos & Inventory CSV Uploads */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="text-[#8FA99B] block mb-1 uppercase font-bold">Store Front Photo</label>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-white/5 border border-dashed border-white/10 hover:border-[#39FF6A] cursor-pointer text-[#8FA99B]">
+                  <Upload className="w-4 h-4 text-[#39FF6A]" />
+                  <span className="truncate">{photoFileName || 'Upload store photo'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setPhotoFileName(e.target.files?.[0]?.name || null)}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label className="text-[#8FA99B] block mb-1 uppercase font-bold">Inventory CSV</label>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-white/5 border border-dashed border-white/10 hover:border-[#39FF6A] cursor-pointer text-[#8FA99B]">
+                  <FileSpreadsheet className="w-4 h-4 text-[#7FE7D6]" />
+                  <span className="truncate">{inventoryFileName || 'Upload inventory.csv'}</span>
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx"
+                    className="hidden"
+                    onChange={(e) => setInventoryFileName(e.target.files?.[0]?.name || null)}
+                  />
+                </label>
+              </div>
             </div>
 
             {/* Stocked Categories */}

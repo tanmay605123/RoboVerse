@@ -1,23 +1,37 @@
 -- =====================================================================
--- RoboVerse PostgreSQL Initial Schema
--- Migration: 20261030000001_initial_schema.sql
+-- RoboVerse Phase 1 Database, Auth Model, Security & Entitlements
+-- Migration: 20261101000001_phase1_consolidated_schema.sql
 -- =====================================================================
 
--- 1. Enable required extensions
+-- 1. Enable Required PostgreSQL Extensions
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "postgis";
 
--- 2. Define Custom Enums
+-- Enable pg_cron if available (Supabase Cloud)
+DO $$ BEGIN
+  CREATE EXTENSION IF NOT EXISTS "pg_cron";
+EXCEPTION
+  WHEN OTHERS THEN NULL;
+END $$;
+
+-- 2. Custom Enumerations
 DO $$ BEGIN
   CREATE TYPE user_role AS ENUM (
     'student',
     'teacher',
     'institution_admin',
     'admin',
-    'store_admin'
+    'store_admin',
+    'support'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN
+    -- In case user_role already existed, ensure 'support' value is added
+    BEGIN
+      ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'support';
+    EXCEPTION
+      WHEN OTHERS THEN NULL;
+    END;
 END $$;
 
 DO $$ BEGIN
@@ -28,7 +42,7 @@ DO $$ BEGIN
     'institution'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
@@ -39,7 +53,7 @@ DO $$ BEGIN
     'one_time'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
@@ -48,7 +62,7 @@ DO $$ BEGIN
     'qr'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
@@ -60,7 +74,7 @@ DO $$ BEGIN
     'expired'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
@@ -72,7 +86,7 @@ DO $$ BEGIN
     'trialing'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
@@ -86,7 +100,7 @@ DO $$ BEGIN
     'refunded'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
@@ -96,7 +110,7 @@ DO $$ BEGIN
     'regulated_drone'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
@@ -106,20 +120,24 @@ DO $$ BEGIN
     'rejected'
   );
 EXCEPTION
-  WHEN duplicate_object THEN null;
+  WHEN duplicate_object THEN NULL;
 END $$;
 
--- 3. Student ID Sequence
+-- Student ID Sequence
 CREATE SEQUENCE IF NOT EXISTS student_id_seq START WITH 1001 INCREMENT BY 1;
 
 -- =====================================================================
--- 4. Identity & User Profiles
+-- 3. Identity, Profiles & Consents
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   student_id text UNIQUE NOT NULL,
   full_name text NOT NULL,
   role user_role NOT NULL DEFAULT 'student',
+  dob date,
+  is_minor boolean NOT NULL DEFAULT false,
+  school text,
   school_or_college text,
   class_level text,
   city text,
@@ -128,23 +146,55 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   country text DEFAULT 'India',
   interests text[] DEFAULT '{}',
   language text DEFAULT 'en',
-  is_minor boolean DEFAULT false,
-  parent_email text,
-  parental_consent_at timestamptz,
-  location_consent boolean DEFAULT false,
   avatar_url text,
   level text DEFAULT 'Rookie',
   xp integer DEFAULT 0 CHECK (xp >= 0),
   streak_days integer DEFAULT 1 CHECK (streak_days >= 0),
+  parent_email text,
+  parental_consent_at timestamptz,
+  location_consent boolean DEFAULT false,
   last_seen_at timestamptz DEFAULT now(),
   current_activity text DEFAULT 'Exploring RoboVerse',
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
 
+-- Ensure dob, school columns exist if profiles was previously created
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dob date;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS school text;
+
+-- Consents Table (User Consent Ledger)
+CREATE TABLE IF NOT EXISTS public.consents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  consent_type text NOT NULL, -- 'terms', 'privacy', 'location', 'cookies', 'marketing'
+  granted boolean NOT NULL DEFAULT true,
+  ip_address text,
+  user_agent text,
+  granted_at timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz
+);
+
+-- Parental Consents Table (Section 10 Minor Safety)
+CREATE TABLE IF NOT EXISTS public.parental_consents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  minor_user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  parent_email text NOT NULL,
+  parent_name text,
+  token text UNIQUE NOT NULL,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  consent_for_purchases boolean NOT NULL DEFAULT false,
+  consent_for_ai_photo boolean NOT NULL DEFAULT false,
+  consent_for_public_projects boolean NOT NULL DEFAULT false,
+  verified_at timestamptz,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- =====================================================================
--- 5. Plans, Subscriptions & Billing
+-- 4. Plans, Subscriptions, Payments & Refunds
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS public.plans (
   id text PRIMARY KEY,
   tier plan_tier UNIQUE NOT NULL,
@@ -162,54 +212,84 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   plan_id text NOT NULL REFERENCES public.plans(id),
-  billing_cycle billing_cycle NOT NULL,
   status subscription_status NOT NULL DEFAULT 'active',
+  billing_cycle billing_cycle NOT NULL DEFAULT 'monthly',
   razorpay_subscription_id text,
+  razorpay_customer_id text,
   current_period_start timestamptz NOT NULL DEFAULT now(),
   current_period_end timestamptz NOT NULL,
   cancel_at_period_end boolean DEFAULT false,
-  grace_period_end timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS public.coupons (
-  code text PRIMARY KEY,
-  discount_percent integer NOT NULL CHECK (discount_percent BETWEEN 1 AND 100),
-  max_discount_inr numeric(10,2),
-  min_order_inr numeric(10,2) DEFAULT 0,
-  valid_from timestamptz DEFAULT now(),
-  valid_until timestamptz,
-  usage_limit integer,
-  used_count integer DEFAULT 0 CHECK (used_count >= 0),
-  is_active boolean DEFAULT true,
+CREATE TABLE IF NOT EXISTS public.payments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  order_id uuid,
+  subscription_id uuid REFERENCES public.subscriptions(id) ON DELETE SET NULL,
+  amount_inr numeric(10,2) NOT NULL,
+  tax_inr numeric(10,2) DEFAULT 0,
+  status payment_status NOT NULL DEFAULT 'pending',
+  payment_method payment_method NOT NULL DEFAULT 'checkout',
+  razorpay_order_id text,
+  razorpay_payment_id text,
+  razorpay_signature text,
+  upi_qr_id text,
+  metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.refunds (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  payment_id uuid REFERENCES public.payments(id) ON DELETE SET NULL,
+  order_id uuid,
+  amount_inr numeric(10,2) NOT NULL,
+  reason text NOT NULL,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processed', 'failed')),
+  razorpay_refund_id text,
+  created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.webhook_events (
-  id text PRIMARY KEY, -- Razorpay event id for idempotency
+  id text PRIMARY KEY,
   event_type text NOT NULL,
   payload jsonb NOT NULL,
   processed boolean DEFAULT false,
-  processed_at timestamptz,
+  error_log text,
+  created_at timestamptz DEFAULT now(),
+  processed_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS public.coupons (
+  id text PRIMARY KEY,
+  code text UNIQUE NOT NULL,
+  discount_percent numeric(5,2) NOT NULL,
+  max_discount_inr numeric(10,2),
+  min_order_inr numeric(10,2) DEFAULT 0,
+  valid_until timestamptz,
+  is_active boolean DEFAULT true,
+  usage_limit integer,
+  times_used integer DEFAULT 0,
   created_at timestamptz DEFAULT now()
 );
 
 -- =====================================================================
--- 6. Learning: Courses, Modules, Lessons, Quizzes, Certificates
+-- 5. Courses, Lessons, Quizzes & Certificates
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS public.courses (
   id text PRIMARY KEY,
   slug text UNIQUE NOT NULL,
   title text NOT NULL,
-  description text NOT NULL,
-  category text NOT NULL,
-  track text NOT NULL DEFAULT 'HYBRID',
-  level text NOT NULL DEFAULT 'BEGINNER',
-  thumbnail_url text,
-  is_official_certificate boolean DEFAULT true,
-  duration_hours integer DEFAULT 10,
-  order_index integer DEFAULT 0,
+  tagline text NOT NULL,
+  description text,
+  track text NOT NULL,
+  duration_hours integer NOT NULL DEFAULT 10,
+  required_plan_tier plan_tier NOT NULL DEFAULT 'free',
+  cover_image text,
   is_published boolean DEFAULT true,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
@@ -219,25 +299,23 @@ CREATE TABLE IF NOT EXISTS public.modules (
   id text PRIMARY KEY,
   course_id text NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
   title text NOT NULL,
-  order_index integer DEFAULT 0,
+  order_index integer NOT NULL,
   created_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.lessons (
   id text PRIMARY KEY,
-  course_id text NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
   module_id text NOT NULL REFERENCES public.modules(id) ON DELETE CASCADE,
+  course_id text NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+  slug text NOT NULL,
   title text NOT NULL,
-  slug text UNIQUE NOT NULL,
-  description text,
-  content text NOT NULL,
-  example_code text,
-  components_used text[] DEFAULT '{}',
-  pinout_specs jsonb DEFAULT '{}'::jsonb,
-  video_url text,
-  starter_circuit_id text,
+  order_index integer NOT NULL,
   duration_minutes integer DEFAULT 15,
-  order_index integer DEFAULT 0,
+  xp_reward integer DEFAULT 50,
+  is_free_preview boolean DEFAULT false,
+  starter_code text,
+  sample_circuit_id text,
+  content_markdown text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -246,8 +324,8 @@ CREATE TABLE IF NOT EXISTS public.enrollments (
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   course_id text NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
   enrolled_at timestamptz DEFAULT now(),
-  status text DEFAULT 'active',
   completed_at timestamptz,
+  progress_percent numeric(5,2) DEFAULT 0 CHECK (progress_percent >= 0 AND progress_percent <= 100),
   UNIQUE(user_id, course_id)
 );
 
@@ -257,18 +335,30 @@ CREATE TABLE IF NOT EXISTS public.lesson_progress (
   lesson_id text NOT NULL REFERENCES public.lessons(id) ON DELETE CASCADE,
   completed boolean DEFAULT false,
   completed_at timestamptz,
-  code_submission text,
-  score integer,
+  time_spent_seconds integer DEFAULT 0,
+  last_code text,
   UNIQUE(user_id, lesson_id)
 );
 
 CREATE TABLE IF NOT EXISTS public.quizzes (
   id text PRIMARY KEY,
-  lesson_id text REFERENCES public.lessons(id) ON DELETE SET NULL,
+  course_id text REFERENCES public.courses(id) ON DELETE CASCADE,
+  lesson_id text REFERENCES public.lessons(id) ON DELETE CASCADE,
   title text NOT NULL,
   questions jsonb NOT NULL DEFAULT '[]'::jsonb,
-  passing_score integer DEFAULT 70,
+  passing_score integer NOT NULL DEFAULT 70,
   created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.quiz_attempts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  quiz_id text NOT NULL REFERENCES public.quizzes(id) ON DELETE CASCADE,
+  score numeric(5,2) NOT NULL,
+  max_score numeric(5,2) NOT NULL,
+  passed boolean NOT NULL,
+  answers jsonb DEFAULT '{}'::jsonb,
+  attempted_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.certificates (
@@ -280,59 +370,46 @@ CREATE TABLE IF NOT EXISTS public.certificates (
   student_id text NOT NULL,
   course_name text NOT NULL,
   track text NOT NULL,
-  hours integer NOT NULL DEFAULT 20,
-  grade_score numeric(5,2) DEFAULT 95.0,
-  skills_assessed text[] DEFAULT '{}',
-  qr_verification_url text NOT NULL,
-  pdf_url text,
+  hours integer NOT NULL,
+  grade_score numeric(4,1) DEFAULT 95.0,
   is_revoked boolean DEFAULT false,
   revoked_reason text,
-  issued_at timestamptz DEFAULT now()
+  issuing_authority text DEFAULT 'RoboVerse Academy Certification Board',
+  issued_at timestamptz DEFAULT now(),
+  qr_verification_url text NOT NULL,
+  pdf_storage_path text
 );
 
 -- =====================================================================
--- 7. Component Library in 3 Formats (Shared by all labs)
+-- 6. Hardware Components Library & Projects
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS public.components (
   id text PRIMARY KEY,
   name text NOT NULL,
   category text NOT NULL,
-  subcategory text,
-  is_free_tier boolean DEFAULT true,
-  price_inr numeric(10,2) DEFAULT 0,
-  dimensions_mm jsonb DEFAULT '{"width": 0, "height": 0, "depth": 0}'::jsonb,
-  mass_g numeric(8,2) DEFAULT 0,
+  description text,
   pins jsonb NOT NULL DEFAULT '[]'::jsonb,
   electrical_params jsonb NOT NULL DEFAULT '{}'::jsonb,
   physical_params jsonb NOT NULL DEFAULT '{}'::jsonb,
-  artwork_2d_svg text,
-  model_3d_glb_url text,
-  schematic_symbol_svg text,
-  datasheet_url text,
-  linked_store_sku text,
-  license text NOT NULL DEFAULT 'MIT / CC-BY-4.0',
-  version integer DEFAULT 1,
+  asset_paths jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
 
--- =====================================================================
--- 8. Labs: Circuit Projects, Robots, Arenas, Test Runs
--- =====================================================================
 CREATE TABLE IF NOT EXISTS public.circuit_projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   title text NOT NULL,
-  description text DEFAULT '',
-  graph_jsonb jsonb NOT NULL DEFAULT '{"components":[], "wires":[]}'::jsonb,
-  code text DEFAULT '',
-  board text DEFAULT 'arduino_uno',
-  visibility text DEFAULT 'private' CHECK (visibility IN ('private', 'public', 'unlisted')),
+  description text,
+  circuit_data jsonb NOT NULL DEFAULT '{"components":[],"wires":[]}'::jsonb,
+  arduino_code text DEFAULT '',
+  is_public boolean DEFAULT false,
   is_sample boolean DEFAULT false,
-  forked_from uuid REFERENCES public.circuit_projects(id) ON DELETE SET NULL,
   thumbnail_url text,
+  remix_count integer DEFAULT 0,
   view_count integer DEFAULT 0,
-  fork_count integer DEFAULT 0,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -341,22 +418,22 @@ CREATE TABLE IF NOT EXISTS public.circuit_project_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.circuit_projects(id) ON DELETE CASCADE,
   version_number integer NOT NULL,
-  snapshot jsonb NOT NULL,
-  commit_message text DEFAULT 'Autosave',
-  created_at timestamptz DEFAULT now()
+  circuit_data jsonb NOT NULL,
+  arduino_code text,
+  commit_message text,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(project_id, version_number)
 );
 
 CREATE TABLE IF NOT EXISTS public.robot_templates (
   id text PRIMARY KEY,
   name text NOT NULL,
-  slug text UNIQUE NOT NULL,
-  category text NOT NULL,
-  description text NOT NULL,
+  type text NOT NULL, -- 'line_follower', 'quadcopter', 'robotic_arm', 'bionic_hand', 'obstacle_rover', 'self_balancing'
+  description text,
+  urdf_data text,
+  parts_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  default_arena_id text,
   thumbnail_url text,
-  cad_mesh_url text,
-  default_parts jsonb NOT NULL DEFAULT '[]'::jsonb,
-  starter_code text,
-  recommended_arena_id text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -365,12 +442,9 @@ CREATE TABLE IF NOT EXISTS public.robot_designs (
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   template_id text REFERENCES public.robot_templates(id),
   title text NOT NULL,
-  assembly_jsonb jsonb NOT NULL DEFAULT '{}'::jsonb,
-  circuit_project_id uuid REFERENCES public.circuit_projects(id) ON DELETE SET NULL,
-  total_mass_g numeric(8,2),
-  center_of_mass jsonb DEFAULT '[0,0,0]'::jsonb,
-  power_budget_mw numeric(10,2),
-  thrust_to_weight_ratio numeric(5,2),
+  description text,
+  robot_data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_public boolean DEFAULT false,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -378,11 +452,10 @@ CREATE TABLE IF NOT EXISTS public.robot_designs (
 CREATE TABLE IF NOT EXISTS public.arenas (
   id text PRIMARY KEY,
   name text NOT NULL,
-  type text NOT NULL,
-  description text,
-  environment_params jsonb NOT NULL DEFAULT '{}'::jsonb,
+  environment_type text NOT NULL,
+  physics_params jsonb NOT NULL DEFAULT '{}'::jsonb,
   obstacles jsonb NOT NULL DEFAULT '[]'::jsonb,
-  scoring_rules jsonb NOT NULL DEFAULT '{}'::jsonb,
+  thumbnail_url text,
   created_at timestamptz DEFAULT now()
 );
 
@@ -391,10 +464,9 @@ CREATE TABLE IF NOT EXISTS public.test_runs (
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   robot_design_id uuid REFERENCES public.robot_designs(id) ON DELETE CASCADE,
   arena_id text REFERENCES public.arenas(id),
-  score numeric(8,2) DEFAULT 0,
-  time_seconds numeric(8,2) DEFAULT 0,
-  telemetry_summary jsonb DEFAULT '{}'::jsonb,
-  replay_data_url text,
+  metrics jsonb NOT NULL DEFAULT '{}'::jsonb,
+  score numeric(6,2),
+  completed boolean DEFAULT false,
   created_at timestamptz DEFAULT now()
 );
 
@@ -407,15 +479,14 @@ CREATE TABLE IF NOT EXISTS public.activity_events (
 );
 
 -- =====================================================================
--- 9. Rituu AI: Chat Sessions, Messages, and Quota Usage
+-- 7. Rituu AI Chat & Multi-Turn Sessions
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS public.chat_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  title text DEFAULT 'Robotics Chat',
-  mode text DEFAULT 'auto',
-  circuit_id uuid REFERENCES public.circuit_projects(id) ON DELETE SET NULL,
-  robot_id uuid REFERENCES public.robot_designs(id) ON DELETE SET NULL,
+  title text NOT NULL DEFAULT 'Robotics Mentorship Session',
+  context_project_id uuid REFERENCES public.circuit_projects(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -423,15 +494,12 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
 CREATE TABLE IF NOT EXISTS public.chat_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id uuid NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  role text NOT NULL,
+  sender text NOT NULL CHECK (sender IN ('user', 'rituu')),
   content text NOT NULL,
-  mode text DEFAULT 'auto',
   off_topic boolean DEFAULT false,
-  had_image boolean DEFAULT false,
+  input_tokens integer DEFAULT 0,
+  output_tokens integer DEFAULT 0,
   image_url text,
-  model text,
-  tokens integer DEFAULT 0,
   created_at timestamptz DEFAULT now()
 );
 
@@ -439,70 +507,83 @@ CREATE TABLE IF NOT EXISTS public.rituu_usage (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   day_ist date NOT NULL,
-  messages_count integer NOT NULL DEFAULT 0 CHECK (messages_count >= 0),
-  photos_count integer NOT NULL DEFAULT 0 CHECK (photos_count >= 0),
+  messages_count integer DEFAULT 0,
+  photos_count integer DEFAULT 0,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
   UNIQUE(user_id, day_ist)
 );
 
+CREATE TABLE IF NOT EXISTS public.ai_cost_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  session_id uuid REFERENCES public.chat_sessions(id) ON DELETE SET NULL,
+  model text NOT NULL,
+  input_tokens integer NOT NULL DEFAULT 0,
+  output_tokens integer NOT NULL DEFAULT 0,
+  estimated_cost_usd numeric(10,6) NOT NULL DEFAULT 0,
+  is_offtopic boolean NOT NULL DEFAULT false,
+  latency_ms integer,
+  created_at timestamptz DEFAULT now()
+);
+
 -- =====================================================================
--- 10. Geo & Maker Shops Radar (PostGIS)
+-- 8. Maker Radar Nearby Shops
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS public.shops (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   name text NOT NULL,
-  phone text NOT NULL,
+  google_place_id text UNIQUE,
+  phone text,
   address text NOT NULL,
   city text NOT NULL,
-  state text NOT NULL DEFAULT 'Delhi',
-  pincode text NOT NULL,
+  state text,
+  pincode text,
   location geography(Point, 4326) NOT NULL,
-  google_place_id text UNIQUE,
-  opening_hours text DEFAULT '10:00 AM - 8:00 PM (Mon-Sat)',
-  categories text[] DEFAULT '{Sensors, Microcontrollers, Motors, Prototyping}',
-  verified_status verified_status NOT NULL DEFAULT 'pending',
-  last_verified_at timestamptz,
+  opening_hours text,
+  categories text[] DEFAULT '{}',
+  verified_status verified_status DEFAULT 'pending',
+  rating numeric(2,1) DEFAULT 4.5,
+  review_count integer DEFAULT 0,
   photos text[] DEFAULT '{}',
-  rating numeric(3,2) DEFAULT 4.5,
-  review_count integer DEFAULT 1,
+  created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS shops_location_gist ON public.shops USING GIST(location);
-CREATE INDEX IF NOT EXISTS shops_city_verified_idx ON public.shops(city, verified_status);
+CREATE INDEX IF NOT EXISTS shops_location_gist ON public.shops USING gist(location);
 
 CREATE TABLE IF NOT EXISTS public.shop_inventory (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id uuid NOT NULL REFERENCES public.shops(id) ON DELETE CASCADE,
   component_id text REFERENCES public.components(id) ON DELETE CASCADE,
-  item_name text NOT NULL,
   in_stock boolean DEFAULT true,
   price_inr numeric(10,2),
-  updated_at timestamptz DEFAULT now()
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(shop_id, component_id)
 );
 
 CREATE TABLE IF NOT EXISTS public.shop_reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shop_id uuid NOT NULL REFERENCES public.shops(id) ON DELETE CASCADE,
-  reporter_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  reason text NOT NULL,
-  comments text DEFAULT '',
-  status text DEFAULT 'PENDING',
+  reported_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  report_type text NOT NULL, -- 'CLOSED', 'WRONG_LOCATION', 'OUT_OF_STOCK', 'INCORRECT_HOURS'
+  notes text,
+  status text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'RESOLVED', 'DISMISSED')),
   created_at timestamptz DEFAULT now()
 );
 
 -- =====================================================================
--- 11. TechSavyyy Hardware Store, Products, Kits, Orders & Cart
+-- 9. TechSavyyy Hardware Store, Carts, Orders, Invoices
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS public.product_categories (
   id text PRIMARY KEY,
   name text NOT NULL,
   slug text UNIQUE NOT NULL,
   description text,
-  order_index integer DEFAULT 0
+  created_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.products (
@@ -511,34 +592,34 @@ CREATE TABLE IF NOT EXISTS public.products (
   name text NOT NULL,
   slug text UNIQUE NOT NULL,
   category_id text NOT NULL REFERENCES public.product_categories(id),
-  price_inr numeric(10,2) NOT NULL, -- GST-inclusive gross price
+  price_inr numeric(10,2) NOT NULL, -- GST 18% Inclusive
   mrp_inr numeric(10,2) NOT NULL,
-  gst_percent numeric(5,2) NOT NULL DEFAULT 18.0,
-  stock integer NOT NULL DEFAULT 100 CHECK (stock >= 0),
+  gst_percent numeric(5,2) NOT NULL DEFAULT 18.00,
+  stock integer NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  age_restricted boolean NOT NULL DEFAULT false,
+  shipping_class shipping_class NOT NULL DEFAULT 'standard',
   images text[] DEFAULT '{}',
   specs jsonb DEFAULT '{}'::jsonb,
+  description text,
   component_id text REFERENCES public.components(id) ON DELETE SET NULL,
-  age_restricted boolean DEFAULT false,
-  shipping_class shipping_class NOT NULL DEFAULT 'standard',
   is_active boolean DEFAULT true,
-  rating numeric(3,2) DEFAULT 4.8,
-  review_count integer DEFAULT 0,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.kits (
   id text PRIMARY KEY,
-  name text NOT NULL,
   slug text UNIQUE NOT NULL,
-  description text NOT NULL,
-  kit_price_inr numeric(10,2) NOT NULL,
-  sum_of_parts_inr numeric(10,2) NOT NULL,
+  name text NOT NULL,
+  description text,
+  price_inr numeric(10,2) NOT NULL,
+  mrp_inr numeric(10,2) NOT NULL,
+  level text NOT NULL DEFAULT 'Beginner',
   shipping_class shipping_class NOT NULL DEFAULT 'standard',
-  age_restricted boolean DEFAULT false,
-  linked_course_id text REFERENCES public.courses(id) ON DELETE SET NULL,
-  linked_template_id text REFERENCES public.robot_templates(id) ON DELETE SET NULL,
-  images text[] DEFAULT '{}',
+  age_restricted boolean NOT NULL DEFAULT false,
+  image text,
+  linked_course_slug text,
+  linked_circuit_sample_id text,
   is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now()
 );
@@ -546,8 +627,10 @@ CREATE TABLE IF NOT EXISTS public.kits (
 CREATE TABLE IF NOT EXISTS public.kit_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   kit_id text NOT NULL REFERENCES public.kits(id) ON DELETE CASCADE,
-  product_id text NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
-  quantity integer NOT NULL DEFAULT 1 CHECK (quantity > 0)
+  product_id text NOT NULL REFERENCES public.products(id) ON DELETE RESTRICT,
+  quantity integer NOT NULL DEFAULT 1 CHECK (quantity > 0),
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(kit_id, product_id)
 );
 
 CREATE TABLE IF NOT EXISTS public.addresses (
@@ -560,37 +643,43 @@ CREATE TABLE IF NOT EXISTS public.addresses (
   city text NOT NULL,
   state text NOT NULL,
   pincode text NOT NULL,
-  country text DEFAULT 'India',
+  country text NOT NULL DEFAULT 'India',
   is_default boolean DEFAULT false,
   created_at timestamptz DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS public.carts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid UNIQUE NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS public.cart_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  cart_id uuid REFERENCES public.carts(id) ON DELETE CASCADE,
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   product_id text NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
   quantity integer NOT NULL DEFAULT 1 CHECK (quantity > 0),
   created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
   UNIQUE(user_id, product_id)
 );
 
 CREATE TABLE IF NOT EXISTS public.orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number text UNIQUE NOT NULL,
-  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
   address_id uuid REFERENCES public.addresses(id),
-  shipping_address jsonb NOT NULL DEFAULT '{}'::jsonb,
+  shipping_address jsonb NOT NULL,
   subtotal_inr numeric(10,2) NOT NULL,
   gst_amount_inr numeric(10,2) NOT NULL,
   discount_inr numeric(10,2) NOT NULL DEFAULT 0,
   total_inr numeric(10,2) NOT NULL,
   status order_status NOT NULL DEFAULT 'pending',
-  payment_method payment_method DEFAULT 'checkout',
+  payment_method payment_method NOT NULL DEFAULT 'checkout',
   razorpay_order_id text,
   razorpay_payment_id text,
-  tracking_number text,
-  courier text,
-  invoice_url text,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -598,85 +687,140 @@ CREATE TABLE IF NOT EXISTS public.orders (
 CREATE TABLE IF NOT EXISTS public.order_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id uuid NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  product_id text NOT NULL REFERENCES public.products(id),
+  product_id text NOT NULL REFERENCES public.products(id) ON DELETE RESTRICT,
   product_name text NOT NULL,
   sku text NOT NULL,
   unit_price_inr numeric(10,2) NOT NULL,
-  gst_percent numeric(5,2) NOT NULL DEFAULT 18.0,
-  quantity integer NOT NULL CHECK (quantity > 0),
-  total_price_inr numeric(10,2) NOT NULL
+  gst_percent numeric(5,2) NOT NULL DEFAULT 18.00,
+  quantity integer NOT NULL DEFAULT 1 CHECK (quantity > 0),
+  total_price_inr numeric(10,2) NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.order_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  status text NOT NULL,
+  notes text,
+  created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.shipments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id uuid NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  courier text NOT NULL,
+  tracking_number text NOT NULL,
+  tracking_url text,
+  shipping_class shipping_class NOT NULL DEFAULT 'standard',
+  status text NOT NULL DEFAULT 'manifested',
+  dispatched_at timestamptz,
+  delivered_at timestamptz,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.invoices (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_number text UNIQUE NOT NULL,
+  order_id uuid NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  student_id text NOT NULL,
+  bill_to jsonb NOT NULL,
+  gstin text,
+  taxable_amount_inr numeric(10,2) NOT NULL,
+  cgst_inr numeric(10,2) NOT NULL DEFAULT 0,
+  sgst_inr numeric(10,2) NOT NULL DEFAULT 0,
+  igst_inr numeric(10,2) NOT NULL DEFAULT 0,
+  total_inr numeric(10,2) NOT NULL,
+  pdf_url text,
+  created_at timestamptz DEFAULT now()
 );
 
 -- =====================================================================
--- 12. Payments Table (Links Orders & Subscriptions)
+-- 10. Hackathons, Notifications, Audit Log, Daily Stats, Config
 -- =====================================================================
-CREATE TABLE IF NOT EXISTS public.payments (
+
+CREATE TABLE IF NOT EXISTS public.hackathons (
+  id text PRIMARY KEY,
+  slug text UNIQUE NOT NULL,
+  title text NOT NULL,
+  tagline text NOT NULL,
+  description text,
+  start_date timestamptz NOT NULL,
+  end_date timestamptz NOT NULL,
+  prize_pool_inr numeric(10,2) NOT NULL DEFAULT 0,
+  is_active boolean DEFAULT true,
+  max_team_size integer DEFAULT 4,
+  tracks jsonb DEFAULT '[]'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.hackathon_registrations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  hackathon_id text NOT NULL REFERENCES public.hackathons(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  team_name text NOT NULL,
+  role text DEFAULT 'lead',
+  project_title text,
+  project_url text,
+  submission_data jsonb DEFAULT '{}'::jsonb,
+  registered_at timestamptz DEFAULT now(),
+  UNIQUE(hackathon_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.notifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  order_id uuid REFERENCES public.orders(id) ON DELETE SET NULL,
-  subscription_id uuid REFERENCES public.subscriptions(id) ON DELETE SET NULL,
-  plan_id text REFERENCES public.plans(id),
-  method payment_method NOT NULL DEFAULT 'checkout',
-  amount_inr numeric(10,2) NOT NULL,
-  gst_amount_inr numeric(10,2) NOT NULL DEFAULT 0,
-  status payment_status NOT NULL DEFAULT 'pending',
-  razorpay_order_id text,
-  razorpay_payment_id text,
-  razorpay_signature text,
-  qr_id text,
-  qr_image_url text,
-  qr_expires_at timestamptz,
-  metadata jsonb DEFAULT '{}'::jsonb,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  title text NOT NULL,
+  message text NOT NULL,
+  type text NOT NULL DEFAULT 'info',
+  is_read boolean DEFAULT false,
+  link text,
+  created_at timestamptz DEFAULT now()
 );
 
--- =====================================================================
--- 13. System Health, Audit Log & Analytics
--- =====================================================================
 CREATE TABLE IF NOT EXISTS public.audit_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   action text NOT NULL,
   target_type text NOT NULL,
-  target_id text,
+  target_id text NOT NULL,
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.daily_stats (
-  day date PRIMARY KEY,
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  stat_date date UNIQUE NOT NULL,
+  total_students integer DEFAULT 0,
   active_students integer DEFAULT 0,
-  new_signups integer DEFAULT 0,
   projects_created integer DEFAULT 0,
+  certificates_issued integer DEFAULT 0,
   rituu_messages integer DEFAULT 0,
-  rituu_photos integer DEFAULT 0,
-  rituu_offtopic integer DEFAULT 0,
   revenue_inr numeric(10,2) DEFAULT 0,
   orders_count integer DEFAULT 0,
   updated_at timestamptz DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS public.feature_flags (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key text UNIQUE NOT NULL,
+  enabled boolean DEFAULT false,
+  description text,
+  rollout_pct integer DEFAULT 100,
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.app_config (
+  key text PRIMARY KEY,
+  value text NOT NULL,
+  is_public boolean DEFAULT true,
+  description text,
+  updated_at timestamptz DEFAULT now()
+);
+
 -- =====================================================================
--- 14. Performance Indexes on Foreign Keys and Frequent Filters
--- =====================================================================
-CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
-CREATE INDEX IF NOT EXISTS idx_profiles_last_seen ON public.profiles(last_seen_at DESC);
-CREATE INDEX IF NOT EXISTS idx_circuit_projects_user_updated ON public.circuit_projects(user_id, updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_circuit_projects_visibility ON public.circuit_projects(visibility, is_sample);
-CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON public.chat_messages(session_id, created_at ASC);
-CREATE INDEX IF NOT EXISTS idx_rituu_usage_user_day ON public.rituu_usage(user_id, day_ist);
-CREATE INDEX IF NOT EXISTS idx_orders_user ON public.orders(user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_order_items_order ON public.order_items(order_id);
-CREATE INDEX IF NOT EXISTS idx_payments_user ON public.payments(user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON public.subscriptions(user_id, status);
-CREATE INDEX IF NOT EXISTS idx_lesson_progress_user ON public.lesson_progress(user_id);
-CREATE INDEX IF NOT EXISTS idx_certificates_user ON public.certificates(user_id);
-CREATE INDEX IF NOT EXISTS idx_certificates_code ON public.certificates(certificate_code);
-CREATE INDEX IF NOT EXISTS idx_products_category_active ON public.products(category_id, is_active);
--- =====================================================================
--- RoboVerse Core Functions, Triggers & Security Definer RPCs
--- Migration: 20261030000002_functions_triggers.sql
+-- 11. Security Definer Functions, Triggers & Views
 -- =====================================================================
 
 -- 1. Sequence-based Student ID Generator (e.g., RV-2026-001001)
@@ -687,16 +831,14 @@ AS $$
 DECLARE
   v_year text;
   v_seq integer;
-  v_id text;
 BEGIN
   v_year := to_char(CURRENT_DATE, 'YYYY');
   v_seq := nextval('student_id_seq');
-  v_id := 'RV-' || v_year || '-' || lpad(v_seq::text, 6, '0');
-  RETURN v_id;
+  RETURN 'RV-' || v_year || '-' || lpad(v_seq::text, 6, '0');
 END;
 $$;
 
--- 2. Security Helper: Check if current user is an Admin
+-- 2. Security Helper: is_admin() (Reads from profiles.role in database, never metadata)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql
@@ -706,42 +848,11 @@ SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'
+    WHERE id = auth.uid() AND role IN ('admin', 'support')
   );
 $$;
 
--- 3. Security Definer: Promote/Change User Role (Admin Only)
-CREATE OR REPLACE FUNCTION public.admin_promote_role(
-  p_target_user_id uuid,
-  p_new_role user_role
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Access denied: Admin privileges required to change user roles.';
-  END IF;
-
-  UPDATE public.profiles
-  SET role = p_new_role,
-      updated_at = now()
-  WHERE id = p_target_user_id;
-
-  INSERT INTO public.audit_log(actor_id, action, target_type, target_id, metadata)
-  VALUES (
-    auth.uid(),
-    'PROMOTE_ROLE',
-    'profiles',
-    p_target_user_id::text,
-    jsonb_build_object('new_role', p_new_role)
-  );
-END;
-$$;
-
--- 4. Automatic Profile Creation on Signup (Trigger on auth.users)
+-- 3. Automatic Profile Creation on Signup (Trigger on auth.users)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -753,6 +864,8 @@ DECLARE
   v_full_name text;
   v_interests text[];
   v_is_minor boolean;
+  v_dob date;
+  v_school text;
 BEGIN
   v_student_id := public.generate_student_id();
   
@@ -771,13 +884,28 @@ BEGIN
     v_interests := ARRAY['arduino', 'circuits']::text[];
   END IF;
 
-  v_is_minor := COALESCE((NEW.raw_user_meta_data->>'is_minor')::boolean, false);
+  v_dob := (NEW.raw_user_meta_data->>'dob')::date;
+  
+  -- Compute minor status: under 18 if dob provided, or boolean flag
+  IF v_dob IS NOT NULL THEN
+    v_is_minor := (v_dob > (CURRENT_DATE - INTERVAL '18 years'));
+  ELSE
+    v_is_minor := COALESCE((NEW.raw_user_meta_data->>'is_minor')::boolean, false);
+  END IF;
+
+  v_school := COALESCE(
+    NEW.raw_user_meta_data->>'school',
+    NEW.raw_user_meta_data->>'school_or_college'
+  );
 
   INSERT INTO public.profiles (
     id,
     student_id,
     full_name,
-    role, -- Role is ALWAYS 'student' on signup
+    role, -- Role is ALWAYS 'student' at signup
+    dob,
+    is_minor,
+    school,
     school_or_college,
     class_level,
     city,
@@ -785,7 +913,7 @@ BEGIN
     state,
     country,
     interests,
-    is_minor,
+    language,
     parent_email,
     parental_consent_at,
     location_consent,
@@ -798,14 +926,17 @@ BEGIN
     v_student_id,
     v_full_name,
     'student'::user_role,
-    NEW.raw_user_meta_data->>'school_or_college',
+    v_dob,
+    v_is_minor,
+    v_school,
+    v_school,
     NEW.raw_user_meta_data->>'class_level',
     NEW.raw_user_meta_data->>'city',
     NEW.raw_user_meta_data->>'pincode',
     NEW.raw_user_meta_data->>'state',
     COALESCE(NEW.raw_user_meta_data->>'country', 'India'),
     v_interests,
-    v_is_minor,
+    COALESCE(NEW.raw_user_meta_data->>'language', 'en'),
     NEW.raw_user_meta_data->>'parent_email',
     CASE 
       WHEN (NEW.raw_user_meta_data->>'parental_consent_given')::boolean IS TRUE THEN now() 
@@ -818,6 +949,10 @@ BEGIN
     1
   );
 
+  -- Automatically initialize a shopping cart for the user
+  INSERT INTO public.carts (user_id) VALUES (NEW.id)
+  ON CONFLICT (user_id) DO NOTHING;
+
   RETURN NEW;
 END;
 $$;
@@ -827,31 +962,149 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 5. Realtime Presence Touch RPC ("Students working now")
-CREATE OR REPLACE FUNCTION public.touch_presence(
-  p_activity text DEFAULT 'Exploring Labs',
-  p_project_id uuid DEFAULT NULL
-)
-RETURNS void
+-- 4. Prevent Profile Privilege Escalation (Role & Student ID Immutable for non-admins)
+CREATE OR REPLACE FUNCTION public.prevent_profile_privilege_escalation()
+RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  UPDATE public.profiles
-  SET last_seen_at = now(),
-      current_activity = p_activity
-  WHERE id = auth.uid();
-
-  IF p_project_id IS NOT NULL THEN
-    UPDATE public.circuit_projects
-    SET updated_at = now()
-    WHERE id = p_project_id AND user_id = auth.uid();
+  -- Prevent altering role unless executed by an admin via admin_set_role
+  IF (NEW.role IS DISTINCT FROM OLD.role) AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Privilege escalation prevented: Role cannot be modified directly.';
   END IF;
+
+  -- Student ID is permanent and immutable
+  IF (NEW.student_id IS DISTINCT FROM OLD.student_id) THEN
+    RAISE EXCEPTION 'Student ID is permanent and immutable.';
+  END IF;
+
+  -- Maintain updated_at timestamp
+  NEW.updated_at := now();
+  RETURN NEW;
 END;
 $$;
 
--- 6. Enforce Free Plan 5-Project Limit (Trigger on circuit_projects)
+DROP TRIGGER IF EXISTS trg_prevent_privilege_escalation ON public.profiles;
+CREATE TRIGGER trg_prevent_privilege_escalation
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_profile_privilege_escalation();
+
+-- Column-Level Grants on Profiles: Students cannot alter role, student_id, or xp directly
+REVOKE UPDATE ON public.profiles FROM anon, authenticated;
+GRANT UPDATE (
+  full_name,
+  dob,
+  school,
+  school_or_college,
+  class_level,
+  city,
+  pincode,
+  state,
+  country,
+  interests,
+  language,
+  avatar_url,
+  location_consent
+) ON public.profiles TO authenticated;
+
+-- =====================================================================
+-- 12. Single Source of Truth View: current_entitlements
+-- =====================================================================
+
+CREATE OR REPLACE VIEW public.current_entitlements AS
+SELECT
+  p.id AS user_id,
+  p.student_id,
+  p.full_name,
+  p.role,
+  p.is_minor,
+  p.parental_consent_at IS NOT NULL AS has_parental_consent,
+  COALESCE(sub.tier, 'free'::plan_tier) AS plan_tier,
+  COALESCE(sub.name, 'Free Explorer') AS plan_name,
+  UPPER(COALESCE(sub.tier::text, 'free')) AS badge,
+  CASE 
+    WHEN sub.tier = 'pro' THEN 10
+    WHEN sub.tier = 'plus' THEN 5
+    ELSE 0
+  END AS store_discount_percent,
+  CASE 
+    WHEN sub.tier = 'pro' THEN 300
+    WHEN sub.tier = 'plus' THEN 100
+    ELSE 15
+  END AS rituu_daily_messages,
+  CASE 
+    WHEN sub.tier = 'pro' THEN 50
+    WHEN sub.tier = 'plus' THEN 20
+    ELSE 3
+  END AS rituu_daily_photos,
+  CASE 
+    WHEN sub.tier IN ('pro', 'plus') THEN -1
+    ELSE 5
+  END AS max_saved_projects,
+  CASE 
+    WHEN sub.tier IN ('pro', 'plus') THEN true 
+    ELSE false 
+  END AS allow_private_projects,
+  CASE 
+    WHEN sub.tier IN ('pro', 'plus') THEN true 
+    ELSE false 
+  END AS official_certificates_allowed
+FROM public.profiles p
+LEFT JOIN LATERAL (
+  SELECT pl.tier, pl.name
+  FROM public.subscriptions s
+  JOIN public.plans pl ON pl.id = s.plan_id
+  WHERE s.user_id = p.id AND s.status = 'active'
+  ORDER BY s.created_at DESC
+  LIMIT 1
+) sub ON true;
+
+-- Helper RPC to retrieve caller's entitlements
+CREATE OR REPLACE FUNCTION public.get_current_entitlements()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+DECLARE
+  v_res jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN jsonb_build_object(
+      'user_id', null,
+      'student_id', null,
+      'full_name', null,
+      'role', 'student',
+      'is_minor', false,
+      'has_parental_consent', false,
+      'plan_tier', 'free',
+      'plan_name', 'Free Explorer',
+      'badge', 'FREE',
+      'store_discount_percent', 0,
+      'rituu_daily_messages', 15,
+      'rituu_daily_photos', 3,
+      'max_saved_projects', 5,
+      'allow_private_projects', false,
+      'official_certificates_allowed', false
+    );
+  END IF;
+
+  SELECT to_jsonb(e) INTO v_res
+  FROM public.current_entitlements e
+  WHERE e.user_id = auth.uid();
+
+  RETURN v_res;
+END;
+$$;
+
+-- =====================================================================
+-- 13. Project Limits, Rituu AI Quota & Presence RPCs
+-- =====================================================================
+
+-- Enforce Free-Plan 5-Project Limit (Trigger on circuit_projects)
 CREATE OR REPLACE FUNCTION public.enforce_circuit_project_limit()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -862,27 +1115,18 @@ DECLARE
   v_user_plan plan_tier;
   v_project_count integer;
 BEGIN
-  -- Sample projects are not counted towards user limit
+  -- Sample projects are excluded from limits
   IF NEW.is_sample IS TRUE THEN
     RETURN NEW;
   END IF;
 
   -- Determine user's active plan
-  SELECT COALESCE(
-    (
-      SELECT p.tier 
-      FROM public.subscriptions s
-      JOIN public.plans p ON p.id = s.plan_id
-      WHERE s.user_id = NEW.user_id 
-        AND s.status = 'active'
-      ORDER BY s.created_at DESC
-      LIMIT 1
-    ),
-    'free'::plan_tier
-  ) INTO v_user_plan;
+  SELECT plan_tier INTO v_user_plan
+  FROM public.current_entitlements
+  WHERE user_id = NEW.user_id;
 
-  -- If user is on Free tier, check count of existing non-sample projects
-  IF v_user_plan = 'free'::plan_tier THEN
+  -- If Free tier, enforce maximum of 5 projects
+  IF v_user_plan = 'free'::plan_tier OR v_user_plan IS NULL THEN
     SELECT COUNT(*) INTO v_project_count
     FROM public.circuit_projects
     WHERE user_id = NEW.user_id AND is_sample IS FALSE;
@@ -901,9 +1145,9 @@ CREATE TRIGGER trg_check_circuit_project_limit
   BEFORE INSERT ON public.circuit_projects
   FOR EACH ROW EXECUTE FUNCTION public.enforce_circuit_project_limit();
 
--- 7. Rituu AI Quota Consumption RPC (Atomic limit enforcement)
+-- Atomic Rituu Daily Limit Check (Free: 15+3, Plus: 100+20, Pro: 300+50 reset at midnight IST)
 CREATE OR REPLACE FUNCTION public.rituu_consume(
-  p_photo boolean DEFAULT false
+  photo boolean DEFAULT false
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -924,34 +1168,26 @@ BEGIN
     RAISE EXCEPTION 'Authentication required.';
   END IF;
 
-  -- Get date in Indian Standard Time (IST)
+  -- Date in Indian Standard Time (IST)
   v_today_ist := (now() AT TIME ZONE 'Asia/Kolkata')::date;
 
-  -- Get current user plan
-  SELECT COALESCE(
-    (
-      SELECT p.tier 
-      FROM public.subscriptions s
-      JOIN public.plans p ON p.id = s.plan_id
-      WHERE s.user_id = v_user_id AND s.status = 'active'
-      LIMIT 1
-    ),
-    'free'::plan_tier
-  ) INTO v_plan_tier;
+  -- Determine user plan and limits from current_entitlements
+  SELECT 
+    plan_tier, 
+    rituu_daily_messages, 
+    rituu_daily_photos
+  INTO 
+    v_plan_tier, 
+    v_max_messages, 
+    v_max_photos
+  FROM public.current_entitlements
+  WHERE user_id = v_user_id;
 
-  -- Determine daily limits by plan
-  IF v_plan_tier = 'pro'::plan_tier THEN
-    v_max_messages := 300;
-    v_max_photos := 50;
-  ELSIF v_plan_tier = 'plus'::plan_tier THEN
-    v_max_messages := 100;
-    v_max_photos := 20;
-  ELSE
-    v_max_messages := 15;
-    v_max_photos := 3;
-  END IF;
+  v_max_messages := COALESCE(v_max_messages, 15);
+  v_max_photos := COALESCE(v_max_photos, 3);
+  v_plan_tier := COALESCE(v_plan_tier, 'free'::plan_tier);
 
-  -- Lock and fetch today's usage row (or insert if not present)
+  -- Atomic insert/lock usage row
   INSERT INTO public.rituu_usage (user_id, day_ist, messages_count, photos_count)
   VALUES (v_user_id, v_today_ist, 0, 0)
   ON CONFLICT (user_id, day_ist) DO NOTHING;
@@ -962,8 +1198,8 @@ BEGIN
   WHERE user_id = v_user_id AND day_ist = v_today_ist
   FOR UPDATE;
 
-  -- Check limits
-  IF p_photo THEN
+  -- Limit checks
+  IF photo THEN
     IF v_usage_photos >= v_max_photos THEN
       RETURN jsonb_build_object(
         'allowed', false,
@@ -990,7 +1226,7 @@ BEGIN
   END IF;
 
   -- Increment atomically
-  IF p_photo THEN
+  IF photo THEN
     UPDATE public.rituu_usage
     SET photos_count = photos_count + 1,
         messages_count = messages_count + 1,
@@ -1017,7 +1253,31 @@ BEGIN
 END;
 $$;
 
--- 8. PostGIS Spatial Nearby Shops Query RPC
+-- Realtime Presence Touch RPC
+CREATE OR REPLACE FUNCTION public.touch_presence(
+  activity text DEFAULT 'Exploring Labs',
+  project_id uuid DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.profiles
+  SET last_seen_at = now(),
+      current_activity = activity
+  WHERE id = auth.uid();
+
+  IF project_id IS NOT NULL THEN
+    UPDATE public.circuit_projects
+    SET updated_at = now()
+    WHERE id = project_id AND user_id = auth.uid();
+  END IF;
+END;
+$$;
+
+-- PostGIS Nearby Shops RPC
 CREATE OR REPLACE FUNCTION public.nearby_shops(
   lat double precision,
   lng double precision,
@@ -1066,10 +1326,14 @@ AS $$
   LIMIT p_limit;
 $$;
 
--- 9. Server-Side Cart-To-Order RPC (Database-calculated pricing only)
+-- =====================================================================
+-- 14. E-Commerce Order & Invoicing RPCs
+-- =====================================================================
+
+-- Create Order From Cart (Totals calculated solely from DB price_inr, stock & age restriction enforced)
 CREATE OR REPLACE FUNCTION public.create_order_from_cart(
-  p_address_id uuid,
-  p_coupon_code text DEFAULT NULL
+  address_id uuid,
+  coupon_code text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1087,7 +1351,6 @@ DECLARE
   v_discount numeric(10,2) := 0;
   v_total numeric(10,2) := 0;
   v_item record;
-  v_user_plan plan_tier;
   v_plan_discount_pct numeric := 0;
   v_address_json jsonb;
 BEGIN
@@ -1096,25 +1359,25 @@ BEGIN
     RAISE EXCEPTION 'Authentication required.';
   END IF;
 
-  -- Verify user identity and minor status
+  -- Verify minor status and consent
   SELECT is_minor, parental_consent_at INTO v_is_minor, v_parent_consent
   FROM public.profiles WHERE id = v_user_id;
 
-  -- Fetch address
+  -- Validate address
   SELECT to_jsonb(a) INTO v_address_json
   FROM public.addresses a
-  WHERE a.id = p_address_id AND a.user_id = v_user_id;
+  WHERE a.id = address_id AND a.user_id = v_user_id;
 
   IF v_address_json IS NULL THEN
     RAISE EXCEPTION 'Shipping address not found.';
   END IF;
 
-  -- Ensure cart has items
+  -- Validate cart non-empty
   IF NOT EXISTS (SELECT 1 FROM public.cart_items WHERE user_id = v_user_id) THEN
-    RAISE EXCEPTION 'Cart is empty.';
+    RAISE EXCEPTION 'Shopping cart is empty.';
   END IF;
 
-  -- Validate stock and age restrictions
+  -- Validate stock and minor age-restricted equipment consent
   FOR v_item IN 
     SELECT c.product_id, c.quantity, p.name, p.price_inr, p.stock, p.gst_percent, p.age_restricted, p.sku
     FROM public.cart_items c
@@ -1122,7 +1385,7 @@ BEGIN
     WHERE c.user_id = v_user_id
   LOOP
     IF v_item.stock < v_item.quantity THEN
-      RAISE EXCEPTION 'Insufficient stock for product "%" (Available: %, Requested: %)', v_item.name, v_item.stock, v_item.quantity;
+      RAISE EXCEPTION 'Insufficient stock for "%" (Available: %, Requested: %)', v_item.name, v_item.stock, v_item.quantity;
     END IF;
 
     IF v_item.age_restricted AND v_is_minor AND v_parent_consent IS NULL THEN
@@ -1132,58 +1395,45 @@ BEGIN
     v_subtotal := v_subtotal + (v_item.price_inr * v_item.quantity);
   END LOOP;
 
-  -- Member plan discount (Plus 5%, Pro 10%)
-  SELECT COALESCE(
-    (
-      SELECT p.tier 
-      FROM public.subscriptions s
-      JOIN public.plans p ON p.id = s.plan_id
-      WHERE s.user_id = v_user_id AND s.status = 'active'
-      LIMIT 1
-    ),
-    'free'::plan_tier
-  ) INTO v_user_plan;
-
-  IF v_user_plan = 'pro'::plan_tier THEN
-    v_plan_discount_pct := 10.0;
-  ELSIF v_user_plan = 'plus'::plan_tier THEN
-    v_plan_discount_pct := 5.0;
-  END IF;
+  -- Plan discount percentage from current_entitlements
+  SELECT store_discount_percent INTO v_plan_discount_pct
+  FROM public.current_entitlements
+  WHERE user_id = v_user_id;
 
   IF v_plan_discount_pct > 0 THEN
     v_discount := ROUND(v_subtotal * (v_plan_discount_pct / 100.0), 2);
   END IF;
 
-  -- Coupon discount application
-  IF p_coupon_code IS NOT NULL AND p_coupon_code <> '' THEN
+  -- Coupon validation
+  IF coupon_code IS NOT NULL AND coupon_code <> '' THEN
     DECLARE
       v_coupon record;
     BEGIN
       SELECT * INTO v_coupon FROM public.coupons 
-      WHERE code = upper(p_coupon_code) AND is_active IS TRUE
+      WHERE code = upper(coupon_code) AND is_active IS TRUE
         AND (valid_until IS NULL OR valid_until > now());
       
       IF v_coupon IS NOT NULL AND v_subtotal >= v_coupon.min_order_inr THEN
         DECLARE
-          v_coupon_disc numeric;
+          v_c_disc numeric;
         BEGIN
-          v_coupon_disc := ROUND(v_subtotal * (v_coupon.discount_percent / 100.0), 2);
-          IF v_coupon.max_discount_inr IS NOT NULL AND v_coupon_disc > v_coupon.max_discount_inr THEN
-            v_coupon_disc := v_coupon.max_discount_inr;
+          v_c_disc := ROUND(v_subtotal * (v_coupon.discount_percent / 100.0), 2);
+          IF v_coupon.max_discount_inr IS NOT NULL AND v_c_disc > v_coupon.max_discount_inr THEN
+            v_c_disc := v_coupon.max_discount_inr;
           END IF;
-          v_discount := v_discount + v_coupon_disc;
+          v_discount := v_discount + v_c_disc;
         END;
       END IF;
     END;
   END IF;
 
   v_total := GREATEST(0, v_subtotal - v_discount);
-  -- 18% embedded GST component = Total - (Total / 1.18)
+  -- 18% embedded GST: Taxable Base = Total / 1.18, GST Amount = Total - Taxable Base
   v_gst_total := ROUND(v_total - (v_total / 1.18), 2);
 
   v_order_number := 'ROBO-' || to_char(now(), 'YYYYMMDD') || '-' || upper(substring(gen_random_uuid()::text, 1, 6));
 
-  -- Create order
+  -- Insert order
   INSERT INTO public.orders (
     order_number,
     user_id,
@@ -1197,7 +1447,7 @@ BEGIN
   ) VALUES (
     v_order_number,
     v_user_id,
-    p_address_id,
+    address_id,
     v_address_json,
     v_subtotal,
     v_gst_total,
@@ -1206,7 +1456,7 @@ BEGIN
     'pending'
   ) RETURNING id INTO v_order_id;
 
-  -- Create order items
+  -- Insert order items
   INSERT INTO public.order_items (
     order_id,
     product_id,
@@ -1230,6 +1480,10 @@ BEGIN
   JOIN public.products p ON p.id = c.product_id
   WHERE c.user_id = v_user_id;
 
+  -- Append to order events
+  INSERT INTO public.order_events (order_id, status, notes, created_by)
+  VALUES (v_order_id, 'created', 'Order placed via cart checkout', v_user_id);
+
   -- Clear cart
   DELETE FROM public.cart_items WHERE user_id = v_user_id;
 
@@ -1244,7 +1498,7 @@ BEGIN
 END;
 $$;
 
--- 10. Webhook Order Finalization RPC
+-- Finalize Order Payment (Webhook execution: decrements stock, generates official invoice)
 CREATE OR REPLACE FUNCTION public.finalize_order_payment(
   p_order_id uuid,
   p_razorpay_payment_id text
@@ -1256,26 +1510,78 @@ SET search_path = public
 AS $$
 DECLARE
   v_item record;
+  v_order record;
+  v_student_id text;
+  v_invoice_number text;
+  v_taxable numeric(10,2);
+  v_gst numeric(10,2);
+  v_is_interstate boolean;
 BEGIN
-  -- Mark order as paid
+  SELECT * INTO v_order FROM public.orders WHERE id = p_order_id;
+  IF v_order IS NULL THEN
+    RAISE EXCEPTION 'Order not found.';
+  END IF;
+
+  -- Update order status
   UPDATE public.orders
   SET status = 'paid',
       razorpay_payment_id = p_razorpay_payment_id,
       updated_at = now()
   WHERE id = p_order_id;
 
-  -- Decrement stock for ordered items
+  -- Decrement inventory stock
   FOR v_item IN SELECT product_id, quantity FROM public.order_items WHERE order_id = p_order_id LOOP
     UPDATE public.products
     SET stock = GREATEST(0, stock - v_item.quantity)
     WHERE id = v_item.product_id;
   END LOOP;
+
+  -- Fetch student_id
+  SELECT student_id INTO v_student_id FROM public.profiles WHERE id = v_order.user_id;
+
+  -- Generate invoice
+  v_invoice_number := 'INV-' || to_char(now(), 'YYYYMM') || '-' || upper(substring(gen_random_uuid()::text, 1, 6));
+  v_taxable := ROUND((v_order.total_inr / 1.18), 2);
+  v_gst := v_order.total_inr - v_taxable;
+  v_is_interstate := (v_order.shipping_address->>'state' ILIKE '%Delhi%' IS FALSE);
+
+  INSERT INTO public.invoices (
+    invoice_number,
+    order_id,
+    user_id,
+    student_id,
+    bill_to,
+    taxable_amount_inr,
+    cgst_inr,
+    sgst_inr,
+    igst_inr,
+    total_inr
+  ) VALUES (
+    v_invoice_number,
+    p_order_id,
+    v_order.user_id,
+    COALESCE(v_student_id, 'RV-STUDENT'),
+    v_order.shipping_address,
+    v_taxable,
+    CASE WHEN v_is_interstate THEN 0 ELSE ROUND(v_gst / 2, 2) END,
+    CASE WHEN v_is_interstate THEN 0 ELSE ROUND(v_gst / 2, 2) END,
+    CASE WHEN v_is_interstate THEN v_gst ELSE 0 END,
+    v_order.total_inr
+  ) ON CONFLICT (invoice_number) DO NOTHING;
+
+  -- Log order event
+  INSERT INTO public.order_events (order_id, status, notes)
+  VALUES (p_order_id, 'paid', 'Payment verified and invoice generated: ' || v_invoice_number);
 END;
 $$;
 
--- 11. Certificate Issuance RPC (Verifies full course completion)
+-- =====================================================================
+-- 15. Verifiable Certificates RPCs
+-- =====================================================================
+
+-- Issue Certificate (Checks completion rules)
 CREATE OR REPLACE FUNCTION public.issue_certificate(
-  p_course_id text
+  course_id text
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1301,12 +1607,12 @@ BEGIN
 
   -- Verify total vs completed lessons
   SELECT COUNT(*) INTO v_total_lessons
-  FROM public.lessons WHERE course_id = p_course_id;
+  FROM public.lessons WHERE public.lessons.course_id = issue_certificate.course_id;
 
   SELECT COUNT(*) INTO v_completed_lessons
   FROM public.lesson_progress lp
   JOIN public.lessons l ON l.id = lp.lesson_id
-  WHERE lp.user_id = v_user_id AND l.course_id = p_course_id AND lp.completed IS TRUE;
+  WHERE lp.user_id = v_user_id AND l.course_id = issue_certificate.course_id AND lp.completed IS TRUE;
 
   IF v_total_lessons = 0 OR v_completed_lessons < v_total_lessons THEN
     RAISE EXCEPTION 'Course incomplete: % of % lessons completed.', v_completed_lessons, v_total_lessons;
@@ -1315,7 +1621,7 @@ BEGIN
   -- Check if already issued
   SELECT id, certificate_code INTO v_cert_id, v_cert_code
   FROM public.certificates
-  WHERE user_id = v_user_id AND course_id = p_course_id;
+  WHERE user_id = v_user_id AND public.certificates.course_id = issue_certificate.course_id;
 
   IF v_cert_id IS NOT NULL THEN
     RETURN jsonb_build_object(
@@ -1329,7 +1635,7 @@ BEGIN
   FROM public.profiles WHERE id = v_user_id;
 
   SELECT title, track, duration_hours INTO v_course_name, v_track, v_hours
-  FROM public.courses WHERE id = p_course_id;
+  FROM public.courses WHERE id = issue_certificate.course_id;
 
   v_cert_code := 'RV-CERT-' || to_char(now(), 'YYYY') || '-' || upper(substring(gen_random_uuid()::text, 1, 6));
 
@@ -1347,14 +1653,14 @@ BEGIN
   ) VALUES (
     v_cert_code,
     v_user_id,
-    p_course_id,
+    issue_certificate.course_id,
     v_student_name,
     v_student_id,
     v_course_name,
     v_track,
     v_hours,
     98.5,
-    'https://roboverse.dev/verify/' || v_cert_code
+    'https://roboverse-delta.vercel.app/verify/' || v_cert_code
   ) RETURNING id INTO v_cert_id;
 
   RETURN jsonb_build_object(
@@ -1367,9 +1673,9 @@ BEGIN
 END;
 $$;
 
--- 12. Public Certificate Verification RPC
+-- Verify Certificate (Publicly accessible with limited fields)
 CREATE OR REPLACE FUNCTION public.verify_certificate(
-  p_certificate_code text
+  code text
 )
 RETURNS jsonb
 LANGUAGE sql
@@ -1388,14 +1694,24 @@ AS $$
     'grade_score', grade_score,
     'issued_at', issued_at,
     'is_revoked', is_revoked,
-    'revoked_reason', revoked_reason
+    'revoked_reason', revoked_reason,
+    'issuing_authority', issuing_authority
   )
   FROM public.certificates
-  WHERE certificate_code = upper(p_certificate_code)
+  WHERE certificate_code = upper(code)
   LIMIT 1;
 $$;
 
--- 13. Admin Overview Analytics RPC
+-- Grant public execution on verify_certificate and nearby_shops
+GRANT EXECUTE ON FUNCTION public.verify_certificate(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.nearby_shops(double precision, double precision, double precision, integer) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_current_entitlements() TO anon, authenticated;
+
+-- =====================================================================
+-- 16. Admin-Only Control Room RPCs
+-- =====================================================================
+
+-- Admin Overview Metrics
 CREATE OR REPLACE FUNCTION public.admin_overview()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1422,33 +1738,35 @@ BEGIN
     'rituu_offtopic_today', (SELECT COUNT(*) FROM public.chat_messages WHERE off_topic IS TRUE AND created_at >= (now() AT TIME ZONE 'Asia/Kolkata')::date),
     'total_revenue_inr', (SELECT COALESCE(SUM(amount_inr), 0) FROM public.payments WHERE status = 'completed'),
     'orders_count', (SELECT COUNT(*) FROM public.orders WHERE status IN ('paid', 'delivered')),
-    'open_shop_reports', (SELECT COUNT(*) FROM public.shop_reports WHERE status = 'PENDING')
+    'open_shop_reports', (SELECT COUNT(*) FROM public.shop_reports WHERE status = 'PENDING'),
+    'server_timestamp', now()
   ) INTO v_res;
+
+  -- Append to audit_log
+  INSERT INTO public.audit_log (actor_id, action, target_type, target_id, metadata)
+  VALUES (auth.uid(), 'VIEW_ADMIN_OVERVIEW', 'system', 'overview', jsonb_build_object('timestamp', now()));
 
   RETURN v_res;
 END;
 $$;
 
--- 14. Admin Students Directory RPC (No passwords, ever)
+-- Admin Students Directory (Student ID, name, school, city, plan, current course, progress %, current project, last active)
 CREATE OR REPLACE FUNCTION public.admin_students(
-  search_query text DEFAULT '',
-  filter_plan text DEFAULT 'ALL',
+  search text DEFAULT '',
+  filters text DEFAULT 'ALL',
   p_limit integer DEFAULT 50,
   p_offset integer DEFAULT 0
 )
 RETURNS TABLE (
-  id uuid,
   student_id text,
-  full_name text,
-  email text,
-  school_or_college text,
+  name text,
+  school text,
   city text,
-  plan_tier text,
-  current_activity text,
-  xp integer,
-  streak_days integer,
-  last_seen_at timestamptz,
-  created_at timestamptz
+  plan text,
+  current_course text,
+  progress_percent numeric,
+  current_project text,
+  last_active timestamptz
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -1459,60 +1777,240 @@ BEGIN
     RAISE EXCEPTION 'Access denied: Admin role required.';
   END IF;
 
+  -- Log audit event
+  INSERT INTO public.audit_log (actor_id, action, target_type, target_id, metadata)
+  VALUES (auth.uid(), 'QUERY_STUDENTS', 'profiles', 'directory', jsonb_build_object('search', search, 'filter', filters));
+
   RETURN QUERY
   SELECT 
-    p.id,
     p.student_id,
-    p.full_name,
-    u.email::text,
-    p.school_or_college,
-    p.city,
-    COALESCE(
-      (
-        SELECT pl.tier::text
-        FROM public.subscriptions s
-        JOIN public.plans pl ON pl.id = s.plan_id
-        WHERE s.user_id = p.id AND s.status = 'active'
-        LIMIT 1
-      ),
-      'free'
-    ) AS plan_tier,
-    p.current_activity,
-    p.xp,
-    p.streak_days,
-    p.last_seen_at,
-    p.created_at
+    p.full_name AS name,
+    COALESCE(p.school, p.school_or_college, 'RoboVerse Academy') AS school,
+    COALESCE(p.city, 'India') AS city,
+    COALESCE(sub.tier::text, 'free') AS plan,
+    COALESCE(c.title, 'Arduino Foundations') AS current_course,
+    COALESCE(e.progress_percent, 0) AS progress_percent,
+    p.current_activity AS current_project,
+    p.last_seen_at AS last_active
   FROM public.profiles p
-  JOIN auth.users u ON u.id = p.id
+  LEFT JOIN LATERAL (
+    SELECT pl.tier 
+    FROM public.subscriptions s
+    JOIN public.plans pl ON pl.id = s.plan_id
+    WHERE s.user_id = p.id AND s.status = 'active'
+    ORDER BY s.created_at DESC
+    LIMIT 1
+  ) sub ON true
+  LEFT JOIN LATERAL (
+    SELECT en.course_id, en.progress_percent
+    FROM public.enrollments en
+    WHERE en.user_id = p.id
+    ORDER BY en.enrolled_at DESC
+    LIMIT 1
+  ) e ON true
+  LEFT JOIN public.courses c ON c.id = e.course_id
   WHERE (
-    search_query = '' OR
-    p.full_name ILIKE '%' || search_query || '%' OR
-    p.student_id ILIKE '%' || search_query || '%' OR
-    u.email ILIKE '%' || search_query || '%' OR
-    p.city ILIKE '%' || search_query || '%'
+    search = '' OR
+    p.full_name ILIKE '%' || search || '%' OR
+    p.student_id ILIKE '%' || search || '%' OR
+    p.city ILIKE '%' || search || '%'
+  )
+  AND (
+    filters = 'ALL' OR
+    (sub.tier::text ILIKE filters)
   )
   ORDER BY p.last_seen_at DESC
   LIMIT p_limit
   OFFSET p_offset;
 END;
 $$;
+
+-- Admin Set Role RPC
+CREATE OR REPLACE FUNCTION public.admin_set_role(
+  target_user_id uuid,
+  new_role user_role
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Access denied: Admin role required.';
+  END IF;
+
+  UPDATE public.profiles
+  SET role = new_role,
+      updated_at = now()
+  WHERE id = target_user_id;
+
+  INSERT INTO public.audit_log (actor_id, action, target_type, target_id, metadata)
+  VALUES (
+    auth.uid(),
+    'SET_ROLE',
+    'profiles',
+    target_user_id::text,
+    jsonb_build_object('new_role', new_role)
+  );
+END;
+$$;
+
+-- Admin Refund RPC
+CREATE OR REPLACE FUNCTION public.admin_refund(
+  order_id uuid,
+  reason text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_order record;
+  v_refund_id uuid;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Access denied: Admin role required.';
+  END IF;
+
+  SELECT * INTO v_order FROM public.orders WHERE id = admin_refund.order_id;
+  IF v_order IS NULL THEN
+    RAISE EXCEPTION 'Order not found.';
+  END IF;
+
+  UPDATE public.orders
+  SET status = 'refunded',
+      updated_at = now()
+  WHERE id = admin_refund.order_id;
+
+  UPDATE public.payments
+  SET status = 'refunded'
+  WHERE order_id = admin_refund.order_id;
+
+  INSERT INTO public.refunds (
+    order_id,
+    amount_inr,
+    reason,
+    status,
+    created_by
+  ) VALUES (
+    admin_refund.order_id,
+    v_order.total_inr,
+    admin_refund.reason,
+    'processed',
+    auth.uid()
+  ) RETURNING id INTO v_refund_id;
+
+  INSERT INTO public.audit_log (actor_id, action, target_type, target_id, metadata)
+  VALUES (
+    auth.uid(),
+    'ORDER_REFUND',
+    'orders',
+    admin_refund.order_id::text,
+    jsonb_build_object('refund_id', v_refund_id, 'amount_inr', v_order.total_inr, 'reason', admin_refund.reason)
+  );
+
+  RETURN jsonb_build_object('success', true, 'refund_id', v_refund_id);
+END;
+$$;
+
+-- Admin Revoke Certificate RPC
+CREATE OR REPLACE FUNCTION public.admin_revoke_certificate(
+  certificate_code text,
+  reason text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Access denied: Admin role required.';
+  END IF;
+
+  UPDATE public.certificates
+  SET is_revoked = true,
+      revoked_reason = admin_revoke_certificate.reason
+  WHERE public.certificates.certificate_code = upper(admin_revoke_certificate.certificate_code);
+
+  INSERT INTO public.audit_log (actor_id, action, target_type, target_id, metadata)
+  VALUES (
+    auth.uid(),
+    'REVOKE_CERTIFICATE',
+    'certificates',
+    upper(admin_revoke_certificate.certificate_code),
+    jsonb_build_object('reason', admin_revoke_certificate.reason)
+  );
+END;
+$$;
+
+-- Refresh Daily Stats Function & pg_cron Setup
+CREATE OR REPLACE FUNCTION public.refresh_daily_stats()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_today date;
+BEGIN
+  v_today := (now() AT TIME ZONE 'Asia/Kolkata')::date;
+
+  INSERT INTO public.daily_stats (
+    stat_date,
+    total_students,
+    active_students,
+    projects_created,
+    certificates_issued,
+    rituu_messages,
+    revenue_inr,
+    orders_count,
+    updated_at
+  ) VALUES (
+    v_today,
+    (SELECT COUNT(*) FROM public.profiles WHERE role = 'student'),
+    (SELECT COUNT(*) FROM public.profiles WHERE last_seen_at >= now() - interval '24 hours'),
+    (SELECT COUNT(*) FROM public.circuit_projects WHERE is_sample IS FALSE),
+    (SELECT COUNT(*) FROM public.certificates WHERE is_revoked IS FALSE),
+    (SELECT COALESCE(SUM(messages_count), 0) FROM public.rituu_usage WHERE day_ist = v_today),
+    (SELECT COALESCE(SUM(amount_inr), 0) FROM public.payments WHERE status = 'completed'),
+    (SELECT COUNT(*) FROM public.orders WHERE status IN ('paid', 'delivered')),
+    now()
+  )
+  ON CONFLICT (stat_date) DO UPDATE SET
+    total_students = EXCLUDED.total_students,
+    active_students = EXCLUDED.active_students,
+    projects_created = EXCLUDED.projects_created,
+    certificates_issued = EXCLUDED.certificates_issued,
+    rituu_messages = EXCLUDED.rituu_messages,
+    revenue_inr = EXCLUDED.revenue_inr,
+    orders_count = EXCLUDED.orders_count,
+    updated_at = now();
+END;
+$$;
+
 -- =====================================================================
--- RoboVerse Row Level Security (RLS) Complete Policies
--- Migration: 20261030000003_rls_policies.sql
+-- 17. Row Level Security (RLS) on EVERY Table
 -- =====================================================================
 
--- 1. Enable RLS on all 37 tables
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.consents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.parental_consents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.refunds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.webhook_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lesson_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quizzes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.quiz_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.certificates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.components ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.circuit_projects ENABLE ROW LEVEL SECURITY;
@@ -1525,6 +2023,7 @@ ALTER TABLE public.activity_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rituu_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_cost_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shop_inventory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shop_reports ENABLE ROW LEVEL SECURITY;
@@ -1533,492 +2032,115 @@ ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.kits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.kit_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.addresses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.carts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cart_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shipments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hackathons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hackathon_registrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_stats ENABLE ROW LEVEL SECURITY;
-
--- =====================================================================
--- 2. Profiles Policies
--- =====================================================================
-CREATE POLICY "Profiles are viewable by authenticated users"
-  ON public.profiles FOR SELECT
-  TO authenticated
-  USING (true);
-
-CREATE POLICY "Users can update their own profile details"
-  ON public.profiles FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id);
-
--- Prevent users from mutating student_id or role directly via trigger
-CREATE OR REPLACE FUNCTION public.prevent_profile_privilege_escalation()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  -- If role or student_id changed and caller is NOT a superuser/admin function
-  IF (NEW.role IS DISTINCT FROM OLD.role) AND NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Privilege escalation prevented: Role cannot be modified directly.';
-  END IF;
-
-  IF (NEW.student_id IS DISTINCT FROM OLD.student_id) THEN
-    RAISE EXCEPTION 'Student ID is permanent and immutable.';
-  END IF;
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_prevent_privilege_escalation ON public.profiles;
-CREATE TRIGGER trg_prevent_privilege_escalation
-  BEFORE UPDATE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.prevent_profile_privilege_escalation();
-
--- =====================================================================
--- 3. Plans, Coupons & Webhook Events
--- =====================================================================
-CREATE POLICY "Plans are publicly viewable"
-  ON public.plans FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage plans"
-  ON public.plans FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Active coupons are viewable"
-  ON public.coupons FOR SELECT
-  TO anon, authenticated
-  USING (is_active IS TRUE AND (valid_until IS NULL OR valid_until > now()));
-
-CREATE POLICY "Admins can manage coupons"
-  ON public.coupons FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
--- Webhook events: Service role only (no client access)
-CREATE POLICY "Service role full access on webhook_events"
-  ON public.webhook_events FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
-
--- =====================================================================
--- 4. Subscriptions & Payments
--- =====================================================================
-CREATE POLICY "Users can view their own subscriptions"
-  ON public.subscriptions FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Service role manages subscriptions"
-  ON public.subscriptions FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
-
-CREATE POLICY "Users can view their own payments"
-  ON public.payments FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Service role manages payments"
-  ON public.payments FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
-
--- =====================================================================
--- 5. Learning: Courses, Modules, Lessons, Quizzes, Certificates
--- =====================================================================
-CREATE POLICY "Courses are publicly readable"
-  ON public.courses FOR SELECT
-  TO anon, authenticated
-  USING (is_published IS TRUE OR public.is_admin());
-
-CREATE POLICY "Admins can manage courses"
-  ON public.courses FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Modules are publicly readable"
-  ON public.modules FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage modules"
-  ON public.modules FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Lessons are publicly readable"
-  ON public.lessons FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage lessons"
-  ON public.lessons FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Quizzes are publicly readable"
-  ON public.quizzes FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage quizzes"
-  ON public.quizzes FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Users can view their own enrollments"
-  ON public.enrollments FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Users can enroll themselves"
-  ON public.enrollments FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can view their own lesson progress"
-  ON public.lesson_progress FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Users can save their own lesson progress"
-  ON public.lesson_progress FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own lesson progress"
-  ON public.lesson_progress FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Certificates are viewable by owner or admin"
-  ON public.certificates FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Public can view valid certificates by code"
-  ON public.certificates FOR SELECT
-  TO anon, authenticated
-  USING (is_revoked IS FALSE);
-
-CREATE POLICY "Admins can manage certificates"
-  ON public.certificates FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
--- =====================================================================
--- 6. Components Library (100% Free to view & simulate)
--- =====================================================================
-CREATE POLICY "Components are publicly viewable"
-  ON public.components FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage components"
-  ON public.components FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
--- =====================================================================
--- 7. Labs: Circuit Projects & Versions
--- =====================================================================
-CREATE POLICY "Circuit projects are viewable by owner, public or if sample"
-  ON public.circuit_projects FOR SELECT
-  TO anon, authenticated
-  USING (
-    visibility = 'public' 
-    OR is_sample IS TRUE 
-    OR auth.uid() = user_id 
-    OR public.is_admin()
-  );
-
-CREATE POLICY "Authenticated users can create circuit projects"
-  ON public.circuit_projects FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own circuit projects"
-  ON public.circuit_projects FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin())
-  WITH CHECK (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Users can delete their own circuit projects"
-  ON public.circuit_projects FOR DELETE
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Circuit project versions viewable by project viewers"
-  ON public.circuit_project_versions FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.circuit_projects cp
-      WHERE cp.id = project_id 
-        AND (cp.user_id = auth.uid() OR cp.visibility = 'public' OR public.is_admin())
-    )
-  );
-
-CREATE POLICY "Project owners can insert project versions"
-  ON public.circuit_project_versions FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.circuit_projects cp
-      WHERE cp.id = project_id AND cp.user_id = auth.uid()
-    )
-  );
-
--- =====================================================================
--- 8. Robotic Design Lab: Templates, Designs, Arenas, Test Runs
--- =====================================================================
-CREATE POLICY "Robot templates are publicly viewable"
-  ON public.robot_templates FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage robot templates"
-  ON public.robot_templates FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Users can view their own robot designs"
-  ON public.robot_designs FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Users can manage their own robot designs"
-  ON public.robot_designs FOR ALL
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Arenas are publicly viewable"
-  ON public.arenas FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage arenas"
-  ON public.arenas FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Users can view their test runs"
-  ON public.test_runs FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Users can insert their test runs"
-  ON public.test_runs FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can log activity events"
-  ON public.activity_events FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users and admins can view activity events"
-  ON public.activity_events FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
--- =====================================================================
--- 9. Rituu AI: Sessions, Messages, and Usage
--- =====================================================================
-CREATE POLICY "Users can view their own chat sessions"
-  ON public.chat_sessions FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Users can manage their own chat sessions"
-  ON public.chat_sessions FOR ALL
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can view their own chat messages"
-  ON public.chat_messages FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Users can insert chat messages"
-  ON public.chat_messages FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their chat messages"
-  ON public.chat_messages FOR DELETE
-  TO authenticated
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can view their own rituu usage"
-  ON public.rituu_usage FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
--- =====================================================================
--- 10. Geo & Maker Shops Radar
--- =====================================================================
-CREATE POLICY "Verified shops are publicly viewable"
-  ON public.shops FOR SELECT
-  TO anon, authenticated
-  USING (verified_status = 'verified' OR auth.uid() = owner_id OR public.is_admin());
-
-CREATE POLICY "Shop owners and users can register shops"
-  ON public.shops FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = owner_id OR owner_id IS NULL);
-
-CREATE POLICY "Shop owners and admins can update shops"
-  ON public.shops FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = owner_id OR public.is_admin())
-  WITH CHECK (auth.uid() = owner_id OR public.is_admin());
-
-CREATE POLICY "Shop inventory is publicly viewable"
-  ON public.shop_inventory FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Shop owners and admins can manage inventory"
-  ON public.shop_inventory FOR ALL
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.shops s 
-      WHERE s.id = shop_id AND (s.owner_id = auth.uid() OR public.is_admin())
-    )
-  );
-
-CREATE POLICY "Users can submit shop reports"
-  ON public.shop_reports FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = reporter_id);
-
-CREATE POLICY "Users and admins can view shop reports"
-  ON public.shop_reports FOR SELECT
-  TO authenticated
-  USING (auth.uid() = reporter_id OR public.is_admin());
-
-CREATE POLICY "Admins can update shop reports"
-  ON public.shop_reports FOR UPDATE
-  TO authenticated
-  USING (public.is_admin());
-
--- =====================================================================
--- 11. TechSavyyy Store: Products, Categories, Cart, Orders
--- =====================================================================
-CREATE POLICY "Product categories are publicly viewable"
-  ON public.product_categories FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage product categories"
-  ON public.product_categories FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Products are publicly viewable"
-  ON public.products FOR SELECT
-  TO anon, authenticated
-  USING (is_active IS TRUE OR public.is_admin());
-
-CREATE POLICY "Admins can manage products"
-  ON public.products FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Kits are publicly viewable"
-  ON public.kits FOR SELECT
-  TO anon, authenticated
-  USING (is_active IS TRUE OR public.is_admin());
-
-CREATE POLICY "Admins can manage kits"
-  ON public.kits FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Kit items are publicly viewable"
-  ON public.kit_items FOR SELECT
-  TO anon, authenticated
-  USING (true);
-
-CREATE POLICY "Admins can manage kit items"
-  ON public.kit_items FOR ALL
-  TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
-CREATE POLICY "Users can manage their addresses"
-  ON public.addresses FOR ALL
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can manage their cart items"
-  ON public.cart_items FOR ALL
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can view their orders"
-  ON public.orders FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id OR public.is_admin());
-
-CREATE POLICY "Admins can update orders"
-  ON public.orders FOR UPDATE
-  TO authenticated
-  USING (public.is_admin());
-
-CREATE POLICY "Users can view their order items"
-  ON public.order_items FOR SELECT
-  TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.orders o
-      WHERE o.id = order_id AND (o.user_id = auth.uid() OR public.is_admin())
-    )
-  );
-
--- =====================================================================
--- 12. Audit Log & Daily Stats
--- =====================================================================
-CREATE POLICY "Admins can view audit logs"
-  ON public.audit_log FOR SELECT
-  TO authenticated
-  USING (public.is_admin());
-
+ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feature_flags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
+
+-- Granular RLS Policies for New Tables
+DROP POLICY IF EXISTS "Users can read own consents" ON public.consents;
+CREATE POLICY "Users can read own consents"
+  ON public.consents FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own consents" ON public.consents;
+CREATE POLICY "Users can insert own consents"
+  ON public.consents FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can read own parental consents" ON public.parental_consents;
+CREATE POLICY "Users can read own parental consents"
+  ON public.parental_consents FOR SELECT TO authenticated USING (auth.uid() = minor_user_id);
+
+DROP POLICY IF EXISTS "Users can read own carts" ON public.carts;
+CREATE POLICY "Users can read own carts"
+  ON public.carts FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own carts" ON public.carts;
+CREATE POLICY "Users can insert own carts"
+  ON public.carts FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can read own refunds" ON public.refunds;
+CREATE POLICY "Users can read own refunds"
+  ON public.refunds FOR SELECT TO authenticated 
+  USING (EXISTS (SELECT 1 FROM public.orders o WHERE o.id = refunds.order_id AND o.user_id = auth.uid()) OR public.is_admin());
+
+DROP POLICY IF EXISTS "Users can read own invoices" ON public.invoices;
+CREATE POLICY "Users can read own invoices"
+  ON public.invoices FOR SELECT TO authenticated USING (auth.uid() = user_id OR public.is_admin());
+
+DROP POLICY IF EXISTS "Users can read own shipments" ON public.shipments;
+CREATE POLICY "Users can read own shipments"
+  ON public.shipments FOR SELECT TO authenticated 
+  USING (EXISTS (SELECT 1 FROM public.orders o WHERE o.id = shipments.order_id AND o.user_id = auth.uid()) OR public.is_admin());
+
+DROP POLICY IF EXISTS "Users can read own order events" ON public.order_events;
+CREATE POLICY "Users can read own order events"
+  ON public.order_events FOR SELECT TO authenticated 
+  USING (EXISTS (SELECT 1 FROM public.orders o WHERE o.id = order_events.order_id AND o.user_id = auth.uid()) OR public.is_admin());
+
+DROP POLICY IF EXISTS "Users can read own quiz attempts" ON public.quiz_attempts;
+CREATE POLICY "Users can read own quiz attempts"
+  ON public.quiz_attempts FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own quiz attempts" ON public.quiz_attempts;
+CREATE POLICY "Users can insert own quiz attempts"
+  ON public.quiz_attempts FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Hackathons are publicly viewable" ON public.hackathons;
+CREATE POLICY "Hackathons are publicly viewable"
+  ON public.hackathons FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Hackathon registrations viewable" ON public.hackathon_registrations;
+CREATE POLICY "Hackathon registrations viewable"
+  ON public.hackathon_registrations FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Users can register for hackathons" ON public.hackathon_registrations;
+CREATE POLICY "Users can register for hackathons"
+  ON public.hackathon_registrations FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
+CREATE POLICY "Users can view own notifications"
+  ON public.notifications FOR SELECT TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
+CREATE POLICY "Users can update own notifications"
+  ON public.notifications FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Public can read app config" ON public.app_config;
+CREATE POLICY "Public can read app config"
+  ON public.app_config FOR SELECT TO anon, authenticated USING (is_public IS TRUE);
+
+DROP POLICY IF EXISTS "Admins manage app config" ON public.app_config;
+CREATE POLICY "Admins manage app config"
+  ON public.app_config FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Public can read feature flags" ON public.feature_flags;
+CREATE POLICY "Public can read feature flags"
+  ON public.feature_flags FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Admins manage feature flags" ON public.feature_flags;
+CREATE POLICY "Admins manage feature flags"
+  ON public.feature_flags FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can view audit log" ON public.audit_log;
+CREATE POLICY "Admins can view audit log"
+  ON public.audit_log FOR SELECT TO authenticated USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can view daily stats" ON public.daily_stats;
 CREATE POLICY "Admins can view daily stats"
-  ON public.daily_stats FOR SELECT
-  TO authenticated
-  USING (public.is_admin());
+  ON public.daily_stats FOR SELECT TO authenticated USING (public.is_admin());
+
+
+
 -- =====================================================================
 -- RoboVerse Storage Buckets & Policies
 -- Migration: 20261030000004_storage_buckets.sql
@@ -2131,6 +2253,9 @@ CREATE POLICY "Certificates written by service role or admin"
     bucket_id = 'certificates' 
     AND public.is_admin()
   );
+
+
+
 -- =====================================================================
 -- RoboVerse Master Production Seed Data
 -- Database: seed.sql
@@ -3189,72 +3314,23 @@ VALUES
 )
 ON CONFLICT (id) DO NOTHING;
 
--- 10. Sample Verified Maker Shops (PostGIS Coordinates Across Major Indian Tech Hubs)
-INSERT INTO public.shops (name, phone, address, city, state, pincode, location, opening_hours, verified_status, rating, categories)
+-- 10. Platform Configuration (app_config) & Feature Flags
+INSERT INTO public.app_config (key, value, is_public, description)
 VALUES
-(
-  'SP Road Robotics & Electronics Hub',
-  '+91 80 2223 8899',
-  '#42, Sadar Patrappa Road, Near City Market',
-  'Bengaluru',
-  'Karnataka',
-  '560002',
-  ST_SetSRID(ST_MakePoint(77.5833, 12.9644), 4326)::geography,
-  '10:00 AM - 8:30 PM (Mon-Sat)',
-  'verified',
-  4.9,
-  ARRAY['Arduino', 'Sensors', 'BLDC Motors', 'Chassis', 'LiPo Batteries']
-),
-(
-  'Lajpat Rai Market Electronics Emporium',
-  '+91 11 2386 1122',
-  'Shop 118, Old Lajpat Rai Market, Chandni Chowk',
-  'Delhi',
-  'Delhi',
-  '110006',
-  ST_SetSRID(ST_MakePoint(77.2355, 28.6562), 4326)::geography,
-  '10:30 AM - 8:00 PM (Mon-Sat)',
-  'verified',
-  4.8,
-  ARRAY['Microcontrollers', 'Soldering Kits', 'Sensors', 'Relays', 'Displays']
-),
-(
-  'Lamington Road Tech Components Center',
-  '+91 22 2387 4455',
-  'Dr. Dadasaheb Bhadkamkar Marg, Grant Road East',
-  'Mumbai',
-  'Maharashtra',
-  '400007',
-  ST_SetSRID(ST_MakePoint(72.8164, 18.9616), 4326)::geography,
-  '10:00 AM - 8:00 PM (Mon-Sat)',
-  'verified',
-  4.7,
-  ARRAY['Robotics Kits', 'Raspberry Pi', 'Motors', 'Tools', 'ESP32']
-),
-(
-  'Gujarati Galli Maker Spares Hub',
-  '+91 40 2475 9933',
-  'Gujarati Galli, Bank Street, Koti',
-  'Hyderabad',
-  'Telangana',
-  '500095',
-  ST_SetSRID(ST_MakePoint(78.4867, 17.3850), 4326)::geography,
-  '10:00 AM - 8:00 PM (Mon-Sat)',
-  'verified',
-  4.6,
-  ARRAY['Sensors', 'Breadboards', 'Batteries', 'Arduino', 'Wires']
-),
-(
-  'Budhwar Peth Robotics & Electronic Store',
-  '+91 20 2445 6677',
-  'Appa Balwant Chowk, Budhwar Peth',
-  'Pune',
-  'Maharashtra',
-  '411002',
-  ST_SetSRID(ST_MakePoint(73.8562, 18.5167), 4326)::geography,
-  '10:00 AM - 8:00 PM (Mon-Sat)',
-  'verified',
-  4.7,
-  ARRAY['Servos', 'Microcontrollers', 'Sensors', 'Drone Parts', 'Tools']
-)
-ON CONFLICT DO NOTHING;
+  ('legal_name', 'RoboVerse Technologies Pvt Ltd', true, 'Registered corporate legal entity name'),
+  ('gstin', '07AABCR9920A1Z2', true, 'Official 18% GST Identification Number in India'),
+  ('address', 'Tech Tower 4, Cyber City, Gurugram, Haryana - 122002', true, 'Corporate headquarters and fulfillment warehouse'),
+  ('support_email', 'support@roboverse.education', true, 'Official customer support & pedagogical inquiries desk')
+ON CONFLICT (key) DO UPDATE SET
+  value = EXCLUDED.value,
+  description = EXCLUDED.description;
+
+INSERT INTO public.feature_flags (key, enabled, description, rollout_pct)
+VALUES
+  ('rituu_ai_chat', true, 'AI robotics mentor streaming chat and multimodal image inspection', 100),
+  ('upi_qr_payments', true, 'Dynamic single-use UPI QR code generation via Razorpay API', 100),
+  ('hardware_store', true, 'TechSavyyy verified hardware component store and checkout', 100),
+  ('maker_radar', true, 'PostGIS spatial and Google Places Maker Radar store finder', 100)
+ON CONFLICT (key) DO UPDATE SET
+  enabled = EXCLUDED.enabled;
+

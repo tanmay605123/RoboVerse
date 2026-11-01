@@ -25,15 +25,16 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('returnUrl') || searchParams.get('redirect');
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const initAuth = useAuthStore((s) => s.initAuth);
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
 
   const [activeTab, setActiveTab] = useState<'password' | 'otp' | 'forgot'>('password');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Form states
-  const [identifier, setIdentifier] = useState('aarav.sharma@example.com');
-  const [password, setPassword] = useState('RoboSpark#2026');
-  const [mobileNumber, setMobileNumber] = useState('+919876543210');
+  // Form states - empty in production, prefilled only in demo mode
+  const [identifier, setIdentifier] = useState(isDemo ? 'aarav.sharma@example.com' : '');
+  const [password, setPassword] = useState(isDemo ? 'RoboSpark#2026' : '');
+  const [mobileNumber, setMobileNumber] = useState(isDemo ? '+919876543210' : '+91');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
 
@@ -103,21 +104,20 @@ function LoginForm() {
       });
 
       if (authError) {
-        // Demo auth is opt-in. A failed Supabase login must never be presented
-        // as a real authenticated session in production.
-        const isDemoIdentifier =
-          identifier === 'aarav.sharma@example.com' ||
-          identifier === 'admin@roboverse.io' ||
-          identifier.includes('demo');
-
-        if (demoAuthEnabled && isDemoIdentifier) {
+        // Fallback ONLY in DEMO_MODE for local testing without internet
+        if (
+          (isDemo || demoAuthEnabled) &&
+          (identifier === 'aarav.sharma@example.com' ||
+            identifier === 'admin@roboverse.io' ||
+            identifier.includes('demo'))
+        ) {
           const isDemoAdmin = identifier.includes('admin');
           const mockRole: DbUserRole = isDemoAdmin ? 'admin' : 'student';
           const mockId = isDemoAdmin ? '00000000-0000-0000-0000-000000000001' : '00000000-0000-0000-0000-000000000002';
           const mockStudentId = isDemoAdmin ? 'RV-ADMIN-000001' : 'RV-2026-001001';
           const mockName = isDemoAdmin ? 'Master Admin' : 'Aarav Sharma';
 
-          setAuth({
+          useAuthStore.getState().setAuth({
             user: {
               id: mockId,
               email: identifier,
@@ -163,59 +163,16 @@ function LoginForm() {
       }
 
       if (data?.user) {
-        // Fetch user profile from database
-        const authenticatedUser = data.user;
-        const { data: profile, error: profileError } = await (supabase.from('profiles') as any)
-          .select('*')
-          .eq('id', authenticatedUser.id)
-          .single();
+        // Initialize full auth store with real profile and entitlements from database
+        await initAuth();
 
-        if (profileError) {
-          throw new Error(
-            'Authentication succeeded, but the user profile could not be loaded. ' +
-              'Apply the Supabase profile trigger migration and try again.'
-          );
-        }
+        const { data: profile } = await (supabase.from('profiles') as any)
+          .select('role, full_name')
+          .eq('id', data.user.id)
+          .maybeSingle();
 
         const role = (profile?.role || data.user.user_metadata?.role || 'student') as DbUserRole;
-        const studentId = profile?.student_id || 'RV-2026-001001';
         const fullName = profile?.full_name || data.user.email?.split('@')[0] || 'RoboVerse Explorer';
-
-        setAuth({
-          user: {
-            id: authenticatedUser.id,
-            email: authenticatedUser.email || '',
-            role,
-            studentId,
-            fullName,
-          },
-          profile: {
-            studentId,
-            fullName,
-            schoolOrCollegeName: profile?.school_or_college || 'Indian Institute of Robotics',
-            classOrYear: profile?.class_level || 'Grade 10',
-            city: profile?.city || 'Bengaluru',
-            state: profile?.state || 'Karnataka',
-            interests: profile?.interests || ['arduino', 'circuits'],
-            avatarUrl: profile?.avatar_url || undefined,
-            level: profile?.level || 'Rookie',
-            xp: profile?.xp ?? 50,
-            streakDays: profile?.streak_days ?? 1,
-            lastSeenAt: profile?.last_seen_at || new Date().toISOString(),
-            currentActivity: profile?.current_activity || 'Exploring RoboVerse Labs',
-          },
-          studentIdCard: {
-            studentId,
-            fullName,
-            schoolOrCollege: profile?.school_or_college || 'Indian Institute of Robotics',
-            planName: 'Free Explorer',
-            level: profile?.level || 'Rookie',
-            xp: profile?.xp ?? 50,
-            verificationUrl: `https://roboverse.dev/verify/${studentId}`,
-            validUntil: '31 DEC 2026',
-          },
-          planTier: 'free',
-        });
 
         setSuccessMessage('Welcome back, ' + fullName);
         navigateByRole(role);
@@ -239,13 +196,13 @@ function LoginForm() {
       });
 
       if (otpError) {
-        if (demoAuthEnabled) {
+        if (isDemo || demoAuthEnabled) {
           setOtpSent(true);
           setOtp('123456');
           setSuccessMessage('OTP sent to ' + mobileNumber + ' (Demo OTP: 123456)');
-        } else {
-          setError(otpError.message || 'Failed to send OTP.');
+          return;
         }
+        setError(otpError.message || 'Failed to send OTP.');
         return;
       }
 
@@ -266,6 +223,14 @@ function LoginForm() {
 
     try {
       if (otp.length === 6) {
+        if ((isDemo || demoAuthEnabled) && otp === '123456') {
+          // Demo fallback
+          await initAuth();
+          setSuccessMessage('Phone verified successfully!');
+          navigateByRole('student');
+          return;
+        }
+
         const { data, error: verifyError } = await supabase.auth.verifyOtp({
           phone: mobileNumber,
           token: otp,
@@ -273,115 +238,22 @@ function LoginForm() {
         });
 
         if (verifyError) {
-          if (!(demoAuthEnabled && otp === '123456')) {
-            throw verifyError;
-          }
-        }
-
-        if (!data?.user && !(demoAuthEnabled && otp === '123456')) {
-          throw new Error('Supabase did not return a verified user. Please try again.');
-        }
-
-        if (!data?.user && demoAuthEnabled && otp === '123456') {
-          // Explicitly opt-in demo mode only; this never runs in production
-          // unless NEXT_PUBLIC_ENABLE_DEMO_AUTH=true is set.
-          const studentId = 'RV-2026-001001';
-          const fullName = 'Mobile Student';
-
-          setAuth({
-            user: {
-              id: '00000000-0000-0000-0000-000000000002',
-              email: `${mobileNumber}@phone.roboverse.internal`,
-              mobileNumber,
-              role: 'student',
-              studentId,
-              fullName,
-            },
-            profile: {
-              studentId,
-              fullName,
-              schoolOrCollegeName: 'Robotics Academy',
-              classOrYear: 'Class 10',
-              city: 'Bengaluru',
-              state: 'Karnataka',
-              interests: ['arduino', 'iot'],
-              level: 'Rookie',
-              xp: 50,
-              streakDays: 1,
-              lastSeenAt: new Date().toISOString(),
-              currentActivity: 'Exploring RoboVerse Labs',
-            },
-            studentIdCard: {
-              studentId,
-              fullName,
-              schoolOrCollege: 'Robotics Academy',
-              planName: 'Free Explorer',
-              level: 'Rookie',
-              xp: 50,
-              verificationUrl: `https://roboverse.dev/verify/${studentId}`,
-              validUntil: '31 DEC 2026',
-            },
-            planTier: 'free',
-          });
-
-          setSuccessMessage('Demo phone verified successfully!');
-          navigateByRole('student');
+          setError(verifyError.message || 'Invalid or expired OTP code.');
+          setLoading(false);
           return;
         }
 
-        if (!data?.user) {
-          throw new Error('Supabase did not return a verified user. Please try again.');
+        if (data?.user) {
+          await initAuth();
+          const { data: profile } = await (supabase.from('profiles') as any)
+            .select('role')
+            .eq('id', data.user.id)
+            .maybeSingle();
+          const role = (profile?.role || 'student') as DbUserRole;
+          setSuccessMessage('Phone verified successfully!');
+          navigateByRole(role);
+          return;
         }
-        const verifiedUser = data.user;
-        const { data: profile, error: profileError } = await (supabase.from('profiles') as any)
-          .select('*')
-          .eq('id', verifiedUser.id)
-          .single();
-        if (profileError) {
-          throw new Error('Authentication succeeded, but the user profile could not be loaded.');
-        }
-
-        const studentId = profile.student_id;
-        const fullName = profile.full_name;
-        setAuth({
-          user: {
-            id: verifiedUser.id,
-            email: verifiedUser.email || '',
-            mobileNumber,
-            role: profile.role || 'student',
-            studentId,
-            fullName,
-          },
-          profile: {
-            studentId,
-            fullName,
-            schoolOrCollegeName: profile.school_or_college || 'Robotics Academy',
-            classOrYear: profile.class_level || 'Class 10',
-            city: profile.city || 'Bengaluru',
-            state: profile.state || 'Karnataka',
-            interests: profile.interests || ['arduino', 'iot'],
-            level: profile.level || 'Rookie',
-            xp: profile.xp ?? 50,
-            streakDays: profile.streak_days ?? 1,
-            lastSeenAt: profile.last_seen_at || new Date().toISOString(),
-            currentActivity: profile.current_activity || 'Exploring RoboVerse Labs',
-          },
-          studentIdCard: {
-            studentId,
-            fullName,
-            schoolOrCollege: profile.school_or_college || 'Robotics Academy',
-            planName: 'Free Explorer',
-            level: profile.level || 'Rookie',
-            xp: profile.xp ?? 50,
-            verificationUrl: `https://roboverse.dev/verify/${studentId}`,
-            validUntil: '31 DEC 2026',
-          },
-          planTier: 'free',
-        });
-
-        setSuccessMessage('Phone verified successfully!');
-        navigateByRole(profile.role || 'student');
-        return;
       }
 
       setError('Please enter a valid 6-digit code.');

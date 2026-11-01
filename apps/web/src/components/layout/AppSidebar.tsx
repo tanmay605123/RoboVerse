@@ -25,7 +25,9 @@ import {
   ChevronRight,
   ChevronLeft,
   X,
+  LogIn,
 } from 'lucide-react';
+import { useAuthStore } from '../../store/useAuthStore';
 
 interface AppSidebarProps {
   isCollapsed: boolean;
@@ -55,6 +57,7 @@ export function AppSidebar({
   onCloseMobile,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const { user, profile, entitlements, projectCount, isAuthenticated } = useAuthStore();
 
   const sections: NavSection[] = [
     {
@@ -64,7 +67,7 @@ export function AppSidebar({
         { id: 'classes', label: 'Classes', icon: GraduationCap, href: '/classes' },
         { id: 'circuit-lab', label: 'Circuit Lab', icon: Cpu, href: '/workbench', badge: '3D' },
         { id: 'robot-lab', label: 'Robot Design Lab', icon: Bot, href: '/robot-lab', badge: 'Sim' },
-        { id: 'projects', label: 'Projects', icon: FolderGit2, href: '/dashboard?tab=projects', badge: '12' },
+        { id: 'projects', label: 'Projects', icon: FolderGit2, href: '/dashboard?tab=projects', badge: projectCount > 0 ? String(projectCount) : undefined },
         { id: 'collections', label: 'Collections', icon: Bookmark, href: '/dashboard?tab=collections' },
       ],
     },
@@ -90,7 +93,7 @@ export function AppSidebar({
     {
       sectionLabel: 'SYSTEM',
       items: [
-        { id: 'settings', label: 'Settings', icon: Settings, href: '/admin' },
+        { id: 'settings', label: 'Settings', icon: Settings, href: '/settings' },
         { id: 'documentation', label: 'Documentation', icon: FileText, href: '/docs' },
         { id: 'help', label: 'Help Center', icon: HelpCircle, href: '/help' },
       ],
@@ -189,18 +192,37 @@ export function AppSidebar({
       {/* Bottom User Quick Card */}
       {!isCollapsed && (
         <div className="p-3 m-3 rounded-2xl bg-[#0E2A1F]/60 border border-[rgba(57,255,106,0.15)] backdrop-blur-md">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#39FF6A] to-[#7FE7D6] flex items-center justify-center text-[#07110D] font-black text-xs shadow-[0_0_10px_rgba(57,255,106,0.4)]">
-              AS
+          {isAuthenticated ? (
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#39FF6A] to-[#7FE7D6] flex items-center justify-center text-[#07110D] font-black text-xs shadow-[0_0_10px_rgba(57,255,106,0.4)]">
+                {(profile?.fullName || user?.email || 'RV')
+                  .split(' ')
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-[#EAF7EF] truncate">
+                  {profile?.fullName || user?.email?.split('@')[0] || 'RoboVerse Explorer'}
+                </p>
+                <p className="text-[10px] text-[#8FA99B] font-mono truncate">
+                  {profile?.studentId || 'RV-XXXX-XXXXXX'}
+                </p>
+              </div>
+              <span className="text-[9.5px] font-mono font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-[rgba(57,255,106,0.15)] border border-[rgba(57,255,106,0.3)] text-[#39FF6A]">
+                {entitlements?.badge || 'FREE'}
+              </span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-[#EAF7EF] truncate">Aarav Sharma</p>
-              <p className="text-[10px] text-[#8FA99B] font-mono truncate">RV-2026-000101</p>
-            </div>
-            <span className="text-[9.5px] font-mono font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-[rgba(57,255,106,0.15)] border border-[rgba(57,255,106,0.3)] text-[#39FF6A]">
-              PRO
-            </span>
-          </div>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center justify-center gap-2 py-2 rounded-xl bg-[rgba(57,255,106,0.1)] hover:bg-[rgba(57,255,106,0.2)] border border-[rgba(57,255,106,0.3)] text-xs font-bold text-[#39FF6A] transition-colors"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
+          )}
         </div>
       )}
     </div>

@@ -32,7 +32,7 @@ export function AppTopBar({
   onOpenMobileSidebar,
 }: AppTopBarProps) {
   const router = useRouter();
-  const { user, profile, studentIdCard, planTier, logout } = useAuthStore();
+  const { user, profile, studentIdCard, planTier, entitlements, isAuthenticated, logout } = useAuthStore();
 
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [currentLang, setCurrentLang] = useState<'EN' | 'HI'>('EN');
@@ -77,9 +77,9 @@ export function AppTopBar({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const studentName = profile?.fullName || 'Aarav Sharma';
-  const studentId = studentIdCard?.studentId || 'RV-2026-000101';
-  const currentPlan = planTier || 'PRO';
+  const studentName = profile?.fullName || user?.email?.split('@')[0] || (isAuthenticated ? 'RoboVerse Explorer' : 'Guest Explorer');
+  const studentId = studentIdCard?.studentId || profile?.studentId || (isAuthenticated ? 'RV-PENDING' : 'GUEST');
+  const currentPlan = entitlements?.badge || (planTier ? String(planTier).toUpperCase() : 'FREE');
 
   return (
     <>
@@ -227,69 +227,88 @@ export function AppTopBar({
             )}
           </div>
 
-          {/* User Identity Pill (Avatar + Name + Student ID) */}
-          <div className="relative" ref={userMenuRef}>
-            <button
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full bg-[#0E2A1F]/80 border border-[rgba(57,255,106,0.15)] hover:border-[#39FF6A] transition-colors"
-            >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#39FF6A] to-[#7FE7D6] flex items-center justify-center text-[#07110D] font-black text-xs shadow-[0_0_8px_rgba(57,255,106,0.3)]">
-                {studentName.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="hidden lg:flex flex-col text-left">
-                <span className="text-xs font-bold text-[#EAF7EF] leading-tight">
-                  {studentName}
-                </span>
-                <span className="text-[10px] font-mono text-[#8FA99B] leading-none">
-                  {studentId}
-                </span>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-[#8FA99B]" />
-            </button>
+          {/* User Identity Pill (Avatar + Name + Student ID) or Sign In button */}
+          {isAuthenticated ? (
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full bg-[#0E2A1F]/80 border border-[rgba(57,255,106,0.15)] hover:border-[#39FF6A] transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#39FF6A] to-[#7FE7D6] flex items-center justify-center text-[#07110D] font-black text-xs shadow-[0_0_8px_rgba(57,255,106,0.3)]">
+                  {studentName.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="hidden lg:flex flex-col text-left">
+                  <span className="text-xs font-bold text-[#EAF7EF] leading-tight">
+                    {studentName}
+                  </span>
+                  <span className="text-[10px] font-mono text-[#8FA99B] leading-none">
+                    {studentId}
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-[#8FA99B]" />
+              </button>
 
-            {/* User Menu Dropdown */}
-            {showUserMenu && (
-              <div className="absolute right-0 mt-3 w-56 bg-[#0A1F17]/95 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-[rgba(57,255,106,0.25)] py-2 z-50 backdrop-blur-2xl animate-slide-up">
-                <div className="px-4 py-2 border-b border-[rgba(57,255,106,0.12)]">
-                  <p className="text-xs font-bold text-[#EAF7EF]">{studentName}</p>
-                  <p className="text-[11px] text-[#8FA99B] font-mono">{studentId}</p>
-                  <div className="mt-1.5">
-                    <span className="text-[9.5px] font-mono font-extrabold uppercase px-2 py-0.5 rounded-full bg-[rgba(57,255,106,0.15)] border border-[rgba(57,255,106,0.3)] text-[#39FF6A]">
-                      {currentPlan} Member
-                    </span>
+              {/* User Menu Dropdown */}
+              {showUserMenu && (
+                <div className="absolute right-0 mt-3 w-56 bg-[#0A1F17]/95 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-[rgba(57,255,106,0.25)] py-2 z-50 backdrop-blur-2xl animate-slide-up">
+                  <div className="px-4 py-2 border-b border-[rgba(57,255,106,0.12)]">
+                    <p className="text-xs font-bold text-[#EAF7EF]">{studentName}</p>
+                    <p className="text-[11px] text-[#8FA99B] font-mono">{studentId}</p>
+                    <div className="mt-1.5">
+                      <span className="text-[9.5px] font-mono font-extrabold uppercase px-2 py-0.5 rounded-full bg-[rgba(57,255,106,0.15)] border border-[rgba(57,255,106,0.3)] text-[#39FF6A]">
+                        {currentPlan} Member
+                      </span>
+                    </div>
+                  </div>
+                  <div className="py-1">
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-xs text-[#CBD8D0] hover:text-[#39FF6A] hover:bg-white/5"
+                    >
+                      <User className="w-3.5 h-3.5 text-[#8FA99B]" /> Profile &amp; Passport
+                    </Link>
+                    <Link
+                      href="/settings"
+                      onClick={() => setShowUserMenu(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-xs text-[#CBD8D0] hover:text-[#39FF6A] hover:bg-white/5"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-[#8FA99B]" /> Settings &amp; Security
+                    </Link>
+                    {user?.role === 'admin' && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-xs text-[#39FF6A] hover:bg-white/5 font-bold"
+                      >
+                        <Sliders className="w-3.5 h-3.5 text-[#39FF6A]" /> Control Room Operations
+                      </Link>
+                    )}
+                  </div>
+                  <div className="pt-1 border-t border-[rgba(57,255,106,0.12)]">
+                    <button
+                      onClick={() => {
+                        logout();
+                        setShowUserMenu(false);
+                        router.push('/');
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-[#FF4D4D] hover:bg-red-950/20 text-left font-medium"
+                    >
+                      <LogOut className="w-3.5 h-3.5" /> Sign Out
+                    </button>
                   </div>
                 </div>
-                <div className="py-1">
-                  <Link
-                    href="/dashboard"
-                    onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 text-xs text-[#CBD8D0] hover:text-[#39FF6A] hover:bg-white/5"
-                  >
-                    <User className="w-3.5 h-3.5 text-[#8FA99B]" /> Profile & Passport
-                  </Link>
-                  <Link
-                    href="/admin"
-                    onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 text-xs text-[#CBD8D0] hover:text-[#39FF6A] hover:bg-white/5"
-                  >
-                    <Sliders className="w-3.5 h-3.5 text-[#8FA99B]" /> Control Room Operations
-                  </Link>
-                </div>
-                <div className="pt-1 border-t border-[rgba(57,255,106,0.12)]">
-                  <button
-                    onClick={() => {
-                      logout();
-                      setShowUserMenu(false);
-                      router.push('/');
-                    }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-[#FF4D4D] hover:bg-red-950/20 text-left font-medium"
-                  >
-                    <LogOut className="w-3.5 h-3.5" /> Sign Out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[rgba(57,255,106,0.1)] hover:bg-[rgba(57,255,106,0.2)] border border-[rgba(57,255,106,0.3)] text-xs font-bold text-[#39FF6A] transition-colors"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
+          )}
 
           {/* Prominent Neon-Green "+ Create" Button with Dropdown */}
           <div className="relative" ref={createMenuRef}>
