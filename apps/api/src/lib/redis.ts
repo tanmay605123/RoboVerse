@@ -106,6 +106,12 @@ class RedisService {
   public clearAll(): void {
     this.inMemoryStore.clear();
   }
+
+  public getHealthStatus(): { status: 'connected' | 'fallback' | 'not_configured' } {
+    if (this.isRedisAvailable) return { status: 'connected' };
+    if (ENV.REDIS_URL) return { status: 'fallback' };
+    return { status: 'not_configured' };
+  }
 }
 
 export const redis = new RedisService();

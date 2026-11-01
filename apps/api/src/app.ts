@@ -9,6 +9,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { apiRateLimiter } from './middleware/rateLimiter';
 import { ENV } from './config/env';
 import { getPostgresHealthStatus } from './lib/postgres';
+import { redis } from './lib/redis';
 
 export function createApp(): Express {
   const app = express();
@@ -45,8 +46,9 @@ export function createApp(): Express {
   // Health check endpoint
   app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
     const postgresStatus = await getPostgresHealthStatus();
+    const databaseReady = postgresStatus.status === 'connected';
     res.json({
-      status: 'healthy',
+      status: databaseReady ? 'healthy' : 'degraded',
       app: 'RoboVerse Core API',
       version: '1.0.0',
       timestamp: new Date().toISOString(),
@@ -57,8 +59,7 @@ export function createApp(): Express {
         ...postgresStatus,
       },
       redis: {
-        status: 'active',
-        url: ENV.REDIS_URL,
+        ...redis.getHealthStatus(),
       },
     });
   });

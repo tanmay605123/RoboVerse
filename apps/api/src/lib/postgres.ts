@@ -3,6 +3,19 @@ import { ENV } from '../config/env';
 
 let isConnected = false;
 
+/** Keep database diagnostics useful without ever echoing connection credentials. */
+export function sanitizePostgresError(error: unknown): { code?: string; message: string } {
+  const value = error as { code?: unknown; message?: unknown } | null;
+  const code = typeof value?.code === 'string' ? value.code : undefined;
+  const rawMessage = typeof value?.message === 'string' ? value.message : String(error);
+  const message = rawMessage
+    .replace(/postgres(?:ql)?:\/\/[^\s'"\)]+/gi, 'postgresql://[redacted]')
+    .replace(/(password|passwd|pwd)\s*[:=]\s*[^\s,;]+/gi, '$1=[redacted]')
+    .replace(/DATABASE_URL\s*[:=]\s*[^\s,;]+/gi, 'DATABASE_URL=[redacted]');
+
+  return { ...(code ? { code } : {}), message };
+}
+
 export async function connectPostgres(): Promise<void> {
   if (!ENV.DATABASE_URL) {
     console.warn('⚠️ DATABASE_URL is not configured. Set it to the Supabase PostgreSQL connection string.');
@@ -17,7 +30,10 @@ export async function connectPostgres(): Promise<void> {
     console.log('🐘 Connected to Supabase PostgreSQL');
   } catch (error: any) {
     isConnected = false;
-    console.warn(`⚠️ PostgreSQL connection unavailable: ${error.message}`);
+    const diagnostic = sanitizePostgresError(error);
+    console.warn(
+      `⚠️ PostgreSQL connection unavailable${diagnostic.code ? ` [${diagnostic.code}]` : ''}: ${diagnostic.message}`
+    );
   }
 }
 
@@ -40,6 +56,10 @@ export async function getPostgresHealthStatus() {
     return { status: 'connected', provider: 'Supabase PostgreSQL' };
   } catch (error: any) {
     isConnected = false;
-    return { status: 'disconnected', provider: 'Supabase PostgreSQL', message: error.message };
+    return {
+      status: 'disconnected',
+      provider: 'Supabase PostgreSQL',
+      ...sanitizePostgresError(error),
+    };
   }
 }
