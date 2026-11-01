@@ -757,9 +757,11 @@ BEGIN
   v_student_id := public.generate_student_id();
   
   v_full_name := COALESCE(
-    NEW.raw_user_meta_data->>'full_name',
-    NEW.raw_user_meta_data->>'name',
-    split_part(NEW.email, '@', 1)
+    NULLIF(NEW.raw_user_meta_data->>'full_name', ''),
+    NULLIF(NEW.raw_user_meta_data->>'name', ''),
+    NULLIF(split_part(COALESCE(NEW.email, ''), '@', 1), ''),
+    NULLIF(NEW.phone, ''),
+    'RoboVerse Explorer'
   );
 
   IF NEW.raw_user_meta_data ? 'interests' THEN

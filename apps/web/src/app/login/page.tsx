@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Logo } from '../../components/brand/Logo';
@@ -40,6 +40,13 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const demoAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === 'true';
+
+  useEffect(() => {
+    if (searchParams.get('registered') === '1') {
+      setSuccessMessage('Account created. Check your email to confirm it, then sign in.');
+    }
+  }, [searchParams]);
 
   // Role-based redirect helper
   const navigateByRole = (role: DbUserRole) => {
@@ -96,12 +103,14 @@ function LoginForm() {
       });
 
       if (authError) {
-        // Fallback for evaluator/demo testing if Supabase backend is in local mock mode
-        if (
+        // Demo auth is opt-in. A failed Supabase login must never be presented
+        // as a real authenticated session in production.
+        const isDemoIdentifier =
           identifier === 'aarav.sharma@example.com' ||
           identifier === 'admin@roboverse.io' ||
-          identifier.includes('demo')
-        ) {
+          identifier.includes('demo');
+
+        if (demoAuthEnabled && isDemoIdentifier) {
           const isDemoAdmin = identifier.includes('admin');
           const mockRole: DbUserRole = isDemoAdmin ? 'admin' : 'student';
           const mockId = isDemoAdmin ? '00000000-0000-0000-0000-000000000001' : '00000000-0000-0000-0000-000000000002';
@@ -155,10 +164,18 @@ function LoginForm() {
 
       if (data?.user) {
         // Fetch user profile from database
-        const { data: profile } = await (supabase.from('profiles') as any)
+        const authenticatedUser = data.user;
+        const { data: profile, error: profileError } = await (supabase.from('profiles') as any)
           .select('*')
-          .eq('id', data.user.id)
+          .eq('id', authenticatedUser.id)
           .single();
+
+        if (profileError) {
+          throw new Error(
+            'Authentication succeeded, but the user profile could not be loaded. ' +
+              'Apply the Supabase profile trigger migration and try again.'
+          );
+        }
 
         const role = (profile?.role || data.user.user_metadata?.role || 'student') as DbUserRole;
         const studentId = profile?.student_id || 'RV-2026-001001';
@@ -166,8 +183,8 @@ function LoginForm() {
 
         setAuth({
           user: {
-            id: data.user.id,
-            email: data.user.email || '',
+            id: authenticatedUser.id,
+            email: authenticatedUser.email || '',
             role,
             studentId,
             fullName,
@@ -222,10 +239,13 @@ function LoginForm() {
       });
 
       if (otpError) {
-        // Fallback for demo testing
-        setOtpSent(true);
-        setOtp('123456');
-        setSuccessMessage('OTP sent to ' + mobileNumber + ' (Demo OTP: 123456)');
+        if (demoAuthEnabled) {
+          setOtpSent(true);
+          setOtp('123456');
+          setSuccessMessage('OTP sent to ' + mobileNumber + ' (Demo OTP: 123456)');
+        } else {
+          setError(otpError.message || 'Failed to send OTP.');
+        }
         return;
       }
 
@@ -245,53 +265,114 @@ function LoginForm() {
     setError(null);
 
     try {
-      if (otp === '123456' || otp.length === 6) {
-        // Demo OTP auto-approve or Supabase verify
+      if (otp.length === 6) {
         const { data, error: verifyError } = await supabase.auth.verifyOtp({
           phone: mobileNumber,
           token: otp,
           type: 'sms',
         });
 
-        if (verifyError && otp !== '123456') {
-          setError(verifyError.message || 'Invalid or expired OTP code.');
-          setLoading(false);
+        if (verifyError) {
+          if (!(demoAuthEnabled && otp === '123456')) {
+            throw verifyError;
+          }
+        }
+
+        if (!data?.user && !(demoAuthEnabled && otp === '123456')) {
+          throw new Error('Supabase did not return a verified user. Please try again.');
+        }
+
+        if (!data?.user && demoAuthEnabled && otp === '123456') {
+          // Explicitly opt-in demo mode only; this never runs in production
+          // unless NEXT_PUBLIC_ENABLE_DEMO_AUTH=true is set.
+          const studentId = 'RV-2026-001001';
+          const fullName = 'Mobile Student';
+
+          setAuth({
+            user: {
+              id: '00000000-0000-0000-0000-000000000002',
+              email: `${mobileNumber}@phone.roboverse.internal`,
+              mobileNumber,
+              role: 'student',
+              studentId,
+              fullName,
+            },
+            profile: {
+              studentId,
+              fullName,
+              schoolOrCollegeName: 'Robotics Academy',
+              classOrYear: 'Class 10',
+              city: 'Bengaluru',
+              state: 'Karnataka',
+              interests: ['arduino', 'iot'],
+              level: 'Rookie',
+              xp: 50,
+              streakDays: 1,
+              lastSeenAt: new Date().toISOString(),
+              currentActivity: 'Exploring RoboVerse Labs',
+            },
+            studentIdCard: {
+              studentId,
+              fullName,
+              schoolOrCollege: 'Robotics Academy',
+              planName: 'Free Explorer',
+              level: 'Rookie',
+              xp: 50,
+              verificationUrl: `https://roboverse.dev/verify/${studentId}`,
+              validUntil: '31 DEC 2026',
+            },
+            planTier: 'free',
+          });
+
+          setSuccessMessage('Demo phone verified successfully!');
+          navigateByRole('student');
           return;
         }
 
-        const studentId = 'RV-2026-001001';
-        const fullName = 'Mobile Student';
+        if (!data?.user) {
+          throw new Error('Supabase did not return a verified user. Please try again.');
+        }
+        const verifiedUser = data.user;
+        const { data: profile, error: profileError } = await (supabase.from('profiles') as any)
+          .select('*')
+          .eq('id', verifiedUser.id)
+          .single();
+        if (profileError) {
+          throw new Error('Authentication succeeded, but the user profile could not be loaded.');
+        }
 
+        const studentId = profile.student_id;
+        const fullName = profile.full_name;
         setAuth({
           user: {
-            id: data?.user?.id || '00000000-0000-0000-0000-000000000002',
-            email: data?.user?.email || `${mobileNumber}@phone.roboverse.internal`,
+            id: verifiedUser.id,
+            email: verifiedUser.email || '',
             mobileNumber,
-            role: 'student',
+            role: profile.role || 'student',
             studentId,
             fullName,
           },
           profile: {
             studentId,
             fullName,
-            schoolOrCollegeName: 'Robotics Academy',
-            classOrYear: 'Class 10',
-            city: 'Bengaluru',
-            state: 'Karnataka',
-            interests: ['arduino', 'iot'],
-            level: 'Rookie',
-            xp: 50,
-            streakDays: 1,
-            lastSeenAt: new Date().toISOString(),
-            currentActivity: 'Exploring RoboVerse Labs',
+            schoolOrCollegeName: profile.school_or_college || 'Robotics Academy',
+            classOrYear: profile.class_level || 'Class 10',
+            city: profile.city || 'Bengaluru',
+            state: profile.state || 'Karnataka',
+            interests: profile.interests || ['arduino', 'iot'],
+            level: profile.level || 'Rookie',
+            xp: profile.xp ?? 50,
+            streakDays: profile.streak_days ?? 1,
+            lastSeenAt: profile.last_seen_at || new Date().toISOString(),
+            currentActivity: profile.current_activity || 'Exploring RoboVerse Labs',
           },
           studentIdCard: {
             studentId,
             fullName,
-            schoolOrCollege: 'Robotics Academy',
+            schoolOrCollege: profile.school_or_college || 'Robotics Academy',
             planName: 'Free Explorer',
-            level: 'Rookie',
-            xp: 50,
+            level: profile.level || 'Rookie',
+            xp: profile.xp ?? 50,
             verificationUrl: `https://roboverse.dev/verify/${studentId}`,
             validUntil: '31 DEC 2026',
           },
@@ -299,7 +380,7 @@ function LoginForm() {
         });
 
         setSuccessMessage('Phone verified successfully!');
-        navigateByRole('student');
+        navigateByRole(profile.role || 'student');
         return;
       }
 
@@ -538,9 +619,11 @@ function LoginForm() {
                     placeholder="e.g. 123456"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] focus:border-[#39FF6A] text-center tracking-widest text-lg font-mono font-bold text-[#39FF6A] focus:outline-none"
                   />
-                  <p className="text-[11px] text-[#7FE7D6] mt-1.5 font-mono text-center">
-                    Demo OTP: 123456
-                  </p>
+                  {demoAuthEnabled && (
+                    <p className="text-[11px] text-[#7FE7D6] mt-1.5 font-mono text-center">
+                      Demo OTP: 123456
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -628,7 +711,7 @@ function LoginForm() {
           </div>
 
           {/* Quick Evaluator Sign-In */}
-          <div className="mt-6 pt-6 border-t border-[rgba(57,255,106,0.1)]">
+          {demoAuthEnabled && <div className="mt-6 pt-6 border-t border-[rgba(57,255,106,0.1)]">
             <p className="text-center text-[11px] font-bold text-[#8FA99B] font-mono uppercase tracking-wider mb-3">
               Quick Evaluator Sign-In
             </p>
@@ -649,7 +732,7 @@ function LoginForm() {
                 <span>Demo Admin</span>
               </button>
             </div>
-          </div>
+          </div>}
 
           {/* Footer Register Link */}
           <div className="mt-6 text-center font-mono text-xs">

@@ -90,10 +90,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const uid = session.user.id;
       // Fetch profile from database
-      const { data: profileRow } = await (supabase.from('profiles') as any)
+      const { data: profileRow, error: profileError } = await (supabase.from('profiles') as any)
         .select('*')
         .eq('id', uid)
         .single();
+
+      if (profileError || !profileRow) {
+        console.error('Authenticated user has no readable profile:', profileError);
+        set({
+          user: null,
+          profile: null,
+          studentIdCard: null,
+          planTier: PlanTier.FREE,
+          isAuthenticated: false,
+          isLoading: false,
+          initialized: true,
+        });
+        return;
+      }
 
       // Fetch active subscription
       const { data: subRow } = await (supabase.from('subscriptions') as any)
@@ -156,7 +170,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     } catch (err) {
       console.error('Error initializing auth:', err);
-      set({ isLoading: false, initialized: true });
+      set({
+        user: null,
+        profile: null,
+        studentIdCard: null,
+        planTier: PlanTier.FREE,
+        isAuthenticated: false,
+        isLoading: false,
+        initialized: true,
+      });
     }
   },
 

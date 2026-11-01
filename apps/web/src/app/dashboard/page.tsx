@@ -56,7 +56,7 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, profile, studentIdCard, planTier, initialized, isLoading, initAuth } = useAuthStore();
+  const { user, profile, studentIdCard, planTier, initialized, isLoading, isAuthenticated, initAuth } = useAuthStore();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -89,6 +89,12 @@ export default function DashboardPage() {
       initAuth();
     }
   }, [initialized, initAuth]);
+
+  useEffect(() => {
+    if (initialized && !isLoading && !isAuthenticated) {
+      router.replace('/login?returnUrl=/dashboard');
+    }
+  }, [initialized, isLoading, isAuthenticated, router]);
 
   // Check if first-time user for onboarding
   useEffect(() => {

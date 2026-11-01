@@ -41,7 +41,7 @@ const MAJOR_INDIAN_CITIES = [
 
 export default function RegisterPage() {
   const router = useRouter();
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const initAuth = useAuthStore((s) => s.initAuth);
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
@@ -181,45 +181,26 @@ export default function RegisterPage() {
         },
       });
 
-      // Handle fallback if offline or local dev
-      const userId = data?.user?.id || '00000000-0000-0000-0000-000000000003';
-      const studentId = 'RV-2026-001001';
+      if (signUpError) {
+        throw signUpError;
+      }
 
-      setAuth({
-        user: {
-          id: userId,
-          email,
-          mobileNumber,
-          role: 'student',
-          studentId,
-          fullName,
-        },
-        profile: {
-          studentId,
-          fullName,
-          schoolOrCollegeName,
-          classOrYear,
-          city,
-          state,
-          interests: selectedInterests,
-          level: 'Rookie',
-          xp: 50,
-          streakDays: 1,
-          lastSeenAt: new Date().toISOString(),
-          currentActivity: 'Started RoboVerse Onboarding',
-        },
-        studentIdCard: {
-          studentId,
-          fullName,
-          schoolOrCollege: schoolOrCollegeName,
-          planName: 'Free Explorer',
-          level: 'Rookie',
-          xp: 50,
-          verificationUrl: `https://roboverse.dev/verify/${studentId}`,
-          validUntil: '31 DEC 2026',
-        },
-        planTier: 'free',
-      });
+      if (!data?.user) {
+        throw new Error('Supabase did not return a created user. Please try again.');
+      }
+
+      // Email confirmation may be enabled in Supabase. In that case Auth has
+      // created the user, but there is no session to use until the email link
+      // is confirmed. Never create a local-only session here.
+      if (!data.session) {
+        setError(null);
+        router.push('/login?registered=1');
+        return;
+      }
+
+      // The database trigger creates the profile from the Auth metadata. Read
+      // the real session/profile back before entering the authenticated app.
+      await initAuth();
 
       // Set first-time user flag for onboarding modal trigger
       if (typeof window !== 'undefined') {

@@ -43,8 +43,10 @@ export function AuthScreen({ navigation }: any) {
     const res = await loginWithPassword(identifier.trim(), password.trim());
     setLoading(false);
     if (!res.success) {
-      // In mobile offline/demo fallback, login smoothly
-      loginAsGuestStudent();
+      // A failed remote login must not silently become a local guest session.
+      // The explicit demo button below remains available when demo access is
+      // intentionally requested.
+      setErrorMsg(res.error || 'Unable to authenticate with RoboVerse.');
     }
   };
 
