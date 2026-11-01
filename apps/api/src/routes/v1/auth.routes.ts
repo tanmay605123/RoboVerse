@@ -22,7 +22,7 @@ import { hashPassword, comparePassword } from '../../lib/password';
 import { generateAuthTokens, verifyRefreshToken } from '../../lib/jwt';
 import { generateStudentIdRecord } from '../../lib/studentId';
 import { redis } from '../../lib/redis';
-import { inMemoryDb } from '../../lib/db';
+import { inMemoryDb, prisma } from '../../lib/db';
 import { usageService } from '../../lib/usage';
 
 export function getRoleRedirectPath(role: UserRole | string): string {
@@ -69,9 +69,7 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
   const data = req.body;
 
   // 1. Check existing email or mobile
-  const existingUserByEmail = Array.from(inMemoryDb.users.values()).find(
-    (u) => u.email.toLowerCase() === data.email.toLowerCase()
-  );
+  const existingUserByEmail = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existingUserByEmail) {
     res.status(409).json({
       success: false,
@@ -80,9 +78,9 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
     return;
   }
 
-  const existingUserByMobile = Array.from(inMemoryDb.users.values()).find(
-    (u) => u.mobileNumber === data.mobileNumber
-  );
+  const existingUserByMobile = data.mobileNumber
+    ? await prisma.user.findUnique({ where: { mobileNumber: data.mobileNumber } })
+    : null;
   if (existingUserByMobile) {
     res.status(409).json({
       success: false,
@@ -126,15 +124,9 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  inMemoryDb.users.set(userId, user);
 
   // 5. Generate unique Student ID (e.g. RV-2026-000101) with QR code
   const studentIdRecord = await generateStudentIdRecord(studentSequenceCounter, 2026);
-  inMemoryDb.studentIds.set(userId, {
-    id: `stid_${userId}`,
-    userId,
-    ...studentIdRecord,
-  });
 
   // 6. Create Student Profile with gamification baseline (Level 1, 50 starter XP, 1-day streak)
   const profile = {
@@ -160,22 +152,52 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  inMemoryDb.profiles.set(userId, profile);
 
   // 7. Initialize Free Subscription
   const subId = `sub_${userId}_free`;
-  inMemoryDb.subscriptions.set(subId, {
-    id: subId,
-    userId,
-    planId: 'plan_free',
-    billingCycle: BillingCycle.MONTHLY,
-    status: 'ACTIVE',
-    currentPeriodStart: new Date(),
-    currentPeriodEnd: new Date('2099-12-31'),
-    cancelAtPeriodEnd: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  await prisma.$transaction([
+    prisma.user.create({ data: user }),
+    prisma.studentID.create({ data: {
+      id: `stid_${userId}`,
+      userId,
+      studentId: studentIdRecord.studentId,
+      qrCodeDataUrl: studentIdRecord.qrCodeDataUrl,
+      verificationHash: studentIdRecord.verificationHash,
+      issuedAt: studentIdRecord.issuedAt,
+      validUntil: studentIdRecord.validUntil,
+    }}),
+    prisma.studentProfile.create({ data: {
+      id: profile.id,
+      userId,
+      fullName: profile.fullName,
+      dateOfBirth: profile.dateOfBirth,
+      parentEmail: profile.parentEmail,
+      parentalConsentGiven: profile.parentalConsentGiven,
+      institutionType: profile.institutionType,
+      schoolOrCollegeName: profile.schoolOrCollegeName,
+      classOrYear: profile.classOrYear,
+      city: profile.city,
+      state: profile.state,
+      country: profile.country,
+      interests: profile.interests,
+      avatarUrl: profile.avatarUrl,
+      bio: profile.bio,
+      level: profile.level,
+      xp: profile.xp,
+      streakDays: profile.streakDays,
+      totalLearningHours: profile.totalLearningHours,
+    }}),
+    prisma.subscription.create({ data: {
+      id: subId,
+      userId,
+      planId: 'plan_free',
+      billingCycle: BillingCycle.MONTHLY,
+      status: 'ACTIVE',
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date('2099-12-31'),
+      cancelAtPeriodEnd: false,
+    }}),
+  ]);
 
   // 8. Generate JWT tokens
   const tokens = generateAuthTokens({
@@ -223,16 +245,10 @@ router.post('/login', validateBody(LoginInputSchema), async (req: Request, res: 
   const isStudentId = identifier.toUpperCase().startsWith('RV-');
 
   if (isStudentId) {
-    const studentIdEntry = Array.from(inMemoryDb.studentIds.values()).find(
-      (s) => s.studentId.toUpperCase() === identifier.toUpperCase()
-    );
-    if (studentIdEntry) {
-      matchedUser = inMemoryDb.users.get(studentIdEntry.userId);
-    }
+    const studentIdEntry = await prisma.studentID.findUnique({ where: { studentId: identifier.toUpperCase() } });
+    if (studentIdEntry) matchedUser = await prisma.user.findUnique({ where: { id: studentIdEntry.userId } });
   } else {
-    matchedUser = Array.from(inMemoryDb.users.values()).find(
-      (u) => u.email.toLowerCase() === identifier.toLowerCase()
-    );
+    matchedUser = await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
   }
 
   if (!matchedUser || !matchedUser.passwordHash) {
@@ -252,13 +268,11 @@ router.post('/login', validateBody(LoginInputSchema), async (req: Request, res: 
     return;
   }
 
-  const studentIdRecord = inMemoryDb.studentIds.get(matchedUser.id);
-  const profile = inMemoryDb.profiles.get(matchedUser.id);
+  const studentIdRecord = await prisma.studentID.findUnique({ where: { userId: matchedUser.id } });
+  const profile = await prisma.studentProfile.findUnique({ where: { userId: matchedUser.id } });
 
   // Find active subscription plan
-  const sub = Array.from(inMemoryDb.subscriptions.values()).find(
-    (s) => s.userId === matchedUser.id && s.status === 'ACTIVE'
-  );
+  const sub = await prisma.subscription.findFirst({ where: { userId: matchedUser.id, status: 'ACTIVE' } });
   const planId = sub ? sub.planId : 'plan_free';
 
   const tokens = generateAuthTokens({
@@ -678,7 +692,7 @@ router.post(
       return;
     }
 
-    const user = inMemoryDb.users.get(userId);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(404).json({
         success: false,
@@ -687,7 +701,10 @@ router.post(
       return;
     }
 
-    user.passwordHash = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await hashPassword(newPassword) },
+    });
     await redis.del(`pwd_reset:${token}`);
 
     res.json({
@@ -713,14 +730,12 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
  */
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const user = inMemoryDb.users.get(userId);
-  const profile = inMemoryDb.profiles.get(userId);
-  const studentIdRecord = inMemoryDb.studentIds.get(userId);
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const profile = await prisma.studentProfile.findUnique({ where: { userId } });
+  const studentIdRecord = await prisma.studentID.findUnique({ where: { userId } });
 
   // Active subscription
-  const sub = Array.from(inMemoryDb.subscriptions.values()).find(
-    (s) => s.userId === userId && s.status === 'ACTIVE'
-  );
+  const sub = await prisma.subscription.findFirst({ where: { userId, status: 'ACTIVE' } });
   const planTier = (req.user!.role === UserRole.PRO_STUDENT
     ? PlanTier.PRO
     : req.user!.role === UserRole.PLUS_STUDENT
@@ -749,7 +764,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
         ? {
             studentId: studentIdRecord.studentId,
             qrCodeDataUrl: studentIdRecord.qrCodeDataUrl,
-            verificationUrl: studentIdRecord.verificationUrl,
+            verificationUrl: `${process.env.CLIENT_WEB_URL || 'http://localhost:3000'}/verify/student/${studentIdRecord.studentId}?hash=${studentIdRecord.verificationHash}`,
             issuedAt: studentIdRecord.issuedAt,
             validUntil: studentIdRecord.validUntil,
           }

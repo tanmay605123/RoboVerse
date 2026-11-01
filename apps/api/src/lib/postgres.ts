@@ -1,4 +1,4 @@
-import { prisma } from './db';
+import { prisma, ensurePostgresDefaults } from './db';
 import { ENV } from '../config/env';
 
 let isConnected = false;
@@ -12,6 +12,7 @@ export async function connectPostgres(): Promise<void> {
   try {
     await prisma.$connect();
     await prisma.$queryRaw`SELECT 1`;
+    await ensurePostgresDefaults();
     isConnected = true;
     console.log('🐘 Connected to Supabase PostgreSQL');
   } catch (error: any) {

@@ -15,6 +15,34 @@ export const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 });
 
+/** Ensure the subscription plans exist in Supabase before serving API requests. */
+export async function ensurePostgresDefaults(): Promise<void> {
+  if (!process.env.DATABASE_URL) return;
+  for (const p of Object.values(DEFAULT_PLANS) as any[]) {
+    await prisma.plan.upsert({
+      where: { id: p.id },
+      update: {
+        name: p.name,
+        tagline: p.tagline,
+        isPopular: p.isPopular || false,
+        badge: p.badge || null,
+        pricingJson: JSON.stringify(p.pricing),
+        featuresJson: JSON.stringify(p.features),
+      },
+      create: {
+        id: p.id,
+        tier: p.tier,
+        name: p.name,
+        tagline: p.tagline,
+        isPopular: p.isPopular || false,
+        badge: p.badge || null,
+        pricingJson: JSON.stringify(p.pricing),
+        featuresJson: JSON.stringify(p.features),
+      },
+    });
+  }
+}
+
 // In-Memory store for offline/local development or test runs
 interface InMemoryDatabase {
   users: Map<string, any>;

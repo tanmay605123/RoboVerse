@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { UpdatePlanInputSchema, UserRole } from '@roboverse/shared';
 import { requireAuth, requireRole } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validate';
-import { inMemoryDb } from '../../lib/db';
+import { prisma } from '../../lib/db';
 
 const router = Router();
 
@@ -11,7 +11,7 @@ const router = Router();
  * List all available plans with complete pricing, feature matrices, and limits
  */
 router.get('/', async (req: Request, res: Response) => {
-  const plans = Array.from(inMemoryDb.plans.values()).map((p) => ({
+  const plans = (await prisma.plan.findMany({ orderBy: { id: 'asc' } })).map((p) => ({
     id: p.id,
     tier: p.tier,
     name: p.name,
@@ -33,7 +33,7 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.get('/:planId', async (req: Request, res: Response) => {
   const { planId } = req.params;
-  const plan = inMemoryDb.plans.get(planId);
+  const plan = await prisma.plan.findUnique({ where: { id: planId } });
 
   if (!plan) {
     res.status(404).json({
@@ -69,7 +69,7 @@ router.put(
   validateBody(UpdatePlanInputSchema),
   async (req: Request, res: Response) => {
     const { planId } = req.params;
-    const plan = inMemoryDb.plans.get(planId);
+    const plan = await prisma.plan.findUnique({ where: { id: planId } });
 
     if (!plan) {
       res.status(404).json({
@@ -81,27 +81,26 @@ router.put(
 
     const { name, tagline, pricing, features } = req.body;
 
-    if (name) plan.name = name;
-    if (tagline) plan.tagline = tagline;
-    if (pricing) plan.pricingJson = JSON.stringify(pricing);
+    const updateData: any = {};
+    if (name) updateData.name = name;
+    if (tagline) updateData.tagline = tagline;
+    if (pricing) updateData.pricingJson = JSON.stringify(pricing);
     if (features) {
       const existingFeatures = JSON.parse(plan.featuresJson);
-      plan.featuresJson = JSON.stringify({ ...existingFeatures, ...features });
+      updateData.featuresJson = JSON.stringify({ ...existingFeatures, ...features });
     }
-    plan.updatedAt = new Date();
-
-    inMemoryDb.plans.set(planId, plan);
+    const updatedPlan = await prisma.plan.update({ where: { id: planId }, data: updateData });
 
     res.json({
       success: true,
       message: `Plan '${planId}' successfully updated by Admin`,
       data: {
-        id: plan.id,
-        tier: plan.tier,
-        name: plan.name,
-        tagline: plan.tagline,
-        pricing: JSON.parse(plan.pricingJson),
-        features: JSON.parse(plan.featuresJson),
+        id: updatedPlan.id,
+        tier: updatedPlan.tier,
+        name: updatedPlan.name,
+        tagline: updatedPlan.tagline,
+        pricing: JSON.parse(updatedPlan.pricingJson),
+        features: JSON.parse(updatedPlan.featuresJson),
       },
     });
   }
