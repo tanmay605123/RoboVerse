@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import {
   RegisterInputSchema,
+  RegisterInput,
   LoginInputSchema,
   RequestOtpInputSchema,
   VerifyOtpInputSchema,
@@ -24,6 +25,7 @@ import { generateStudentIdRecord } from '../../lib/studentId';
 import { redis } from '../../lib/redis';
 import { inMemoryDb, prisma } from '../../lib/db';
 import { usageService } from '../../lib/usage';
+import { ENV } from '../../config/env';
 
 export function getRoleRedirectPath(role: UserRole | string): string {
   switch (role) {
@@ -45,6 +47,99 @@ export function getRoleRedirectPath(role: UserRole | string): string {
 
 const router = Router();
 let studentSequenceCounter = 100;
+
+// Local development and automated tests can run without PostgreSQL. Production
+// deployments with DATABASE_URL continue to use Prisma/Supabase exclusively.
+const shouldUseInMemoryAuth = () => ENV.NODE_ENV === 'test' || !ENV.DATABASE_URL;
+
+async function createInMemoryRegistration(data: RegisterInput) {
+  const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  studentSequenceCounter += 1;
+  const userReferralCode = `RV-${data.fullName.slice(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const now = new Date();
+  const user = {
+    id: userId,
+    email: data.email.toLowerCase(),
+    passwordHash: await hashPassword(data.password),
+    mobileNumber: data.mobileNumber,
+    role: UserRole.FREE_STUDENT,
+    status: UserStatus.ACTIVE,
+    referralCode: userReferralCode,
+    referredById: data.referralCode || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const studentIdRecord = await generateStudentIdRecord(studentSequenceCounter, 2026);
+  const profile = {
+    id: `prof_${userId}`,
+    userId,
+    fullName: data.fullName,
+    dateOfBirth: data.dateOfBirth,
+    parentEmail: data.parentEmail || null,
+    parentalConsentGiven: data.parentalConsentGiven || false,
+    institutionType: data.institutionType,
+    schoolOrCollegeName: data.schoolOrCollegeName,
+    classOrYear: data.classOrYear,
+    city: data.city,
+    state: data.state,
+    country: data.country || 'India',
+    interests: data.interests,
+    avatarUrl: data.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(data.fullName)}`,
+    bio: 'Aspiring roboticist & electronics builder at RoboVerse',
+    level: 1,
+    xp: 50,
+    streakDays: 1,
+    totalLearningHours: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  inMemoryDb.users.set(userId, user);
+  inMemoryDb.studentIds.set(userId, {
+    id: `stid_${userId}`,
+    userId,
+    ...studentIdRecord,
+  });
+  inMemoryDb.profiles.set(userId, profile);
+  inMemoryDb.subscriptions.set(`sub_${userId}_free`, {
+    id: `sub_${userId}_free`,
+    userId,
+    planId: 'plan_free',
+    billingCycle: BillingCycle.MONTHLY,
+    status: 'ACTIVE',
+    currentPeriodStart: now,
+    currentPeriodEnd: new Date('2099-12-31'),
+    cancelAtPeriodEnd: false,
+  });
+
+  const tokens = generateAuthTokens({
+    userId,
+    email: user.email,
+    role: user.role,
+    studentId: studentIdRecord.studentId,
+    planId: 'plan_free',
+  });
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      mobileNumber: user.mobileNumber,
+      role: user.role,
+      referralCode: user.referralCode,
+    },
+    studentId: studentIdRecord.studentId,
+    studentIdCard: {
+      studentId: studentIdRecord.studentId,
+      qrCodeDataUrl: studentIdRecord.qrCodeDataUrl,
+      verificationUrl: studentIdRecord.verificationUrl,
+      validUntil: studentIdRecord.validUntil,
+    },
+    profile,
+    tokens,
+    redirectTo: getRoleRedirectPath(user.role),
+  };
+}
 
 /**
  * GET /api/v1/auth/redirect-path
@@ -68,8 +163,27 @@ router.get('/redirect-path', (req: Request, res: Response) => {
 router.post('/register', validateBody(RegisterInputSchema), async (req: Request, res: Response) => {
   const data = req.body;
 
+  if (shouldUseInMemoryAuth()) {
+    const duplicateEmail = Array.from(inMemoryDb.users.values()).some(
+      (user) => user.email.toLowerCase() === data.email.toLowerCase()
+    );
+    const duplicateMobile = Array.from(inMemoryDb.users.values()).some(
+      (user) => user.mobileNumber === data.mobileNumber
+    );
+    if (duplicateEmail) {
+      res.status(409).json({ success: false, error: { code: 'EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists' } });
+      return;
+    }
+    if (duplicateMobile) {
+      res.status(409).json({ success: false, error: { code: 'MOBILE_ALREADY_EXISTS', message: 'This mobile number is already registered' } });
+      return;
+    }
+  }
+
   // 1. Check existing email or mobile
-  const existingUserByEmail = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
+  const existingUserByEmail = shouldUseInMemoryAuth()
+    ? null
+    : await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existingUserByEmail) {
     res.status(409).json({
       success: false,
@@ -78,7 +192,7 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
     return;
   }
 
-  const existingUserByMobile = data.mobileNumber
+  const existingUserByMobile = !shouldUseInMemoryAuth() && data.mobileNumber
     ? await prisma.user.findUnique({ where: { mobileNumber: data.mobileNumber } })
     : null;
   if (existingUserByMobile) {
@@ -100,6 +214,16 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
         code: 'PARENTAL_CONSENT_REQUIRED',
         message: 'Students under 18 years of age require parental/guardian consent and parent email.',
       },
+    });
+    return;
+  }
+
+  if (shouldUseInMemoryAuth()) {
+    const registration = await createInMemoryRegistration(data);
+    res.status(201).json({
+      success: true,
+      message: 'Welcome to RoboVerse! Student account and Digital ID created successfully.',
+      data: registration,
     });
     return;
   }
@@ -239,6 +363,58 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
  */
 router.post('/login', validateBody(LoginInputSchema), async (req: Request, res: Response) => {
   const { identifier, password } = req.body;
+
+  if (shouldUseInMemoryAuth()) {
+    const normalizedIdentifier = identifier.trim();
+    const isStudentId = normalizedIdentifier.toUpperCase().startsWith('RV-');
+    const studentIdEntry = isStudentId
+      ? Array.from(inMemoryDb.studentIds.values()).find(
+          (entry) => entry.studentId === normalizedIdentifier.toUpperCase()
+        )
+      : undefined;
+    const matchedUser = studentIdEntry
+      ? inMemoryDb.users.get(studentIdEntry.userId)
+      : Array.from(inMemoryDb.users.values()).find(
+          (user) => user.email.toLowerCase() === normalizedIdentifier.toLowerCase()
+        );
+
+    if (!matchedUser || !matchedUser.passwordHash || !(await comparePassword(password, matchedUser.passwordHash))) {
+      res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email/Student ID or password' },
+      });
+      return;
+    }
+
+    const studentIdRecord = inMemoryDb.studentIds.get(matchedUser.id);
+    const profile = inMemoryDb.profiles.get(matchedUser.id);
+    const tokens = generateAuthTokens({
+      userId: matchedUser.id,
+      email: matchedUser.email,
+      role: matchedUser.role,
+      studentId: studentIdRecord?.studentId || 'RV-GUEST',
+      planId: 'plan_free',
+    });
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: {
+          id: matchedUser.id,
+          email: matchedUser.email,
+          mobileNumber: matchedUser.mobileNumber,
+          role: matchedUser.role,
+          referralCode: matchedUser.referralCode,
+        },
+        studentId: studentIdRecord?.studentId,
+        profile,
+        tokens,
+        redirectTo: getRoleRedirectPath(matchedUser.role),
+      },
+    });
+    return;
+  }
 
   // Check if identifier is studentId (e.g. RV-2026-...) or email
   let matchedUser: any = null;

@@ -8,6 +8,7 @@ import {
   ROBOVERSE_STARTER_ASSEMBLIES,
 } from '@roboverse/shared';
 import { inMemoryDb } from '../src/lib/db';
+import { prisma } from '../src/lib/db';
 import { generateStudentIdRecord } from '../src/lib/studentId';
 import { hashPassword } from '../src/lib/password';
 
@@ -294,6 +295,98 @@ export async function runDatabaseSeed() {
     },
   ];
   productsData.forEach((p) => inMemoryDb.products.set(p.id, p));
+
+  // Persist the documented login account when a real PostgreSQL database is
+  // configured. The original seed only populated the in-memory demo store,
+  // which made the credentials unusable after deployment.
+  if (process.env.DATABASE_URL) {
+    console.log('🐘 Persisting default admin account to PostgreSQL...');
+    const adminPasswordHash = await hashPassword('Admin@2026!');
+    const adminId = 'user_admin_001';
+    const adminStudentId = await generateStudentIdRecord(1, 2026);
+
+    await prisma.plan.upsert({
+      where: { id: 'plan_free' },
+      update: {},
+      create: {
+        id: 'plan_free',
+        tier: PlanTier.FREE,
+        name: 'Free Explorer',
+        tagline: 'Learn robotics at your own pace',
+        pricingJson: JSON.stringify({ monthly: 0, yearly: 0 }),
+        featuresJson: JSON.stringify([]),
+      },
+    });
+
+    await prisma.user.upsert({
+      where: { id: adminId },
+      update: {
+        email: 'admin@roboverse.io',
+        passwordHash: adminPasswordHash,
+        mobileNumber: '+919999900001',
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+      create: {
+        id: adminId,
+        email: 'admin@roboverse.io',
+        passwordHash: adminPasswordHash,
+        mobileNumber: '+919999900001',
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        referralCode: 'ROBO-ADMIN-01',
+      },
+    });
+
+    await prisma.studentID.upsert({
+      where: { userId: adminId },
+      update: {},
+      create: {
+        id: 'stid_user_admin_001',
+        userId: adminId,
+        studentId: adminStudentId.studentId,
+        qrCodeDataUrl: adminStudentId.qrCodeDataUrl,
+        verificationHash: adminStudentId.verificationHash,
+        issuedAt: adminStudentId.issuedAt,
+        validUntil: adminStudentId.validUntil,
+      },
+    });
+
+    await prisma.studentProfile.upsert({
+      where: { userId: adminId },
+      update: { fullName: 'RoboVerse Commander' },
+      create: {
+        id: 'prof_user_admin_001',
+        userId: adminId,
+        fullName: 'RoboVerse Commander',
+        institutionType: 'university',
+        schoolOrCollegeName: 'RoboVerse Robotics Lab',
+        classOrYear: 'Lead Admin',
+        city: 'New Delhi',
+        state: 'Delhi',
+        country: 'India',
+        interests: ['arduino', 'ros_robotics', 'machine_learning'],
+        level: 99,
+        xp: 99999,
+        streakDays: 365,
+        totalLearningHours: 1200,
+      },
+    });
+
+    await prisma.subscription.upsert({
+      where: { id: 'sub_user_admin_001_free' },
+      update: { status: 'ACTIVE' },
+      create: {
+        id: 'sub_user_admin_001_free',
+        userId: adminId,
+        planId: 'plan_free',
+        billingCycle: BillingCycle.MONTHLY,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date('2099-12-31'),
+      },
+    });
+  }
 
   console.log('✅ Database Seed Completed Successfully!');
 }

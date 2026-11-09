@@ -170,7 +170,8 @@ export function initInMemorySeed(): void {
   inMemoryDb.users.set(adminId, {
     id: adminId,
     email: 'admin@roboverse.io',
-    passwordHash: '$2a$10$pT6o3y7f3wGZfJ8/YdI0CeN0oAovt6gJv6f1J1rJ1n6.Zgq9pEweC', // Admin@2026!
+    // bcrypt hash for Admin@2026!
+    passwordHash: '$2a$10$/gMxKoKHfzm5kxNQyV.lnexMxmlxVP.TxlwneYyC0AENmPEN6FZ1S',
     mobileNumber: '+919999900001',
     role: UserRole.ADMIN,
     status: UserStatus.ACTIVE,
