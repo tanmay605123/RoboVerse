@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { apiRequest } from '../../lib/apiClient';
-import { STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
+import { RegisterInputSchema, STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
 
 const MAJOR_INDIAN_CITIES = [
   'Bengaluru',
@@ -137,7 +137,7 @@ export default function RegisterPage() {
     fullName.length >= 2 &&
     email.includes('@') &&
     passwordStrength >= 3 &&
-    mobileNumber.length >= 10 &&
+    /^\+?[1-9]\d{9,14}$/.test(mobileNumber.trim()) &&
     (!isMinor || (parentEmail.includes('@') && parentalConsentGiven));
 
   const canProceedStep2 =
@@ -159,26 +159,36 @@ export default function RegisterPage() {
     setError(null);
 
     try {
+      const registrationPayload = {
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        mobileNumber: mobileNumber.trim().replace(/[\s()-]/g, ''),
+        dateOfBirth: dateOfBirth.trim(),
+        parentEmail: isMinor ? parentEmail.trim().toLowerCase() : '',
+        parentalConsentGiven: isMinor ? parentalConsentGiven : true,
+        institutionType,
+        schoolOrCollegeName: schoolOrCollegeName.trim(),
+        classOrYear: classOrYear.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        country: 'India',
+        interests: selectedInterests,
+        acceptedTerms,
+        referralCode: referralCode.trim().toUpperCase(),
+      };
+
+      const parsedRegistration = RegisterInputSchema.safeParse(registrationPayload);
+      if (!parsedRegistration.success) {
+        const firstIssue = parsedRegistration.error.issues[0];
+        setError(firstIssue?.message || 'Please check the highlighted registration details.');
+        setLoading(false);
+        return;
+      }
+
       const response = await apiRequest<any>('/auth/register', {
         method: 'POST',
-        body: JSON.stringify({
-          fullName,
-          email: email.trim().toLowerCase(),
-          password,
-          mobileNumber: mobileNumber.trim(),
-          dateOfBirth,
-          parentEmail: isMinor ? parentEmail : '',
-          parentalConsentGiven: isMinor ? parentalConsentGiven : true,
-          institutionType,
-          schoolOrCollegeName,
-          classOrYear,
-          city,
-          state,
-          country: 'India',
-          interests: selectedInterests,
-          acceptedTerms,
-          referralCode,
-        }),
+        body: JSON.stringify(parsedRegistration.data),
       });
 
       if (!response.success || !response.data?.user || !response.data?.tokens?.accessToken) {
@@ -230,7 +240,16 @@ export default function RegisterPage() {
           return;
         }
 
-        setError(response.error?.message || 'Registration failed. Please check inputs.');
+        const validationDetails = response.error?.details;
+        const firstValidationError = Array.isArray(validationDetails)
+          ? validationDetails.find((detail: any) => detail?.message)?.message
+          : undefined;
+
+        setError(
+          firstValidationError ||
+            response.error?.message ||
+            'Registration failed. Please check your inputs.'
+        );
         setLoading(false);
         return;
       }
