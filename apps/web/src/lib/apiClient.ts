@@ -24,16 +24,42 @@ export async function apiRequest<T = any>(
       headers,
     });
 
-    const json = await res.json();
+    // Some proxy/server failures return an empty body or plain text instead
+    // of JSON. Read the body once and parse it defensively so the UI can show
+    // a useful error instead of "Unexpected end of JSON input".
+    const responseText = await res.text();
+    let json: any = null;
+    if (responseText.trim()) {
+      try {
+        json = JSON.parse(responseText);
+      } catch {
+        json = null;
+      }
+    }
+
     if (!res.ok && json?.success !== false) {
       return {
         success: false,
         error: {
           code: `HTTP_${res.status}`,
-          message: json?.message || `RoboVerse API request failed (${res.status}).`,
+          message:
+            json?.message ||
+            responseText.trim() ||
+            `RoboVerse API request failed (${res.status}).`,
         },
       };
     }
+
+    if (!json) {
+      return {
+        success: false,
+        error: {
+          code: `HTTP_${res.status}`,
+          message: responseText.trim() || `RoboVerse API returned an empty response (${res.status}).`,
+        },
+      };
+    }
+
     return json;
   } catch (err: any) {
     return {
