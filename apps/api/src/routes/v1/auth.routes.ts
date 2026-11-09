@@ -48,13 +48,38 @@ export function getRoleRedirectPath(role: UserRole | string): string {
 const router = Router();
 let studentSequenceCounter = 100;
 
+/**
+ * Keep Student ID generation stable across Render restarts. The process-local
+ * counter resets when the service restarts, but the database already contains
+ * previously issued IDs. Always continue after the highest persisted ID.
+ */
+async function getNextStudentSequence(year = 2026): Promise<number> {
+  if (!shouldUseInMemoryAuth()) {
+    const latestStudentId = await prisma.studentID.findFirst({
+      where: { studentId: { startsWith: `RV-${year}-` } },
+      orderBy: { studentId: 'desc' },
+      select: { studentId: true },
+    });
+
+    const persistedSequence = latestStudentId
+      ? Number(latestStudentId.studentId.slice(`RV-${year}-`.length))
+      : 0;
+
+    if (Number.isFinite(persistedSequence)) {
+      studentSequenceCounter = Math.max(studentSequenceCounter, persistedSequence);
+    }
+  }
+
+  studentSequenceCounter += 1;
+  return studentSequenceCounter;
+}
+
 // Local development and automated tests can run without PostgreSQL. Production
 // deployments with DATABASE_URL continue to use Prisma/Supabase exclusively.
 const shouldUseInMemoryAuth = () => ENV.NODE_ENV === 'test' || !ENV.DATABASE_URL;
 
 async function createInMemoryRegistration(data: RegisterInput) {
   const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  studentSequenceCounter += 1;
   const userReferralCode = `RV-${data.fullName.slice(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
   const now = new Date();
   const user = {
@@ -69,7 +94,7 @@ async function createInMemoryRegistration(data: RegisterInput) {
     createdAt: now,
     updatedAt: now,
   };
-  const studentIdRecord = await generateStudentIdRecord(studentSequenceCounter, 2026);
+  const studentIdRecord = await generateStudentIdRecord(await getNextStudentSequence(), 2026);
   const profile = {
     id: `prof_${userId}`,
     userId,
@@ -233,7 +258,6 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
 
   // 4. Create User entity
   const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  studentSequenceCounter += 1;
   const userReferralCode = `RV-${data.fullName.slice(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const user = {
@@ -250,7 +274,7 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
   };
 
   // 5. Generate unique Student ID (e.g. RV-2026-000101) with QR code
-  const studentIdRecord = await generateStudentIdRecord(studentSequenceCounter, 2026);
+  const studentIdRecord = await generateStudentIdRecord(await getNextStudentSequence(), 2026);
 
   // 6. Create Student Profile with gamification baseline (Level 1, 50 starter XP, 1-day streak)
   const profile = {
@@ -538,8 +562,7 @@ router.post('/otp/verify', validateBody(VerifyOtpInputSchema), async (req: Reque
   if (!user) {
     // Auto-create basic profile
     const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    studentSequenceCounter += 1;
-    const studentIdRecord = await generateStudentIdRecord(studentSequenceCounter, 2026);
+    const studentIdRecord = await generateStudentIdRecord(await getNextStudentSequence(), 2026);
 
     user = {
       id: userId,
