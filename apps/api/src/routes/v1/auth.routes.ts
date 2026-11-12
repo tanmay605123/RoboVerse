@@ -26,6 +26,7 @@ import { redis } from '../../lib/redis';
 import { inMemoryDb, prisma } from '../../lib/db';
 import { usageService } from '../../lib/usage';
 import { ENV } from '../../config/env';
+import { createSupabaseAdminClient } from '../../lib/supabaseAdmin';
 
 export function getRoleRedirectPath(role: UserRole | string): string {
   switch (role) {
@@ -76,7 +77,7 @@ async function getNextStudentSequence(year = 2026): Promise<number> {
 
 // Local development and automated tests can run without PostgreSQL. Production
 // deployments with DATABASE_URL continue to use Prisma/Supabase exclusively.
-const shouldUseInMemoryAuth = () => ENV.NODE_ENV === 'test' || !ENV.DATABASE_URL;
+const shouldUseInMemoryAuth = () => ENV.NODE_ENV === 'test' || (ENV.ALLOW_IN_MEMORY_AUTH && !ENV.DATABASE_URL);
 
 async function createInMemoryRegistration(data: RegisterInput) {
   const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -188,6 +189,17 @@ router.get('/redirect-path', (req: Request, res: Response) => {
 router.post('/register', validateBody(RegisterInputSchema), async (req: Request, res: Response) => {
   const data = req.body;
 
+  if (!shouldUseInMemoryAuth() && !ENV.DATABASE_URL) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'DATABASE_CONFIGURATION_MISSING',
+        message: 'Persistent authentication is unavailable. Set DATABASE_URL on the API server.',
+      },
+    });
+    return;
+  }
+
   if (shouldUseInMemoryAuth()) {
     const duplicateEmail = Array.from(inMemoryDb.users.values()).some(
       (user) => user.email.toLowerCase() === data.email.toLowerCase()
@@ -253,11 +265,57 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
     return;
   }
 
-  // 3. Hash password
+  // 3. Create the canonical identity in Supabase Auth. The backend tables below
+  // mirror this identity for application-specific data and JWT authorization.
+  const supabaseAdmin = createSupabaseAdminClient();
+  if (!supabaseAdmin) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'AUTH_CONFIGURATION_MISSING',
+        message: 'Supabase Auth is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the API server.',
+      },
+    });
+    return;
+  }
+
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: data.email.toLowerCase(),
+    password: data.password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: data.fullName,
+      mobile_number: data.mobileNumber,
+      dob: data.dateOfBirth,
+      parent_email: data.parentEmail || null,
+      parental_consent_given: data.parentalConsentGiven,
+      school_or_college: data.schoolOrCollegeName,
+      class_level: data.classOrYear,
+      city: data.city,
+      state: data.state,
+      country: data.country || 'India',
+      interests: data.interests,
+    },
+  });
+
+  if (authError || !authData.user) {
+    const alreadyExists = authError?.message?.toLowerCase().includes('already') || authError?.status === 422;
+    res.status(alreadyExists ? 409 : 502).json({
+      success: false,
+      error: {
+        code: alreadyExists ? 'EMAIL_ALREADY_EXISTS' : 'SUPABASE_AUTH_CREATE_FAILED',
+        message: alreadyExists ? 'An account with this email already exists' : (authError?.message || 'Unable to create the Supabase Auth account'),
+      },
+    });
+    return;
+  }
+
+  // 4. Hash password for the existing backend JWT login path.
   const passwordHash = await hashPassword(data.password);
 
-  // 4. Create User entity
-  const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  // Use the Supabase Auth UUID as the backend user ID so both systems refer to
+  // exactly the same person.
+  const userId = authData.user.id;
   const userReferralCode = `RV-${data.fullName.slice(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const user = {
@@ -303,18 +361,19 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
 
   // 7. Initialize Free Subscription
   const subId = `sub_${userId}_free`;
-  await prisma.$transaction([
-    prisma.user.create({ data: user }),
-    prisma.studentID.create({ data: {
-      id: `stid_${userId}`,
-      userId,
-      studentId: studentIdRecord.studentId,
-      qrCodeDataUrl: studentIdRecord.qrCodeDataUrl,
-      verificationHash: studentIdRecord.verificationHash,
-      issuedAt: studentIdRecord.issuedAt,
-      validUntil: studentIdRecord.validUntil,
-    }}),
-    prisma.studentProfile.create({ data: {
+  try {
+    await prisma.$transaction([
+      prisma.user.create({ data: user }),
+      prisma.studentID.create({ data: {
+        id: `stid_${userId}`,
+        userId,
+        studentId: studentIdRecord.studentId,
+        qrCodeDataUrl: studentIdRecord.qrCodeDataUrl,
+        verificationHash: studentIdRecord.verificationHash,
+        issuedAt: studentIdRecord.issuedAt,
+        validUntil: studentIdRecord.validUntil,
+      }}),
+      prisma.studentProfile.create({ data: {
       id: profile.id,
       userId,
       fullName: profile.fullName,
@@ -334,18 +393,24 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
       xp: profile.xp,
       streakDays: profile.streakDays,
       totalLearningHours: profile.totalLearningHours,
-    }}),
-    prisma.subscription.create({ data: {
-      id: subId,
-      userId,
-      planId: 'plan_free',
-      billingCycle: BillingCycle.MONTHLY,
-      status: 'ACTIVE',
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date('2099-12-31'),
-      cancelAtPeriodEnd: false,
-    }}),
-  ]);
+      }}),
+      prisma.subscription.create({ data: {
+        id: subId,
+        userId,
+        planId: 'plan_free',
+        billingCycle: BillingCycle.MONTHLY,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date('2099-12-31'),
+        cancelAtPeriodEnd: false,
+      }}),
+    ]);
+  } catch (error) {
+    // Do not leave an orphaned Supabase Auth identity if the application
+    // database transaction cannot be completed.
+    await supabaseAdmin.auth.admin.deleteUser(authData.user.id).catch(() => undefined);
+    throw error;
+  }
 
   // 8. Generate JWT tokens
   const tokens = generateAuthTokens({
@@ -387,6 +452,17 @@ router.post('/register', validateBody(RegisterInputSchema), async (req: Request,
  */
 router.post('/login', validateBody(LoginInputSchema), async (req: Request, res: Response) => {
   const { identifier, password } = req.body;
+
+  if (!shouldUseInMemoryAuth() && !ENV.DATABASE_URL) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'DATABASE_CONFIGURATION_MISSING',
+        message: 'Persistent authentication is unavailable. Set DATABASE_URL on the API server.',
+      },
+    });
+    return;
+  }
 
   if (shouldUseInMemoryAuth()) {
     const normalizedIdentifier = identifier.trim();
