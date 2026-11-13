@@ -1,0 +1,18 @@
+# Version control and dependencies
+.git
+node_modules
+
+# Mobile native builds and artifacts (keep web light & fast)
+apps/mobile
+**/*.apk
+**/*.aab
+**/.gradle
+**/build
+apps/mobile/android
+apps/mobile/ios
+
+# Build outputs
+.next
+dist
+out
+.turbo

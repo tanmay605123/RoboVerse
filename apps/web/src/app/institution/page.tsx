@@ -1,0 +1,77 @@
+'use client';
+
+import React, { useState } from 'react';
+import { AppSidebar } from '../../components/layout/AppSidebar';
+import { AppTopBar } from '../../components/layout/AppTopBar';
+import { useAuthStore } from '../../store/useAuthStore';
+import { Layers, Users, CreditCard, ShieldCheck, Download, Plus, CheckCircle2 } from 'lucide-react';
+
+export default function InstitutionAdminPage() {
+  const { user, profile } = useAuthStore();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[#07110D] text-[#EAF7EF] font-sans selection:bg-[#39FF6A] selection:text-black">
+      <AppSidebar
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        <AppTopBar
+          onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+        />
+
+        <main className="flex-1 p-6 md:p-8 max-w-6xl mx-auto w-full space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[rgba(57,255,106,0.12)]">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-[#EAF7EF] flex items-center gap-3">
+                <Layers className="w-7 h-7 text-[#7FE7D6]" />
+                <span>Institution Administration</span>
+              </h1>
+              <p className="text-xs text-[#8FA99B] font-mono mt-1">
+                Seat allocation, bulk student licensing (₹499/student/yr), faculty management, and institutional analytics.
+              </p>
+            </div>
+            <span className="text-[11px] font-mono font-bold px-3 py-1 rounded-full bg-[rgba(127,231,214,0.15)] border border-[rgba(127,231,214,0.3)] text-[#7FE7D6]">
+              INSTITUTION ADMIN
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-5 rounded-2xl bg-[#0E2A1F]/60 border border-[rgba(57,255,106,0.15)] backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <Users className="w-5 h-5 text-[#39FF6A]" />
+                <span className="text-xs text-[#8FA99B] font-mono font-bold">Licensed Student Seats</span>
+              </div>
+              <p className="text-2xl font-black text-[#EAF7EF] mt-2">120 / 150</p>
+              <p className="text-[11px] text-[#8FA99B] mt-1">30 seats remaining in current cohort</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#0E2A1F]/60 border border-[rgba(57,255,106,0.15)] backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <CreditCard className="w-5 h-5 text-[#7FE7D6]" />
+                <span className="text-xs text-[#8FA99B] font-mono font-bold">Annual License Tier</span>
+              </div>
+              <p className="text-2xl font-black text-[#EAF7EF] mt-2">Active</p>
+              <p className="text-[11px] text-[#8FA99B] mt-1">₹499 / student / yr (Billed annually)</p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#0E2A1F]/60 border border-[rgba(57,255,106,0.15)] backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="w-5 h-5 text-[#39FF6A]" />
+                <span className="text-xs text-[#8FA99B] font-mono font-bold">DPDP Compliance</span>
+              </div>
+              <p className="text-2xl font-black text-[#39FF6A] mt-2">100% Verified</p>
+              <p className="text-[11px] text-[#8FA99B] mt-1">Parental consents captured for minors</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}

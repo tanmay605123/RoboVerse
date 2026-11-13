@@ -1,0 +1,57 @@
+{
+  "name": "roboverse-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RoboVerse - 3D Robotics and Electronics Learning Platform for Students",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace=@roboverse/api run dev",
+    "dev:web": "npm --workspace=@roboverse/web run dev",
+    "build": "npm run build:web",
+    "start": "npm --workspace=@roboverse/web run start",
+    "build:packages": "npm run build --workspaces --if-present",
+    "build:web": "npm --workspace=@roboverse/web run build",
+    "test": "npm run test:api && npm run test:sim",
+    "test:api": "npm --workspace=@roboverse/api run test",
+    "test:sim": "npm --workspace=@roboverse/sim-engine run test",
+    "seed:api": "npm --workspace=@roboverse/api run seed:postgres",
+    "seed:postgres": "npm --workspace=@roboverse/api run seed:postgres",
+    "dev:worker": "npm --workspace=@roboverse/worker run dev",
+    "build:worker": "npm --workspace=@roboverse/worker run build",
+    "typecheck:mobile": "npm --workspace=@roboverse/mobile run typecheck",
+    "start:mobile": "npm --workspace=@roboverse/mobile run start",
+    "test:qa:components": "node scripts/verify-components-qa.js",
+    "test:rituu:eval": "node scripts/test-rituu-eval.js",
+    "test:nearby:shops": "node scripts/test-nearby-shops.js",
+    "test:store:checkout": "node scripts/test-store-checkout.js",
+    "test:admin:certs": "node scripts/test-admin-certificates.js",
+    "test:security": "node scripts/test-security-audit.js",
+    "test:load": "node scripts/load-test-5k-users.js",
+    "test:all": "npm run test:qa:components && npm run test:rituu:eval && npm run test:nearby:shops && npm run test:store:checkout && npm run test:admin:certs && npm run test:security && npm run test:load && npm run test:sim",
+    "lint": "npm --workspace=@roboverse/web run lint"
+  },
+  "keywords": [
+    "robotics",
+    "electronics",
+    "arduino",
+    "simulation",
+    "3d",
+    "threejs",
+    "education"
+  ],
+  "author": "RoboVerse Team",
+  "license": "MIT",
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "msgpackr-extract@3.0.4": true,
+    "prisma@5.22.0": true,
+    "protobufjs@7.6.6": true,
+    "@google/genai@2.32.0": true,
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "@scarf/scarf@1.4.0": true
+  }
+}
