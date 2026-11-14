@@ -27,6 +27,7 @@ import { OnboardingJourneyModal } from '../../components/onboarding/OnboardingJo
 
 export default function RegisterPage() {
   const router = useRouter();
+  const setAuth = useAuthStore((s) => s.setAuth);
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
@@ -186,8 +187,27 @@ export default function RegisterPage() {
         localStorage.setItem('roboverse_refresh_token', response.data.tokens.refreshToken);
       }
 
-      useAuthStore.getState().setBackendAuth(response.data);
-      setCreatedStudentData({ name: payload.fullName, studentId: response.data.studentId });
+      const studentId = response.data.studentId || response.data.studentIdCard?.studentId || 'RV-PENDING';
+      setAuth({
+        user: response.data.user,
+        profile: {
+          ...(response.data.profile || {}),
+          fullName: response.data.profile?.fullName || payload.fullName,
+          studentId,
+          schoolOrCollegeName: response.data.profile?.schoolOrCollegeName || payload.schoolOrCollegeName,
+          classOrYear: response.data.profile?.classOrYear || payload.classOrYear,
+          city: response.data.profile?.city || payload.city,
+          state: response.data.profile?.state || payload.state,
+          interests: response.data.profile?.interests || payload.interests,
+          level: Number(response.data.profile?.level || 1),
+          xp: Number(response.data.profile?.xp || 50),
+          streakDays: Number(response.data.profile?.streakDays || 1),
+          totalLearningHours: Number(response.data.profile?.totalLearningHours || 0),
+        },
+        studentIdCard: response.data.studentIdCard,
+        tokens: response.data.tokens,
+      });
+      setCreatedStudentData({ name: payload.fullName, studentId });
       setShowOnboarding(true);
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please check your inputs.');

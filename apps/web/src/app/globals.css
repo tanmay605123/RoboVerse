@@ -82,3 +82,14 @@ body {
                     linear-gradient(to bottom, rgba(57, 255, 106, 0.04) 1px, transparent 1px);
   background-size: 32px 32px;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
