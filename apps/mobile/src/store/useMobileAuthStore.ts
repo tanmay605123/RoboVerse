@@ -90,15 +90,9 @@ export const useMobileAuthStore = create<MobileAuthState>((set, get) => ({
   },
 
   loginWithPassword: async (identifier, password) => {
-    const isEmail = identifier.includes('@');
-    const endpoint = isEmail ? '/auth/login' : '/auth/login/student-id';
-    const payload = isEmail
-      ? { email: identifier, password }
-      : { studentId: identifier, password };
-
-    const res = await mobileApiRequest(endpoint, {
+    const res = await mobileApiRequest('/auth/login', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ identifier, password }),
     });
 
     if (res.success && res.data) {

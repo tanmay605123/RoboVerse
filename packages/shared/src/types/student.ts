@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import { UserRole } from './auth';
 
+export interface StudentIdRecord {
+  studentId: string;
+  qrCodeDataUrl?: string;
+  verificationHash?: string;
+  verificationUrl?: string;
+  issuedAt?: string | Date;
+  validUntil?: string | Date;
+}
+
 export interface StudentBadge {
   id: string;
   name: string;

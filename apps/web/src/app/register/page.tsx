@@ -24,7 +24,6 @@ import { apiRequest } from '../../lib/apiClient';
 import { useAuthStore } from '../../store/useAuthStore';
 import { STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
 import { OnboardingJourneyModal } from '../../components/onboarding/OnboardingJourneyModal';
-import { getSupabaseClient } from '../../lib/supabaseClient';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -147,8 +146,6 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
 
-    const generatedSeqId = `RV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
-
     const payload = {
       fullName,
       email,
@@ -170,32 +167,6 @@ export default function RegisterPage() {
       referralCode: referralCode || undefined,
     };
 
-    // 1. Try Supabase Auth SignUp
-    const supabase = getSupabaseClient();
-    const { data: supaData, error: supaError } = await supabase.auth.signUp({
-      email,
-      password,
-      phone: mobileNumber.startsWith('+') ? mobileNumber : `+91${mobileNumber}`,
-      options: {
-        data: {
-          full_name: fullName,
-          role: 'student',
-          student_id: generatedSeqId,
-          school_or_college: schoolOrCollegeName,
-          class_level: classOrYear,
-          city,
-          state,
-          pincode,
-          interests: selectedInterests,
-          is_minor: isMinor,
-          parent_email: isMinor ? parentEmail : null,
-          parental_consent: isMinor && parentalConsentGiven,
-          location_consent: locationConsent,
-        },
-      },
-    });
-
-    // 2. Also register via backend API for complete database hydration
     const res = await apiRequest('/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -203,32 +174,23 @@ export default function RegisterPage() {
 
     setLoading(false);
 
-    const studentId = res.data?.studentIdCard?.studentId || supaData?.user?.user_metadata?.student_id || generatedSeqId;
+    if (!res.success || !res.data) {
+      setError(res.error?.message || 'Registration failed. Please try again.');
+      return;
+    }
+
+    const studentId = res.data.studentIdCard?.studentId || res.data.studentId;
+
+    if (!studentId) {
+      setError('Registration succeeded but no Student ID was returned. Please contact support.');
+      return;
+    }
 
     setAuth({
-      user: res.data?.user || { id: supaData?.user?.id || 'new_user_id', email, role: 'student' },
-      profile: res.data?.profile || {
-        fullName,
-        studentId,
-        institutionType,
-        schoolOrCollegeName,
-        classOrYear,
-        city,
-        state,
-        pincode,
-        interests: selectedInterests,
-        level: 1,
-        xp: 250,
-        streakDays: 1,
-        totalLearningHours: 0,
-      },
-      studentIdCard: res.data?.studentIdCard || {
-        studentId,
-        qrCodeDataUrl: '',
-        verificationUrl: `https://roboverse-delta.vercel.app/verify/student/${studentId}`,
-        validUntil: '2027-12-31',
-      },
-      tokens: res.data?.tokens || { accessToken: supaData?.session?.access_token || 'demo_token', refreshToken: 'demo_refresh' },
+      user: res.data.user,
+      profile: { ...res.data.profile, studentId },
+      studentIdCard: res.data.studentIdCard,
+      tokens: res.data.tokens,
     });
 
     // Trigger Onboarding Journey

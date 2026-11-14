@@ -76,6 +76,15 @@ export const LoginInputSchema = z.object({
 
 export type LoginInput = z.infer<typeof LoginInputSchema>;
 
+export interface AuthResponseData {
+  user: any;
+  profile?: any;
+  studentId?: string;
+  studentIdCard?: any;
+  tokens: { accessToken: string; refreshToken: string };
+  redirectTo?: string;
+}
+
 // Mobile OTP Request & Verify
 export const RequestOtpInputSchema = z.object({
   mobileNumber: z

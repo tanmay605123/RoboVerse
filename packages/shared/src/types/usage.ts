@@ -23,6 +23,14 @@ export interface DailyUsageStatus {
   maxSavedProjectsLimit: number;
   // AI Cost accounting (in INR)
   estimatedAiCostInr: number;
+  // Legacy aliases retained for clients that display raw usage meters.
+  rituuMessagesCount?: number;
+  photoAnalysesCount?: number;
+  limits?: {
+    dailyTextMessageLimit: number;
+    dailyPhotoAnalysisLimit: number;
+    maxSavedProjects: number;
+  };
 }
 
 export type UsageActionType = 'RITUU_TEXT' | 'RITUU_PHOTO' | 'CODE_REVIEW' | 'SAVE_PROJECT';

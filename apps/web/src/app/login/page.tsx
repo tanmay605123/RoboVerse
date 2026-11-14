@@ -20,7 +20,6 @@ import {
 import { apiRequest } from '../../lib/apiClient';
 import { useAuthStore } from '../../store/useAuthStore';
 import { getSafeRedirectUrl } from '../../lib/authRedirect';
-import { getSupabaseClient } from '../../lib/supabaseClient';
 
 function LoginForm() {
   const router = useRouter();
@@ -58,58 +57,7 @@ function LoginForm() {
     setError(null);
     setInfoMessage(null);
 
-    // 1. Try Supabase Auth first
-    const supabase = getSupabaseClient();
-    if (identifier.includes('@')) {
-      const { data: supaData, error: supaError } = await supabase.auth.signInWithPassword({
-        email: identifier,
-        password,
-      });
-
-      if (!supaError && supaData?.user) {
-        setLoading(false);
-        const user = supaData.user;
-        const profile = user.user_metadata || {};
-        const role = profile.role || 'student';
-        const studentId = profile.student_id || 'RV-2026-000101';
-
-        setAuth({
-          user: {
-            id: user.id,
-            email: user.email || identifier,
-            role,
-          },
-          profile: {
-            fullName: profile.full_name || 'RoboVerse Explorer',
-            studentId,
-            schoolOrCollegeName: profile.school_or_college || 'Indian Institute of Technology',
-            classOrYear: profile.class_level || 'Grade 10',
-            city: profile.city || 'New Delhi',
-            state: profile.state || 'Delhi',
-            interests: profile.interests || ['arduino', 'circuit_design'],
-            level: 1,
-            xp: 250,
-            streakDays: 3,
-            totalLearningHours: 4.5,
-          },
-          studentIdCard: {
-            studentId,
-            qrCodeDataUrl: '',
-            verificationUrl: `https://roboverse-delta.vercel.app/verify/student/${studentId}`,
-            validUntil: '2027-12-31',
-          },
-          tokens: {
-            accessToken: supaData.access_token || 'mock_supa_token',
-            refreshToken: supaData.refresh_token || 'mock_supa_refresh',
-          },
-        });
-
-        router.push(getSafeRedirectUrl(nextUrl, role));
-        return;
-      }
-    }
-
-    // 2. Fallback to API bridge
+    // Authenticate against the same backend that owns the Prisma user/profile records.
     const res = await apiRequest('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ identifier, password }),

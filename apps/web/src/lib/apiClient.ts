@@ -1,4 +1,6 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+// The backend exposes its versioned routes under /api/v1. Keep the same
+// prefix for local development and for the Next.js production rewrite.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
 
 export async function apiRequest<T = any>(
   endpoint: string,

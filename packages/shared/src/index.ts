@@ -15,6 +15,7 @@ export * from './types/robotics';
 export * from './robotics/templatesAndArenas';
 export * from './types/store';
 export * from './store/catalog';
+export * from './data/componentsCatalog';
 export * from './types/certificates';
 export * from './types/hackathons';
 export * from './types/admin';

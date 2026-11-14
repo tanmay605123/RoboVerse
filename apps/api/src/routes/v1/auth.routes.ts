@@ -24,6 +24,7 @@ import { generateStudentIdRecord } from '../../lib/studentId';
 import { redis } from '../../lib/redis';
 import { inMemoryDb, prisma } from '../../lib/db';
 import { usageService } from '../../lib/usage';
+import { ENV } from '../../config/env';
 
 export function getRoleRedirectPath(role: UserRole | string): string {
   switch (role) {
@@ -244,11 +245,21 @@ router.post('/login', validateBody(LoginInputSchema), async (req: Request, res: 
   let matchedUser: any = null;
   const isStudentId = identifier.toUpperCase().startsWith('RV-');
 
-  if (isStudentId) {
-    const studentIdEntry = await prisma.studentID.findUnique({ where: { studentId: identifier.toUpperCase() } });
-    if (studentIdEntry) matchedUser = await prisma.user.findUnique({ where: { id: studentIdEntry.userId } });
+  if (ENV.DATABASE_URL) {
+    if (isStudentId) {
+      const studentIdEntry = await prisma.studentID.findUnique({ where: { studentId: identifier.toUpperCase() } });
+      if (studentIdEntry) matchedUser = await prisma.user.findUnique({ where: { id: studentIdEntry.userId } });
+    } else {
+      matchedUser = await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+    }
   } else {
-    matchedUser = await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+    matchedUser = Array.from(inMemoryDb.users.values()).find((user) => {
+      if (isStudentId) {
+        const studentId = inMemoryDb.studentIds.get(user.id)?.studentId;
+        return studentId?.toUpperCase() === identifier.toUpperCase();
+      }
+      return user.email.toLowerCase() === identifier.toLowerCase();
+    });
   }
 
   if (!matchedUser || !matchedUser.passwordHash) {
@@ -268,11 +279,19 @@ router.post('/login', validateBody(LoginInputSchema), async (req: Request, res: 
     return;
   }
 
-  const studentIdRecord = await prisma.studentID.findUnique({ where: { userId: matchedUser.id } });
-  const profile = await prisma.studentProfile.findUnique({ where: { userId: matchedUser.id } });
+  const studentIdRecord = ENV.DATABASE_URL
+    ? await prisma.studentID.findUnique({ where: { userId: matchedUser.id } })
+    : inMemoryDb.studentIds.get(matchedUser.id);
+  const profile = ENV.DATABASE_URL
+    ? await prisma.studentProfile.findUnique({ where: { userId: matchedUser.id } })
+    : inMemoryDb.profiles.get(matchedUser.id);
 
   // Find active subscription plan
-  const sub = await prisma.subscription.findFirst({ where: { userId: matchedUser.id, status: 'ACTIVE' } });
+  const sub = ENV.DATABASE_URL
+    ? await prisma.subscription.findFirst({ where: { userId: matchedUser.id, status: 'ACTIVE' } })
+    : Array.from(inMemoryDb.subscriptions.values()).find(
+        (subscription) => subscription.userId === matchedUser.id && subscription.status === 'ACTIVE'
+      );
   const planId = sub ? sub.planId : 'plan_free';
 
   const tokens = generateAuthTokens({
