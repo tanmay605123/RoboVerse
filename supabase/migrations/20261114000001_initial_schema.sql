@@ -313,6 +313,16 @@ CREATE TABLE IF NOT EXISTS public.certificates (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS code TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS verification_url TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS qr_code_data_url TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS pdf_url TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS revoked BOOLEAN DEFAULT false;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS issue_date TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS issuing_authority text DEFAULT 'RoboVerse Academy Certification Board';
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS pdf_storage_path text;
+
 -- RPC: issue_certificate
 DROP FUNCTION IF EXISTS public.issue_certificate(text);
 CREATE OR REPLACE FUNCTION public.issue_certificate(p_course_id TEXT)

@@ -380,6 +380,9 @@ CREATE TABLE IF NOT EXISTS public.certificates (
   pdf_storage_path text
 );
 
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS issuing_authority text DEFAULT 'RoboVerse Academy Certification Board';
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS pdf_storage_path text;
+
 -- =====================================================================
 -- 6. Hardware Components Library & Projects
 -- =====================================================================
