@@ -17,11 +17,12 @@ export async function POST(req: Request) {
     const requestedEmail = email || 'student@roboverse.dev';
 
     // Fetch user profile
-    const { data: profile } = await supabase
+    const { data: profileRows } = await supabase
       .from('profiles' as any)
       .select('id, full_name, role, student_id, school_college, city, pincode, interests, language, is_minor, parental_consent_at, location_consent, created_at')
       .eq('email', requestedEmail)
-      .maybeSingle();
+      .single();
+    const profile = Array.isArray(profileRows) ? profileRows[0] : profileRows;
 
     // Compile DPDP export package
     const exportData = {
