@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS active_plan_id TEXT DEFAULT 'free';
+
 -- Admin Security Helper
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN
