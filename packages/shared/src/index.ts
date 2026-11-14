@@ -1,4 +1,5 @@
 export * from './types/database';
+export type { DbUserRole } from './types/database.types';
 export * from './supabaseClient';
 export * from './types/auth';
 export * from './types/student';
@@ -23,4 +24,5 @@ export * from './subscriptions/plans';
 export * from './types/realtime';
 export * from './realtime/realtimeClient';
 export * from './performance/qualityPresets';
+export * from './data/componentsCatalog';
 

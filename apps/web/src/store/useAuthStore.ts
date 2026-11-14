@@ -77,6 +77,8 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   planTier: PlanTier;
+  entitlements: { badge?: string; planTier?: string; maxCircuits?: number; rituuDailyLimit?: number } | null;
+  projectCount: number;
   isAuthenticated: boolean;
   hasCompletedOnboarding: boolean;
 
@@ -86,7 +88,11 @@ interface AuthState {
     studentIdCard?: StudentIdCardData;
     tokens: { accessToken: string; refreshToken: string };
     planTier?: PlanTier;
+    entitlements?: { badge?: string; planTier?: string; maxCircuits?: number; rituuDailyLimit?: number } | null;
+    projectCount?: number;
   }) => void;
+  setProjectCount: (count: number) => void;
+  refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<StudentProfileData>) => void;
   setOnboardingCompleted: (completed: boolean) => void;
   logout: () => void;
@@ -99,10 +105,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   refreshToken: null,
   planTier: PlanTier.FREE,
+  entitlements: null,
+  projectCount: 0,
   isAuthenticated: false,
   hasCompletedOnboarding: false,
 
-  setAuth: ({ user, profile, studentIdCard, tokens, planTier = PlanTier.FREE }) => {
+  setAuth: ({ user, profile, studentIdCard, tokens, planTier = PlanTier.FREE, entitlements = null, projectCount = 0 }) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('roboverse_access_token', tokens.accessToken);
       localStorage.setItem('roboverse_refresh_token', tokens.refreshToken);
@@ -129,9 +137,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       planTier,
+      entitlements,
+      projectCount,
       isAuthenticated: true,
     });
   },
+
+  setProjectCount: (count) => set({ projectCount: count }),
+  refreshProfile: async () => {},
 
   updateProfile: (updates) => {
     set((state) => {

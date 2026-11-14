@@ -137,24 +137,129 @@ export class RoboVerseSupabaseClient {
       }
     },
 
-    signOut: async () => {
+    signOut: async (options?: { scope?: string }) => {
       try {
-        await fetch(`${this.url}/auth/v1/logout`, {
+        await fetch(`${this.url}/auth/v1/logout${options?.scope ? `?scope=${options.scope}` : ''}`, {
           method: 'POST',
           headers: this.getHeaders(),
         });
       } finally {
-        this.setAuthToken(null);
+        if (!options?.scope || options.scope === 'global' || options.scope === 'local') {
+          this.setAuthToken(null);
+        }
       }
       return { error: null };
     },
 
-    getUser: async () => {
-      if (!this.token) return { data: { user: null }, error: null };
+    updateUser: async (attributes: { password?: string; data?: Record<string, any> }) => {
       try {
         const res = await fetch(`${this.url}/auth/v1/user`, {
-          method: 'GET',
+          method: 'PUT',
           headers: this.getHeaders(),
+          body: JSON.stringify(attributes),
+        });
+        const data = await res.json();
+        return { data: res.ok ? { user: data } : null, error: res.ok ? null : data };
+      } catch (err: any) {
+        return { data: null, error: err };
+      }
+    },
+
+    mfa: {
+      listFactors: async () => {
+        try {
+          const res = await fetch(`${this.url}/auth/v1/factors`, {
+            method: 'GET',
+            headers: this.getHeaders(),
+          });
+          const data = await res.json();
+          if (!res.ok) return { data: null, error: data };
+          const factors = Array.isArray(data) ? data : [];
+          return { data: { all: factors, totp: factors.filter((f: any) => f.factor_type === 'totp') }, error: null };
+        } catch (err: any) {
+          return { data: null, error: err };
+        }
+      },
+      enroll: async (params: { factorType: string; friendlyName?: string; issuer?: string }) => {
+        try {
+          const res = await fetch(`${this.url}/auth/v1/factors`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({
+              factor_type: params.factorType,
+              friendly_name: params.friendlyName,
+              issuer: params.issuer,
+            }),
+          });
+          const data = await res.json();
+          return { data: res.ok ? data : null, error: res.ok ? null : data };
+        } catch (err: any) {
+          return { data: null, error: err };
+        }
+      },
+      challenge: async (params: { factorId: string }) => {
+        try {
+          const res = await fetch(`${this.url}/auth/v1/factors/${params.factorId}/challenge`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+          });
+          const data = await res.json();
+          return { data: res.ok ? data : null, error: res.ok ? null : data };
+        } catch (err: any) {
+          return { data: null, error: err };
+        }
+      },
+      verify: async (params: { factorId: string; challengeId: string; code: string }) => {
+        try {
+          const res = await fetch(`${this.url}/auth/v1/factors/${params.factorId}/verify`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({
+              challenge_id: params.challengeId,
+              code: params.code,
+            }),
+          });
+          const data = await res.json();
+          return { data: res.ok ? data : null, error: res.ok ? null : data };
+        } catch (err: any) {
+          return { data: null, error: err };
+        }
+      },
+      getAuthenticatorAssuranceLevel: async () => {
+        return {
+          data: {
+            currentLevel: 'aal1' as string,
+            nextLevel: 'aal1' as string,
+            currentAuthenticationMethods: [] as any[],
+          },
+          error: null,
+        };
+      },
+    },
+
+    getSession: async () => {
+      const token = this.token || (typeof window !== 'undefined' ? localStorage.getItem('roboverse_access_token') : null);
+      if (!token) return { data: { session: null }, error: null };
+      return {
+        data: {
+          session: {
+            access_token: token,
+            token_type: 'bearer',
+            user: null as { id: string; email?: string; [key: string]: any } | null,
+          },
+        },
+        error: null,
+      };
+    },
+
+    getUser: async (jwt?: string) => {
+      const token = jwt || this.token;
+      if (!token) return { data: { user: null }, error: null };
+      try {
+        const headers = this.getHeaders(jwt ? { Authorization: `Bearer ${jwt}` } : {});
+        const res = await fetch(`${this.url}/auth/v1/user`, {
+          method: 'GET',
+          headers,
         });
         const data = await res.json();
         if (!res.ok) return { data: { user: null }, error: data };
@@ -257,6 +362,11 @@ class PostgrestQueryBuilder {
     return this;
   }
 
+  public maybeSingle() {
+    this.queryParams.push(`limit=1`);
+    return this;
+  }
+
   public async insert(data: any | any[]) {
     const res = await fetch(this.baseEndpoint, {
       method: 'POST',
@@ -296,7 +406,11 @@ class PostgrestQueryBuilder {
         headers: this.headersFn(),
       });
       const data = await res.json();
-      resolve({ data: res.ok ? data : null, error: res.ok ? null : data });
+      let finalData = res.ok ? data : null;
+      if (Array.isArray(finalData) && this.queryParams.includes('limit=1')) {
+        finalData = finalData[0] || null;
+      }
+      resolve({ data: finalData, error: res.ok ? null : data });
     } catch (err) {
       if (reject) reject(err);
       else resolve({ data: null, error: err });

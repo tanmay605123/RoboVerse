@@ -14,7 +14,8 @@ DO $$ BEGIN
     'teacher',
     'institution_admin',
     'admin',
-    'store_admin'
+    'store_admin',
+    'support'
   );
 EXCEPTION
   WHEN duplicate_object THEN null;

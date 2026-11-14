@@ -8,15 +8,18 @@ import { DigitalStudentIdCard } from '@roboverse/shared';
 
 interface StudentIdCard3DProps {
   cardData?: Partial<DigitalStudentIdCard>;
+  studentId?: string;
+  fullName?: string;
+  school?: string;
 }
 
-export function StudentIdCard3D({ cardData }: StudentIdCard3DProps) {
+export function StudentIdCard3D({ cardData, studentId: propStudentId, fullName: propFullName, school: propSchool }: StudentIdCard3DProps) {
   const [isFlipped, setIsFlipped] = useState(false);
 
-  const studentId = cardData?.studentId || 'RV-2026-000101';
-  const fullName = cardData?.fullName || 'Aarav Sharma';
+  const studentId = propStudentId || cardData?.studentId || 'RV-2026-000101';
+  const fullName = propFullName || cardData?.fullName || 'Aarav Sharma';
   const planName = cardData?.planName || 'Free Explorer';
-  const school = cardData?.schoolOrCollege || 'Delhi Public School';
+  const school = propSchool || cardData?.schoolOrCollege || 'Delhi Public School';
   const level = cardData?.level || 1;
   const xp = cardData?.xp || 240;
   const streak = cardData?.streakDays || 5;

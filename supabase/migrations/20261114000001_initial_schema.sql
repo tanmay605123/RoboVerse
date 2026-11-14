@@ -53,16 +53,21 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS active_plan_id TEXT DEFAULT 'free';
+
 -- Admin Security Helper
 CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'
+    WHERE id = auth.uid() AND role::text IN ('admin', 'support')
   );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$;
 
 -- Trigger to create profile upon Supabase Auth sign-up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -121,7 +126,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -147,7 +152,7 @@ BEGIN
   INSERT INTO public.audit_log (admin_id, action, target_type, target_id, details)
   VALUES (auth.uid(), 'CHANGE_ROLE', 'user', p_user_id::text, jsonb_build_object('new_role', p_new_role));
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- 4. PLANS, SUBSCRIPTIONS & PAYMENTS
@@ -169,6 +174,16 @@ CREATE TABLE IF NOT EXISTS public.plans (
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS price_inr_monthly NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS price_inr_quarterly NUMERIC(10,2);
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS price_inr_yearly NUMERIC(10,2);
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS gst_percent NUMERIC(5,2) DEFAULT 18.00;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS max_saved_projects INT DEFAULT 5;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS rituu_daily_messages INT DEFAULT 15;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS rituu_daily_photos INT DEFAULT 3;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS store_discount_percent NUMERIC(5,2) DEFAULT 0.00;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -310,7 +325,18 @@ CREATE TABLE IF NOT EXISTS public.certificates (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS code TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS verification_url TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS qr_code_data_url TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS pdf_url TEXT;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS revoked BOOLEAN DEFAULT false;
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS issue_date TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS issuing_authority text DEFAULT 'RoboVerse Academy Certification Board';
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS pdf_storage_path text;
+
 -- RPC: issue_certificate
+DROP FUNCTION IF EXISTS public.issue_certificate(text);
 CREATE OR REPLACE FUNCTION public.issue_certificate(p_course_id TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -387,9 +413,10 @@ BEGIN
     'title', v_course_title
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- RPC: verify_certificate (Public)
+DROP FUNCTION IF EXISTS public.verify_certificate(text);
 CREATE OR REPLACE FUNCTION public.verify_certificate(p_code TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -424,7 +451,7 @@ BEGIN
     'issue_date', v_cert.issue_date
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE SET search_path = public;
 
 -- ============================================================================
 -- 6. LABS, COMPONENTS & 3D HARDWARE
@@ -611,7 +638,10 @@ CREATE TABLE IF NOT EXISTS public.rituu_usage (
   UNIQUE(user_id, day_ist)
 );
 
+ALTER TABLE public.rituu_usage ADD COLUMN IF NOT EXISTS estimated_cost_inr NUMERIC(10,4) DEFAULT 0;
+
 -- RPC: rituu_consume (Atomic limit check & consumption in IST timezone)
+DROP FUNCTION IF EXISTS public.rituu_consume(boolean);
 CREATE OR REPLACE FUNCTION public.rituu_consume(p_is_photo BOOLEAN DEFAULT false)
 RETURNS JSONB AS $$
 DECLARE
@@ -678,7 +708,7 @@ BEGIN
     'photos_limit', v_photo_limit
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- 8. NEARBY COMPONENT STORES & POSTGIS GEOGRAPHY
@@ -705,6 +735,7 @@ CREATE TABLE IF NOT EXISTS public.shops (
 );
 
 -- PostGIS GiST Spatial Index
+CREATE INDEX IF NOT EXISTS shops_location_gist ON public.shops USING GIST(location);
 CREATE INDEX IF NOT EXISTS idx_shops_location_gist ON public.shops USING GIST(location);
 
 CREATE TABLE IF NOT EXISTS public.shop_inventory (
@@ -727,7 +758,13 @@ CREATE TABLE IF NOT EXISTS public.shop_reports (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.shop_reports ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+ALTER TABLE public.shop_reports ADD COLUMN IF NOT EXISTS report_type TEXT DEFAULT 'other';
+ALTER TABLE public.shop_reports ADD COLUMN IF NOT EXISTS details TEXT;
+
 -- RPC: nearby_shops using PostGIS ST_DWithin and ST_Distance
+DROP FUNCTION IF EXISTS public.nearby_shops(double precision, double precision, double precision, integer);
+DROP FUNCTION IF EXISTS public.nearby_shops(double precision, double precision, integer, integer);
 CREATE OR REPLACE FUNCTION public.nearby_shops(
   p_lat DOUBLE PRECISION,
   p_lng DOUBLE PRECISION,
@@ -776,7 +813,7 @@ BEGIN
   ORDER BY distance_meters ASC
   LIMIT p_limit;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE SET search_path = public;
 
 -- ============================================================================
 -- 9. TECHSAVYYY STORE, KITS & ORDERS (SERVER-SIDE PRICING ONLY)
@@ -807,6 +844,12 @@ CREATE TABLE IF NOT EXISTS public.products (
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS component_id TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS age_restricted BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS shipping_class TEXT DEFAULT 'standard';
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS description TEXT;
 
 CREATE TABLE IF NOT EXISTS public.kits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -865,6 +908,11 @@ CREATE TABLE IF NOT EXISTS public.orders (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS total_amount_inr NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS tax_breakdown JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS shipping_class TEXT DEFAULT 'standard';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_id UUID;
+
 CREATE TABLE IF NOT EXISTS public.order_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
@@ -875,6 +923,8 @@ CREATE TABLE IF NOT EXISTS public.order_items (
 );
 
 -- RPC: create_order_from_cart (COMPUTES TOTALS FROM DATABASE ONLY)
+DROP FUNCTION IF EXISTS public.create_order_from_cart(uuid, text);
+DROP FUNCTION IF EXISTS public.create_order_from_cart(uuid);
 CREATE OR REPLACE FUNCTION public.create_order_from_cart(p_address_id UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -1001,9 +1051,10 @@ BEGIN
     'shipping_class', v_highest_shipping
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- RPC: finalize_order_payment (used by Razorpay webhook)
+DROP FUNCTION IF EXISTS public.finalize_order_payment(uuid, text);
 CREATE OR REPLACE FUNCTION public.finalize_order_payment(p_order_id UUID, p_razorpay_payment_id TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -1038,13 +1089,14 @@ BEGIN
 
   RETURN jsonb_build_object('success', true, 'order_id', p_order_id, 'status', 'paid');
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- 10. REALTIME PRESENCE & ADMIN OPERATIONS
 -- ============================================================================
 
 -- Presence helper
+DROP FUNCTION IF EXISTS public.touch_presence(text, uuid);
 CREATE OR REPLACE FUNCTION public.touch_presence(p_activity TEXT, p_project_id UUID DEFAULT NULL)
 RETURNS VOID AS $$
 BEGIN
@@ -1056,7 +1108,7 @@ BEGIN
     WHERE id = auth.uid();
   END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE TABLE IF NOT EXISTS public.audit_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1080,6 +1132,7 @@ CREATE TABLE IF NOT EXISTS public.daily_stats (
 );
 
 -- RPC: admin_overview
+DROP FUNCTION IF EXISTS public.admin_overview();
 CREATE OR REPLACE FUNCTION public.admin_overview()
 RETURNS JSONB AS $$
 DECLARE
@@ -1095,7 +1148,7 @@ DECLARE
   v_shop_reports_pending INT;
 BEGIN
   IF NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Access Denied: Administrator role required.';
+    RAISE EXCEPTION 'Access denied: Admin role required.';
   END IF;
 
   SELECT COUNT(*) INTO v_total_students FROM public.profiles WHERE role = 'student';
@@ -1136,9 +1189,10 @@ BEGIN
     'pending_shop_reports', v_shop_reports_pending
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- RPC: admin_students (Returns directory without passwords)
+DROP FUNCTION IF EXISTS public.admin_students(text, text, integer, integer);
 CREATE OR REPLACE FUNCTION public.admin_students(
   p_search TEXT DEFAULT '',
   p_filter_plan TEXT DEFAULT NULL,
@@ -1160,7 +1214,7 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
   IF NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Access Denied: Administrator role required.';
+    RAISE EXCEPTION 'Access denied: Admin role required.';
   END IF;
 
   RETURN QUERY
@@ -1183,7 +1237,7 @@ BEGIN
   LIMIT p_limit
   OFFSET p_offset;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================================
 -- 11. INDEXES FOR PERFORMANCE & EXPLAIN TUNING
@@ -1263,66 +1317,85 @@ ALTER TABLE public.daily_stats ENABLE ROW LEVEL SECURITY;
 REVOKE UPDATE (role, active_plan_id, student_id) ON public.profiles FROM authenticated;
 
 -- PROFILES
+DROP POLICY IF EXISTS "Public read minimal profiles" ON public.profiles;
 CREATE POLICY "Public read minimal profiles" ON public.profiles
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can update their own editable profile" ON public.profiles;
 CREATE POLICY "Users can update their own editable profile" ON public.profiles
   FOR UPDATE USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
 -- PLANS & PUBLIC CATALOGS (Read-only for public, admin write)
+DROP POLICY IF EXISTS "Plans are publicly viewable" ON public.plans;
 CREATE POLICY "Plans are publicly viewable" ON public.plans
   FOR SELECT USING (is_active = true OR public.is_admin());
 
+DROP POLICY IF EXISTS "Admin manages plans" ON public.plans;
 CREATE POLICY "Admin manages plans" ON public.plans
   FOR ALL USING (public.is_admin());
 
 -- SUBSCRIPTIONS & PAYMENTS
+DROP POLICY IF EXISTS "Users view own subscriptions" ON public.subscriptions;
 CREATE POLICY "Users view own subscriptions" ON public.subscriptions
   FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Users view own payments" ON public.payments;
 CREATE POLICY "Users view own payments" ON public.payments
   FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
 
 -- COURSES & LESSONS (Public read, admin write)
+DROP POLICY IF EXISTS "Courses are publicly viewable" ON public.courses;
 CREATE POLICY "Courses are publicly viewable" ON public.courses
   FOR SELECT USING (is_published = true OR public.is_admin());
 
+DROP POLICY IF EXISTS "Admin manages courses" ON public.courses;
 CREATE POLICY "Admin manages courses" ON public.courses
   FOR ALL USING (public.is_admin());
 
+DROP POLICY IF EXISTS "Modules viewable" ON public.modules;
 CREATE POLICY "Modules viewable" ON public.modules
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Lessons viewable" ON public.lessons;
 CREATE POLICY "Lessons viewable" ON public.lessons
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Enrollments owner or admin" ON public.enrollments;
 CREATE POLICY "Enrollments owner or admin" ON public.enrollments
   FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Lesson progress owner or admin" ON public.lesson_progress;
 CREATE POLICY "Lesson progress owner or admin" ON public.lesson_progress
   FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Quizzes viewable" ON public.quizzes;
 CREATE POLICY "Quizzes viewable" ON public.quizzes
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Certificates public read" ON public.certificates;
 CREATE POLICY "Certificates public read" ON public.certificates
   FOR SELECT USING (revoked = false OR auth.uid() = user_id OR public.is_admin());
 
 -- COMPONENTS & ROBOT TEMPLATES
+DROP POLICY IF EXISTS "Components are publicly viewable" ON public.components;
 CREATE POLICY "Components are publicly viewable" ON public.components
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admin manages components" ON public.components;
 CREATE POLICY "Admin manages components" ON public.components
   FOR ALL USING (public.is_admin());
 
+DROP POLICY IF EXISTS "Robot templates are publicly viewable" ON public.robot_templates;
 CREATE POLICY "Robot templates are publicly viewable" ON public.robot_templates
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Arenas are publicly viewable" ON public.arenas;
 CREATE POLICY "Arenas are publicly viewable" ON public.arenas
   FOR SELECT USING (true);
 
 -- CIRCUIT PROJECTS
+DROP POLICY IF EXISTS "Projects select policy" ON public.circuit_projects;
 CREATE POLICY "Projects select policy" ON public.circuit_projects
   FOR SELECT USING (
     visibility = 'public'
@@ -1331,26 +1404,33 @@ CREATE POLICY "Projects select policy" ON public.circuit_projects
     OR public.is_admin()
   );
 
+DROP POLICY IF EXISTS "Projects insert owner" ON public.circuit_projects;
 CREATE POLICY "Projects insert owner" ON public.circuit_projects
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Projects update owner" ON public.circuit_projects;
 CREATE POLICY "Projects update owner" ON public.circuit_projects
   FOR UPDATE USING (auth.uid() = user_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Projects delete owner" ON public.circuit_projects;
 CREATE POLICY "Projects delete owner" ON public.circuit_projects
   FOR DELETE USING (auth.uid() = user_id OR public.is_admin());
 
 -- ROBOT DESIGNS & TEST RUNS
+DROP POLICY IF EXISTS "Robot designs owner access" ON public.robot_designs;
 CREATE POLICY "Robot designs owner access" ON public.robot_designs
   FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Test runs owner access" ON public.test_runs;
 CREATE POLICY "Test runs owner access" ON public.test_runs
   FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
 -- CHAT SESSIONS & MESSAGES (Rituu)
+DROP POLICY IF EXISTS "Chat sessions owner access" ON public.chat_sessions;
 CREATE POLICY "Chat sessions owner access" ON public.chat_sessions
   FOR ALL USING (auth.uid() = user_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Chat messages session owner access" ON public.chat_messages;
 CREATE POLICY "Chat messages session owner access" ON public.chat_messages
   FOR ALL USING (
     EXISTS (
@@ -1359,53 +1439,69 @@ CREATE POLICY "Chat messages session owner access" ON public.chat_messages
     )
   );
 
+DROP POLICY IF EXISTS "Rituu usage owner access" ON public.rituu_usage;
 CREATE POLICY "Rituu usage owner access" ON public.rituu_usage
   FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
 
 -- SHOPS (Verified shops are publicly viewable)
+DROP POLICY IF EXISTS "Shops public select" ON public.shops;
 CREATE POLICY "Shops public select" ON public.shops
   FOR SELECT USING (verified_status = 'verified' OR auth.uid() = owner_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Shop owners can register/update" ON public.shops;
 CREATE POLICY "Shop owners can register/update" ON public.shops
   FOR INSERT WITH CHECK (auth.uid() = owner_id);
 
+DROP POLICY IF EXISTS "Shop owners update own shop" ON public.shops;
 CREATE POLICY "Shop owners update own shop" ON public.shops
   FOR UPDATE USING (auth.uid() = owner_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Shop inventory public read" ON public.shop_inventory;
 CREATE POLICY "Shop inventory public read" ON public.shop_inventory
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Shop reports insert" ON public.shop_reports;
 CREATE POLICY "Shop reports insert" ON public.shop_reports
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Shop reports admin view" ON public.shop_reports;
 CREATE POLICY "Shop reports admin view" ON public.shop_reports
   FOR SELECT USING (public.is_admin() OR auth.uid() = user_id);
 
 -- PRODUCTS & COMMERCE
+DROP POLICY IF EXISTS "Product categories viewable" ON public.product_categories;
 CREATE POLICY "Product categories viewable" ON public.product_categories
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Products viewable" ON public.products;
 CREATE POLICY "Products viewable" ON public.products
   FOR SELECT USING (is_active = true OR public.is_admin());
 
+DROP POLICY IF EXISTS "Admin manages products" ON public.products;
 CREATE POLICY "Admin manages products" ON public.products
   FOR ALL USING (public.is_admin());
 
+DROP POLICY IF EXISTS "Kits viewable" ON public.kits;
 CREATE POLICY "Kits viewable" ON public.kits
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Kit items viewable" ON public.kit_items;
 CREATE POLICY "Kit items viewable" ON public.kit_items
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Addresses owner access" ON public.addresses;
 CREATE POLICY "Addresses owner access" ON public.addresses
   FOR ALL USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Cart owner access" ON public.cart_items;
 CREATE POLICY "Cart owner access" ON public.cart_items
   FOR ALL USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Orders owner access" ON public.orders;
 CREATE POLICY "Orders owner access" ON public.orders
   FOR SELECT USING (auth.uid() = user_id OR public.is_admin());
 
+DROP POLICY IF EXISTS "Order items owner access" ON public.order_items;
 CREATE POLICY "Order items owner access" ON public.order_items
   FOR SELECT USING (
     EXISTS (
@@ -1415,6 +1511,7 @@ CREATE POLICY "Order items owner access" ON public.order_items
   );
 
 -- AUDIT LOG (Admin only)
+DROP POLICY IF EXISTS "Admin views audit log" ON public.audit_log;
 CREATE POLICY "Admin views audit log" ON public.audit_log
   FOR SELECT USING (public.is_admin());
 
@@ -1432,24 +1529,31 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Storage Policies
+DROP POLICY IF EXISTS "Component assets public read" ON storage.objects;
 CREATE POLICY "Component assets public read" ON storage.objects
   FOR SELECT USING (bucket_id = 'component-assets');
 
+DROP POLICY IF EXISTS "Component assets admin write" ON storage.objects;
 CREATE POLICY "Component assets admin write" ON storage.objects
   FOR INSERT WITH CHECK (bucket_id = 'component-assets' AND public.is_admin());
 
+DROP POLICY IF EXISTS "Avatars public read" ON storage.objects;
 CREATE POLICY "Avatars public read" ON storage.objects
   FOR SELECT USING (bucket_id = 'avatars');
 
+DROP POLICY IF EXISTS "Avatars owner upload" ON storage.objects;
 CREATE POLICY "Avatars owner upload" ON storage.objects
   FOR INSERT WITH CHECK (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
 
+DROP POLICY IF EXISTS "Project thumbnails public read" ON storage.objects;
 CREATE POLICY "Project thumbnails public read" ON storage.objects
   FOR SELECT USING (bucket_id = 'project-thumbnails');
 
+DROP POLICY IF EXISTS "Project thumbnails owner write" ON storage.objects;
 CREATE POLICY "Project thumbnails owner write" ON storage.objects
   FOR INSERT WITH CHECK (bucket_id = 'project-thumbnails' AND auth.uid()::text = (storage.foldername(name))[1]);
 
+DROP POLICY IF EXISTS "Certificates private owner or admin read" ON storage.objects;
 CREATE POLICY "Certificates private owner or admin read" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'certificates'

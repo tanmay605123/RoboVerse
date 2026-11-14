@@ -380,6 +380,9 @@ CREATE TABLE IF NOT EXISTS public.certificates (
   pdf_storage_path text
 );
 
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS issuing_authority text DEFAULT 'RoboVerse Academy Certification Board';
+ALTER TABLE public.certificates ADD COLUMN IF NOT EXISTS pdf_storage_path text;
+
 -- =====================================================================
 -- 6. Hardware Components Library & Projects
 -- =====================================================================
@@ -606,6 +609,11 @@ CREATE TABLE IF NOT EXISTS public.products (
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
+
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS component_id text;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS age_restricted boolean DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS public.kits (
   id text PRIMARY KEY,
@@ -848,7 +856,7 @@ SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role IN ('admin', 'support')
+    WHERE id = auth.uid() AND role::text IN ('admin', 'support')
   );
 $$;
 
@@ -1144,6 +1152,7 @@ CREATE TRIGGER trg_check_circuit_project_limit
   FOR EACH ROW EXECUTE FUNCTION public.enforce_circuit_project_limit();
 
 -- Atomic Rituu Daily Limit Check (Free: 15+3, Plus: 100+20, Pro: 300+50 reset at midnight IST)
+DROP FUNCTION IF EXISTS public.rituu_consume(boolean);
 CREATE OR REPLACE FUNCTION public.rituu_consume(
   photo boolean DEFAULT false
 )
@@ -1252,6 +1261,7 @@ END;
 $$;
 
 -- Realtime Presence Touch RPC
+DROP FUNCTION IF EXISTS public.touch_presence(text, uuid);
 CREATE OR REPLACE FUNCTION public.touch_presence(
   activity text DEFAULT 'Exploring Labs',
   project_id uuid DEFAULT NULL
@@ -1276,6 +1286,7 @@ END;
 $$;
 
 -- PostGIS Nearby Shops RPC
+DROP FUNCTION IF EXISTS public.nearby_shops(double precision, double precision, double precision, integer);
 CREATE OR REPLACE FUNCTION public.nearby_shops(
   lat double precision,
   lng double precision,
@@ -1329,6 +1340,8 @@ $$;
 -- =====================================================================
 
 -- Create Order From Cart (Totals calculated solely from DB price_inr, stock & age restriction enforced)
+DROP FUNCTION IF EXISTS public.create_order_from_cart(uuid, text);
+DROP FUNCTION IF EXISTS public.create_order_from_cart(uuid);
 CREATE OR REPLACE FUNCTION public.create_order_from_cart(
   address_id uuid,
   coupon_code text DEFAULT NULL
@@ -1497,6 +1510,7 @@ END;
 $$;
 
 -- Finalize Order Payment (Webhook execution: decrements stock, generates official invoice)
+DROP FUNCTION IF EXISTS public.finalize_order_payment(uuid, text);
 CREATE OR REPLACE FUNCTION public.finalize_order_payment(
   p_order_id uuid,
   p_razorpay_payment_id text
@@ -1584,6 +1598,7 @@ $$;
 -- =====================================================================
 
 -- Issue Certificate (Checks completion rules)
+DROP FUNCTION IF EXISTS public.issue_certificate(text);
 CREATE OR REPLACE FUNCTION public.issue_certificate(
   course_id text
 )
@@ -1678,6 +1693,7 @@ END;
 $$;
 
 -- Verify Certificate (Publicly accessible with limited fields)
+DROP FUNCTION IF EXISTS public.verify_certificate(text);
 CREATE OR REPLACE FUNCTION public.verify_certificate(
   code text
 )
@@ -1716,6 +1732,7 @@ GRANT EXECUTE ON FUNCTION public.get_current_entitlements() TO anon, authenticat
 -- =====================================================================
 
 -- Admin Overview Metrics
+DROP FUNCTION IF EXISTS public.admin_overview();
 CREATE OR REPLACE FUNCTION public.admin_overview()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -1755,6 +1772,7 @@ END;
 $$;
 
 -- Admin Students Directory (Student ID, name, school, city, plan, current course, progress %, current project, last active)
+DROP FUNCTION IF EXISTS public.admin_students(text, text, integer, integer);
 CREATE OR REPLACE FUNCTION public.admin_students(
   search text DEFAULT '',
   filters text DEFAULT 'ALL',

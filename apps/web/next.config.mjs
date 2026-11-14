@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@roboverse/shared', '@roboverse/ui-tokens', '@roboverse/sim-engine', 'three'],
+  transpilePackages: ['@roboverse/shared', '@roboverse/ui-tokens', '@roboverse/components-lib', '@roboverse/sim-engine', 'three'],
   images: {
     remotePatterns: [
       {

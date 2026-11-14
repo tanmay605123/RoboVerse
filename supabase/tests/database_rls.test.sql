@@ -17,10 +17,26 @@ SELECT has_table('public', 'components', 'Table components exists');
 SELECT has_table('public', 'orders', 'Table orders exists');
 
 -- 3. Check Row Level Security is Enabled
-SELECT tests.rls_is_enabled('public', 'profiles', 'RLS must be enabled on profiles');
-SELECT tests.rls_is_enabled('public', 'circuit_projects', 'RLS must be enabled on circuit_projects');
-SELECT tests.rls_is_enabled('public', 'orders', 'RLS must be enabled on orders');
-SELECT tests.rls_is_enabled('public', 'chat_messages', 'RLS must be enabled on chat_messages');
+SELECT row_eq(
+  'SELECT relrowsecurity FROM pg_class WHERE relname = ''profiles'' AND relnamespace = ''public''::regnamespace',
+  ROW(true),
+  'RLS must be enabled on profiles'
+);
+SELECT row_eq(
+  'SELECT relrowsecurity FROM pg_class WHERE relname = ''circuit_projects'' AND relnamespace = ''public''::regnamespace',
+  ROW(true),
+  'RLS must be enabled on circuit_projects'
+);
+SELECT row_eq(
+  'SELECT relrowsecurity FROM pg_class WHERE relname = ''orders'' AND relnamespace = ''public''::regnamespace',
+  ROW(true),
+  'RLS must be enabled on orders'
+);
+SELECT row_eq(
+  'SELECT relrowsecurity FROM pg_class WHERE relname = ''chat_messages'' AND relnamespace = ''public''::regnamespace',
+  ROW(true),
+  'RLS must be enabled on chat_messages'
+);
 
 -- 4. Test Student ID Format Generation
 SELECT matches(
