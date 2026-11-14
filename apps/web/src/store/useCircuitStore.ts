@@ -179,6 +179,11 @@ export interface CircuitState {
   activeChallengeId: string | null;
   challengeCompleted: boolean;
 
+  // Canvas & Simulation inputs
+  digitalInputs: Record<string | number, boolean>;
+  wireStyle: string;
+  areComponentsVisible: boolean;
+
   // Actions
   setViewMode: (mode: WorkbenchViewMode) => void;
   setToolMode: (mode: ToolMode) => void;
@@ -187,6 +192,9 @@ export interface CircuitState {
   addComponent: (component: CircuitComponent) => void;
   removeComponent: (id: string) => void;
   updateComponentPosition: (id: string, position: [number, number, number]) => void;
+  updateComponentProperties: (id: string, properties: Record<string, any>) => void;
+  rotateComponent: (id: string, deltaDeg?: number) => void;
+  setDigitalInput: (pin: string | number, isHigh: boolean) => void;
   
   startWireDraft: (componentId: string, pinId: string) => void;
   completeWireDraft: (componentId: string, pinId: string) => void;
@@ -206,6 +214,13 @@ export interface CircuitState {
   undo: () => void;
   redo: () => void;
   
+  loadStarterAssembly: (assembly: {
+    components: CircuitComponent[];
+    wires: WireConnection[];
+    arduinoCode?: string;
+    title?: string;
+  }) => void;
+
   setChallenge: (challengeId: string | null) => void;
   verifyChallenge: () => boolean;
 }
@@ -239,6 +254,38 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
 
   activeChallengeId: null,
   challengeCompleted: false,
+
+  digitalInputs: {},
+  wireStyle: 'curved',
+  areComponentsVisible: true,
+
+  setDigitalInput: (pin, isHigh) => {
+    set((state) => ({
+      digitalInputs: { ...state.digitalInputs, [pin]: isHigh },
+    }));
+  },
+
+  updateComponentProperties: (id, props) => {
+    set((state) => ({
+      components: state.components.map((c) =>
+        c.id === id ? { ...c, properties: { ...c.properties, ...props } } : c
+      ),
+    }));
+  },
+
+  rotateComponent: (id, deltaDeg = 90) => {
+    set((state) => ({
+      components: state.components.map((c) => {
+        if (c.id !== id) return c;
+        const currentY = c.rotation ? c.rotation[1] : 0;
+        const newY = currentY + (deltaDeg * Math.PI) / 180;
+        return {
+          ...c,
+          rotation: [c.rotation[0], newY, c.rotation[2]] as [number, number, number],
+        };
+      }),
+    }));
+  },
 
   setViewMode: (mode) => set({ viewMode: mode }),
   setToolMode: (mode) => set({ toolMode: mode, wireDraftFrom: null }),
@@ -400,6 +447,20 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
       oscilloscopeSamples: [],
       diagnostics: [],
       serialLogs: sketchRunner.getSerialLogs(),
+    });
+  },
+
+  loadStarterAssembly: (assembly) => {
+    get().stopSimulation();
+    set({
+      components: assembly.components,
+      wires: assembly.wires,
+      arduinoCode: assembly.arduinoCode || get().arduinoCode,
+      selectedComponentId: null,
+      wireDraftFrom: null,
+      diagnostics: [],
+      undoStack: [],
+      redoStack: [],
     });
   },
 

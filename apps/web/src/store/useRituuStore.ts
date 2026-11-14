@@ -23,6 +23,7 @@ interface RituuState {
   isListening: boolean;
   uploadedPhotoBase64: string | null;
   pendingCircuitJson: string | null;
+  pendingRobotContext: string | null;
 
   // Actions
   toggleOpen: () => void;
@@ -33,6 +34,7 @@ interface RituuState {
   setIsListening: (listening: boolean) => void;
   setUploadedPhoto: (base64: string | null) => void;
   setPendingCircuit: (json: string | null) => void;
+  setPendingRobotContext: (context: string | null) => void;
 
   sendMessage: (text: string, options?: { imageBase64?: string; circuitJson?: string }) => Promise<void>;
   rateMessage: (messageId: string, rating: 'UP' | 'DOWN', comment?: string) => Promise<void>;
@@ -60,6 +62,7 @@ export const useRituuStore = create<RituuState>((set, get) => ({
   isListening: false,
   uploadedPhotoBase64: null,
   pendingCircuitJson: null,
+  pendingRobotContext: null,
 
   toggleOpen: () => {
     const next = !get().isOpen;
@@ -87,6 +90,8 @@ export const useRituuStore = create<RituuState>((set, get) => ({
   setUploadedPhoto: (base64) => set({ uploadedPhotoBase64: base64 }),
 
   setPendingCircuit: (json) => set({ pendingCircuitJson: json }),
+
+  setPendingRobotContext: (context) => set({ pendingRobotContext: context }),
 
   sendMessage: async (text, options) => {
     const { activeMode, messages, uploadedPhotoBase64, pendingCircuitJson, voiceOutputEnabled } = get();

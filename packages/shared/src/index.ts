@@ -1,4 +1,5 @@
 export * from './types/database';
+export type { DbUserRole } from './types/database.types';
 export * from './supabaseClient';
 export * from './types/auth';
 export * from './types/student';
