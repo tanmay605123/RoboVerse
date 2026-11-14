@@ -24,4 +24,5 @@ export * from './subscriptions/plans';
 export * from './types/realtime';
 export * from './realtime/realtimeClient';
 export * from './performance/qualityPresets';
+export * from './data/componentsCatalog';
 
