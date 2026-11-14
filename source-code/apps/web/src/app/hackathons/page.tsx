@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../components/landing/Navbar';
+import { SquadChatDrawer } from '../../components/collaboration/SquadChatDrawer';
 import { apiRequest } from '../../lib/apiClient';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
@@ -81,6 +82,22 @@ export default function HackathonsPage() {
   const [joiningPool, setJoiningPool] = useState(false);
   const [matchingSuccess, setMatchingSuccess] = useState<string | null>(null);
   const [matchingError, setMatchingError] = useState<string | null>(null);
+  const [matchingCandidates, setMatchingCandidates] = useState<any[]>([]);
+
+  // Project submission modal
+  const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
+  const [submissionHackathon, setSubmissionHackathon] = useState<Hackathon | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [submissionForm, setSubmissionForm] = useState({
+    teamName: '',
+    projectTitle: '',
+    projectDescription: '',
+    circuitProjectId: 'proj_rover_3d_mna_01',
+    videoDemoUrl: 'https://youtu.be/sample-robot-demo',
+    githubUrl: 'https://github.com/roboverse-team/autonomous-rover',
+  });
 
   // Fetch hackathons
   useEffect(() => {
@@ -101,11 +118,60 @@ export default function HackathonsPage() {
     loadHackathons();
   }, [selectedCity, selectedMode, searchQuery]);
 
-  const handleOpenMatching = (hackathon: Hackathon) => {
+  const handleOpenMatching = async (hackathon: Hackathon) => {
     setSelectedHackathon(hackathon);
     setMatchingSuccess(null);
     setMatchingError(null);
     setMatchingModalOpen(true);
+
+    const res = await apiRequest(`/hackathons/${hackathon.id}/team-matching`);
+    if (res.success && res.data) {
+      setMatchingCandidates(res.data.candidates || []);
+    }
+  };
+
+  const handleOpenSubmission = (hackathon: Hackathon) => {
+    setSubmissionHackathon(hackathon);
+    setSubmissionSuccess(null);
+    setSubmissionError(null);
+    setSubmissionForm({
+      teamName: `${profile?.fullName || (profile as any)?.full_name || 'RoboVerse'} Team`,
+      projectTitle: 'Autonomous MNA Obstacle Navigating Rover',
+      projectDescription: 'Interactive 3D simulation prototype with Arduino Uno, L298N driver, HC-SR04 ultrasonic sonar sensor and PID speed controller.',
+      circuitProjectId: 'proj_rover_3d_mna_01',
+      videoDemoUrl: 'https://youtu.be/sample-robot-demo',
+      githubUrl: 'https://github.com/roboverse-team/autonomous-rover',
+    });
+    setSubmissionModalOpen(true);
+  };
+
+  const handleSubmitProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!submissionHackathon) return;
+
+    if (!isAuthenticated) {
+      setSubmissionError('Please log in with your Student ID to submit a hackathon project.');
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmissionError(null);
+
+    const res = await apiRequest('/hackathons/submit', {
+      method: 'POST',
+      body: JSON.stringify({
+        hackathonId: submissionHackathon.id,
+        ...submissionForm,
+      }),
+    });
+
+    setSubmitting(false);
+
+    if (res.success) {
+      setSubmissionSuccess('Project submitted successfully! You earned +100 XP for your squad.');
+    } else {
+      setSubmissionError(res.error?.message || 'Failed to submit hackathon project.');
+    }
   };
 
   const handleToggleSkill = (skill: string) => {
@@ -353,23 +419,33 @@ export default function HackathonsPage() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="grid grid-cols-2 gap-2 pt-2">
-                      <button
-                        onClick={() => handleOpenMatching(hackathon)}
-                        className="w-full py-2.5 px-3 rounded-xl bg-robo-surfaceRaised border border-robo-teal/50 hover:border-robo-teal hover:bg-robo-teal/10 text-robo-teal font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
-                      >
-                        <Users className="w-3.5 h-3.5" />
-                        <span>Find Teammates</span>
-                      </button>
+                    <div className="space-y-2 pt-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleOpenMatching(hackathon)}
+                          className="w-full py-2.5 px-3 rounded-xl bg-robo-surfaceRaised border border-robo-teal/50 hover:border-robo-teal hover:bg-robo-teal/10 text-robo-teal font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Squad Match</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenSubmission(hackathon)}
+                          className="w-full py-2.5 px-3 rounded-xl bg-robo-neon/20 border border-robo-neon hover:bg-robo-neon hover:text-black text-robo-neon font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-neon-subtle"
+                        >
+                          <Trophy className="w-3.5 h-3.5" />
+                          <span>Submit Project</span>
+                        </button>
+                      </div>
 
                       <a
                         href={hackathon.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="w-full py-2.5 px-3 rounded-xl bg-robo-neon hover:bg-robo-neonHover text-black font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-neon-subtle"
+                        className="w-full py-2 px-3 rounded-xl bg-black/60 border border-robo-borderSubtle hover:border-robo-neon text-robo-textSecondary hover:text-white font-mono text-[11px] flex items-center justify-center gap-1.5 transition-all"
                       >
                         <span>Official Portal</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
+                        <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   </div>
@@ -523,9 +599,183 @@ export default function HackathonsPage() {
                 </div>
               </form>
             )}
+
+            {/* Existing Candidates in Matching Pool */}
+            {matchingCandidates.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-robo-borderSubtle">
+                <span className="text-xs font-mono text-robo-teal block mb-3">
+                  CANDIDATES CURRENTLY SEEKING TEAMMATES ({matchingCandidates.length}):
+                </span>
+                <div className="space-y-2.5 max-h-40 overflow-y-auto pr-1">
+                  {matchingCandidates.map((c) => (
+                    <div
+                      key={c.id}
+                      className="p-3 rounded-xl bg-black/40 border border-robo-borderSubtle text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between">
+                        <strong className="text-white">{c.name}</strong>
+                        <span className="text-[10px] font-mono text-robo-neon">{c.preferredRole}</span>
+                      </div>
+                      <p className="text-[11px] text-robo-textSecondary line-clamp-1">{c.message}</p>
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {c.skills?.map((s: string) => (
+                          <span
+                            key={s}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-robo-surfaceRaised text-robo-textSecondary"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Project Submission Modal */}
+      {submissionModalOpen && submissionHackathon && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-lg rounded-3xl bg-[#091D14] border border-robo-neon/50 p-6 sm:p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <button
+              onClick={() => setSubmissionModalOpen(false)}
+              className="absolute top-5 right-5 p-2 text-robo-textSecondary hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 text-robo-neon text-xs font-mono mb-2">
+              <Trophy className="w-4 h-4" />
+              <span>OFFICIAL ARENA PROJECT SUBMISSION</span>
+            </div>
+
+            <h3 className="text-xl font-bold text-white mb-1">
+              Submit to {submissionHackathon.title}
+            </h3>
+            <p className="text-xs text-robo-textSecondary mb-6">
+              Submit your circuit schematics, 3D simulation telemetry, and video demo to the judging committee.
+            </p>
+
+            {submissionSuccess ? (
+              <div className="p-4 rounded-2xl bg-robo-neon/10 border border-robo-neon text-robo-neon space-y-3">
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>Submission Recorded!</span>
+                </div>
+                <p className="text-xs text-robo-textSecondary leading-relaxed">{submissionSuccess}</p>
+                <button
+                  onClick={() => setSubmissionModalOpen(false)}
+                  className="w-full mt-2 py-2.5 rounded-xl bg-robo-neon text-black font-bold text-xs"
+                >
+                  Return to Arenas
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitProject} className="space-y-4">
+                {submissionError && (
+                  <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-500/50 text-red-200 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{submissionError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-1.5">
+                    TEAM / SQUAD NAME
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={submissionForm.teamName}
+                    onChange={(e) => setSubmissionForm({ ...submissionForm, teamName: e.target.value })}
+                    placeholder="e.g. RoverAlpha Squad"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-robo-borderSubtle text-white text-xs focus:outline-none focus:border-robo-neon"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-1.5">
+                    PROJECT TITLE
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={submissionForm.projectTitle}
+                    onChange={(e) => setSubmissionForm({ ...submissionForm, projectTitle: e.target.value })}
+                    placeholder="e.g. Autonomous Obstacle Evading Rover"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-robo-borderSubtle text-white text-xs focus:outline-none focus:border-robo-neon"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-1.5">
+                    TECHNICAL ABSTRACT &amp; ARCHITECTURE
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={submissionForm.projectDescription}
+                    onChange={(e) => setSubmissionForm({ ...submissionForm, projectDescription: e.target.value })}
+                    placeholder="Describe microcontroller, sensors, MNA electrical solver validation, PID motor control algorithm..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-robo-borderSubtle text-white placeholder-robo-textSecondary text-xs focus:outline-none focus:border-robo-neon resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-mono text-robo-textSecondary mb-1">
+                      VIDEO DEMO LINK
+                    </label>
+                    <input
+                      type="url"
+                      value={submissionForm.videoDemoUrl}
+                      onChange={(e) => setSubmissionForm({ ...submissionForm, videoDemoUrl: e.target.value })}
+                      placeholder="YouTube / Drive link"
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-robo-borderSubtle text-white text-xs focus:outline-none focus:border-robo-neon"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-mono text-robo-textSecondary mb-1">
+                      GITHUB REPO / CODE
+                    </label>
+                    <input
+                      type="url"
+                      value={submissionForm.githubUrl}
+                      onChange={(e) => setSubmissionForm({ ...submissionForm, githubUrl: e.target.value })}
+                      placeholder="GitHub repository"
+                      className="w-full px-3 py-2 rounded-xl bg-black/60 border border-robo-borderSubtle text-white text-xs focus:outline-none focus:border-robo-neon"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-3">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full py-3.5 rounded-xl bg-robo-neon hover:bg-robo-neonHover text-black font-bold text-sm shadow-neon-glow flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  >
+                    {submitting ? (
+                      <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Trophy className="w-4 h-4" />
+                        <span>Submit Project to Judging Committee (+100 XP)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Realtime Squad Team Chat Drawer */}
+      <SquadChatDrawer />
     </div>
   );
 }

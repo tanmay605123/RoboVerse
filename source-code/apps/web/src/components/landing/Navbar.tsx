@@ -22,6 +22,10 @@ export function Navbar() {
           <Link href="/workbench" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? '3D Workbench' : '3D वर्कबेंच'}
           </Link>
+          <Link href="/arduino-studio" className="hover:text-robo-neon transition-colors flex items-center gap-1 text-[#39FF6A]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#39FF6A] animate-pulse" />
+            <span>Arduino Studio</span>
+          </Link>
           <Link href="/roadmap" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? 'Curriculum' : 'पाठ्यक्रम'}
           </Link>
@@ -38,7 +42,7 @@ export function Navbar() {
           <Link href="/store" className="hover:text-robo-neon transition-colors">
             TechSavyyy Store
           </Link>
-          <Link href="/#pricing" className="hover:text-robo-neon transition-colors">
+          <Link href="/pricing" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? 'Pricing' : 'मूल्य निर्धारण'}
           </Link>
         </div>
@@ -140,7 +144,7 @@ export function Navbar() {
             TechSavyyy Store
           </Link>
           <Link
-            href="/#pricing"
+            href="/pricing"
             onClick={() => setMobileMenuOpen(false)}
             className="hover:text-robo-neon py-1"
           >

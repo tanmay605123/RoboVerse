@@ -12,6 +12,8 @@ import { VirtualInstrumentsModal } from '@/components/workbench/VirtualInstrumen
 import { BomModal } from '@/components/workbench/BomModal';
 import { CircuitChallengesModal } from '@/components/workbench/CircuitChallengesModal';
 import { CircuitDiagnosticsBar } from '@/components/workbench/CircuitDiagnosticsBar';
+import { GuidedLessonOverlay } from '@/components/workbench/GuidedLessonOverlay';
+import { SquadChatDrawer } from '@/components/collaboration/SquadChatDrawer';
 import {
   Layers,
   FileCode,
@@ -50,6 +52,7 @@ export default function WorkbenchPage() {
     isSimulating,
     startSimulation,
     stopSimulation,
+    setArduinoCode,
   } = useCircuitStore();
 
   const [isInstrumentsOpen, setIsInstrumentsOpen] = useState(false);
@@ -125,6 +128,15 @@ export default function WorkbenchPage() {
             <Bot className="w-3.5 h-3.5" />
             3D Robot Arena
           </button>
+
+          <Link
+            href="/arduino-studio"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[#39FF6A] hover:bg-[#39FF6A]/15 font-bold transition ml-1 border border-[#39FF6A]/40 bg-[#07110D]"
+            title="Launch Advanced Arduino Simulator & Circuit Builder"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#39FF6A] animate-pulse" />
+            <span>Arduino Studio</span>
+          </Link>
         </div>
 
         {/* Right: Wire Color Selector, Instruments, Challenges, BOM, Undo/Redo */}
@@ -218,10 +230,31 @@ export default function WorkbenchPage() {
         <ComponentPaletteDrawer />
 
         {/* Center: Interactive 3D Canvas / 2D Schematic / Robot Builder */}
-        <main className="flex-1 relative h-full">
-          {viewMode === '3D' && <BreadboardCanvas />}
-          {viewMode === 'SCHEMATIC' && <Schematic2DView />}
-          {viewMode === 'ROBOT_BUILDER' && <RobotBuilderArena />}
+        <main className="flex-1 relative h-full flex flex-col">
+          {/* Floating Guided Lesson HUD Overlay */}
+          <div className="absolute top-3 left-4 right-4 z-20 pointer-events-none">
+            <div className="pointer-events-auto max-w-xl">
+              <GuidedLessonOverlay
+                onSelectLesson={(lesson) => {
+                  setArduinoCode(lesson.starterCode);
+                }}
+                onRunSimulation={() => {
+                  if (isSimulating) {
+                    stopSimulation();
+                  } else {
+                    startSimulation();
+                  }
+                }}
+                isSimulating={isSimulating}
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 relative h-full">
+            {viewMode === '3D' && <BreadboardCanvas />}
+            {viewMode === 'SCHEMATIC' && <Schematic2DView />}
+            {viewMode === 'ROBOT_BUILDER' && <RobotBuilderArena />}
+          </div>
 
           {/* Bottom Diagnostics Bar */}
           <CircuitDiagnosticsBar />
@@ -243,6 +276,9 @@ export default function WorkbenchPage() {
         isOpen={isChallengesOpen}
         onClose={() => setIsChallengesOpen(false)}
       />
+
+      {/* Realtime Squad Team Chat */}
+      <SquadChatDrawer />
     </div>
   );
 }

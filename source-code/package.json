@@ -30,5 +30,8 @@
     "education"
   ],
   "author": "RoboVerse Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0"
+  }
 }

@@ -421,7 +421,7 @@ export const FloatingRituuChat: React.FC = () => {
                   className="w-8 h-8 rounded-lg object-cover border border-[#39FF6A]"
                 />
                 <span className="text-gray-300 text-[11px] font-mono">
-                  Circuit Photo attached (Claude Vision)
+                  Circuit Photo attached (Gemini Multimodal Vision)
                 </span>
               </div>
               <button

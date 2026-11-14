@@ -24,7 +24,7 @@ import {
   Radio,
 } from 'lucide-react-native';
 
-export function ExploreScreen() {
+export function ExploreScreen({ navigation }: any) {
   const [activeTab, setActiveTab] = useState<'hackathons' | 'shops'>('hackathons');
 
   const [hackathons, setHackathons] = useState<any[]>([]);
@@ -103,7 +103,23 @@ export function ExploreScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.scrollList}>
           {activeTab === 'hackathons' ? (
-            hackathons.map((h) => (
+            <>
+              <TouchableOpacity
+                style={styles.squadChatBanner}
+                onPress={() => navigation?.navigate('SquadChat')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.squadChatBannerLeft}>
+                  <View style={styles.livePulse} />
+                  <View>
+                    <Text style={styles.squadChatTitle}>TEAM GARUDA AUTONOMOUS</Text>
+                    <Text style={styles.squadChatSub}>Squad Chat &bull; 4 Members Online</Text>
+                  </View>
+                </View>
+                <Text style={styles.squadChatBtnText}>OPEN CHAT ➔</Text>
+              </TouchableOpacity>
+
+              {hackathons.map((h) => (
               <View key={h.id} style={styles.hackathonCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cityBadge}>
@@ -149,7 +165,8 @@ export function ExploreScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-            ))
+            ))}
+            </>
           ) : (
             shops.map((s) => (
               <View key={s.id} style={styles.shopCard}>
@@ -511,5 +528,43 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 11,
     fontWeight: '800',
+  },
+  squadChatBanner: {
+    backgroundColor: '#0B1914',
+    borderWidth: 1,
+    borderColor: '#39FF6A',
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  squadChatBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  livePulse: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#39FF6A',
+  },
+  squadChatTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  squadChatSub: {
+    color: '#94A3B8',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  squadChatBtnText: {
+    color: '#39FF6A',
+    fontSize: 11,
+    fontWeight: '900',
   },
 });

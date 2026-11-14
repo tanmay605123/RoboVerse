@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useCircuitStore } from '@/store/useCircuitStore';
+import { BlockCodeEditor } from './BlockCodeEditor';
 import {
   Code,
   Terminal,
@@ -13,6 +15,7 @@ import {
   Download,
   Copy,
   Check,
+  Blocks,
 } from 'lucide-react';
 
 const SKETCH_PRESETS = [
@@ -170,7 +173,7 @@ export const ArduinoEditorDrawer: React.FC = () => {
     appendSerialLog,
   } = useCircuitStore();
 
-  const [activeTab, setActiveTab] = useState<'CODE' | 'SERIAL'>('CODE');
+  const [activeTab, setActiveTab] = useState<'BLOCKS' | 'CODE' | 'SERIAL'>('CODE');
   const [copied, setCopied] = useState(false);
   const [baudRate, setBaudRate] = useState('9600');
   const [serialInput, setSerialInput] = useState('');
@@ -258,10 +261,29 @@ export const ArduinoEditorDrawer: React.FC = () => {
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
+
+        <Link
+          href="/arduino-studio"
+          className="mt-2 flex items-center justify-center gap-1.5 py-1 px-2 rounded-lg bg-[#07110D] hover:bg-[#39FF6A]/10 text-[#7FE7D6] hover:text-[#39FF6A] border border-[#7FE7D6]/30 text-[10px] font-sans font-medium transition"
+        >
+          <Sparkles className="w-3 h-3 text-[#39FF6A] animate-pulse" />
+          <span>Launch Advanced Arduino Studio &rarr;</span>
+        </Link>
       </div>
 
-      {/* Tabs: Code vs Serial Monitor */}
+      {/* Tabs: Blocks vs Code vs Serial Monitor */}
       <div className="flex border-b border-gray-800 text-xs font-sans">
+        <button
+          onClick={() => setActiveTab('BLOCKS')}
+          className={`flex-1 py-2 flex items-center justify-center gap-1.5 border-b-2 transition ${
+            activeTab === 'BLOCKS'
+              ? 'border-[#39FF6A] text-[#39FF6A] bg-[#39FF6A]/5 font-bold'
+              : 'border-transparent text-gray-400 hover:text-white'
+          }`}
+        >
+          <Blocks className="w-3.5 h-3.5" />
+          Blocks
+        </button>
         <button
           onClick={() => setActiveTab('CODE')}
           className={`flex-1 py-2 flex items-center justify-center gap-1.5 border-b-2 transition ${
@@ -271,7 +293,7 @@ export const ArduinoEditorDrawer: React.FC = () => {
           }`}
         >
           <Code className="w-3.5 h-3.5" />
-          Sketch (C++)
+          C++ Code
         </button>
         <button
           onClick={() => setActiveTab('SERIAL')}
@@ -282,12 +304,23 @@ export const ArduinoEditorDrawer: React.FC = () => {
           }`}
         >
           <Terminal className="w-3.5 h-3.5" />
-          Serial Monitor
+          Serial
           {serialLogs.length > 0 && (
             <span className="w-2 h-2 rounded-full bg-[#7FE7D6] animate-pulse" />
           )}
         </button>
       </div>
+
+      {/* TAB 0: VISUAL BLOCK CODE EDITOR */}
+      {activeTab === 'BLOCKS' && (
+        <div className="flex-1 flex flex-col relative overflow-hidden bg-[#050B08]">
+          <BlockCodeEditor
+            onGenerateCode={(cpp) => {
+              setArduinoCode(cpp);
+            }}
+          />
+        </div>
+      )}
 
       {/* TAB 1: CODE EDITOR */}
       {activeTab === 'CODE' && (

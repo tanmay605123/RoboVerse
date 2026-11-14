@@ -30,16 +30,28 @@ import {
 
 interface Product {
   id: string;
+  sku?: string;
   title: string;
+  name?: string;
   slug: string;
   description: string;
   category: string;
+  categoryId?: string;
   priceInr: number;
+  mrpInr?: number;
+  sumOfPartsInr?: number;
   stockQuantity: number;
+  stock?: number;
   images: string[];
   specs?: Record<string, any>;
   rating: number;
+  reviewsCount?: number;
+  isKit?: boolean;
   isKitOfMonth?: boolean;
+  ageRestricted?: boolean;
+  shippingClass?: string;
+  courseId?: string;
+  robotTemplateId?: string;
 }
 
 interface CartItem {
@@ -189,13 +201,14 @@ export default function StorePage() {
       return;
     }
 
-    const { razorpayOrderId } = checkoutRes.data;
+    const { razorpayOrderId, orderId } = checkoutRes.data;
 
     // 2. Verify payment (Razorpay Mock / Sandbox)
     const verifyRes = await apiRequest('/store/verify-order', {
       method: 'POST',
       body: JSON.stringify({
         razorpayOrderId,
+        orderId,
         razorpayPaymentId: `pay_mock_${Date.now()}`,
         razorpaySignature: 'mock_signature_valid_for_dev_mode',
       }),
@@ -387,14 +400,37 @@ export default function StorePage() {
                 >
                   <div>
                     {/* Top Ribbon & Category */}
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold bg-black/60 border border-robo-borderSubtle text-robo-teal">
-                        {product.category}
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 mb-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold bg-black/60 border border-robo-borderSubtle text-robo-teal">
+                          {product.category}
+                        </span>
+                        {product.isKit && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
+                            KIT
+                          </span>
+                        )}
+                        {product.ageRestricted && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 border border-amber-500/40 text-amber-400">
+                            18+
+                          </span>
+                        )}
+                        {product.shippingClass === 'regulated_drone' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300">
+                            DGCA
+                          </span>
+                        )}
+                      </div>
+
                       {product.isKitOfMonth && (
-                        <span className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold bg-robo-neon/20 border border-robo-neon text-robo-neon flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-robo-neon/20 border border-robo-neon text-robo-neon flex items-center gap-1">
                           <Sparkles className="w-3 h-3" />
                           Kit of the Month
+                        </span>
+                      )}
+                      {product.mrpInr && product.mrpInr > product.priceInr && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-robo-neon/20 border border-robo-neon text-robo-neon">
+                          Save ₹{product.mrpInr - product.priceInr}
                         </span>
                       )}
                     </div>
@@ -453,6 +489,9 @@ export default function StorePage() {
                       </div>
                       <span className="text-[10px] font-mono text-robo-textSecondary block">
                         incl. 18% GST
+                      </span>
+                      <span className="text-[9px] font-mono text-emerald-400 block">
+                        ✓ In Stock ({product.stockQuantity || product.stock || 50})
                       </span>
                     </div>
 
@@ -817,17 +856,15 @@ export default function StorePage() {
                       </div>
                     </div>
 
-                    {ord.invoice?.id && (
-                      <a
-                        href={`/api/v1/subscriptions/invoices/${ord.invoice.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3.5 py-2 rounded-xl bg-robo-surfaceRaised border border-robo-teal/40 hover:border-robo-teal text-robo-teal font-mono text-xs flex items-center gap-1.5 transition-colors"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>View GST Invoice</span>
-                      </a>
-                    )}
+                    <a
+                      href={ord.invoicePdfUrl || `/api/store/invoice/${ord.invoiceNumber || ord.orderNumber || ord.orderId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2 rounded-xl bg-robo-surfaceRaised border border-robo-teal/40 hover:border-robo-teal text-robo-teal font-mono text-xs flex items-center gap-1.5 transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>View 18% GST Invoice</span>
+                    </a>
                   </div>
                 ))}
               </div>

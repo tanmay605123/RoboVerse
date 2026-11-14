@@ -122,7 +122,7 @@ export default function RituuPage() {
               <p className="text-[11px] text-gray-400 font-mono">
                 {quota
                   ? `${quota.messagesUsed}/${quota.messagesLimit} messages used • ${quota.photosUsed}/${quota.photosLimit} photos analyzed (${quota.planTier})`
-                  : 'Claude 3.5 Sonnet Vision Engine'}
+                  : 'Gemini 1.5 Flash Multimodal Vision Engine'}
               </p>
             </div>
           </div>
@@ -334,10 +334,29 @@ export default function RituuPage() {
           {/* Bottom input area */}
           <div className="p-4 bg-[#07110D] border-t border-gray-800 shrink-0">
             <div className="max-w-4xl mx-auto space-y-3">
+              {/* Suggested Prompt Chips */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 text-[11px] no-scrollbar">
+                {[
+                  'Why does my LED burn out without a resistor?',
+                  'How do I wire HC-SR04 sonar sensor to Arduino?',
+                  'Calculate resistor for 5V red LED with Ohm\'s Law',
+                  'Write SG90 servo motor sweep sketch',
+                  'How to connect L298N driver to 2WD rover?',
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => sendMessage(chip)}
+                    className="whitespace-nowrap px-3 py-1.5 rounded-full bg-[#0E2A1F]/60 hover:bg-[#39FF6A]/10 text-gray-300 hover:text-[#39FF6A] border border-gray-800 hover:border-[#39FF6A]/40 transition text-[11px]"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
               {/* Photo preview */}
               {uploadedPhotoBase64 && (
                 <div className="p-2.5 bg-[#0E2A1F] border border-[#39FF6A]/40 rounded-2xl flex items-center justify-between text-xs font-mono">
-                  <span className="text-[#39FF6A]">Photo attached ready for Claude Vision analysis</span>
+                  <span className="text-[#39FF6A]">Photo attached ready for Gemini Multimodal Vision analysis</span>
                   <button onClick={() => setUploadedPhoto(null)} className="text-gray-400 hover:text-white">
                     Cancel
                   </button>

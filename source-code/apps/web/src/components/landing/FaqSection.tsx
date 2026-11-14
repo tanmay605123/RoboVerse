@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     q: 'How does Rituu AI assist with circuit errors and photo uploads?',
-    a: 'Rituu is powered by Claude Vision and restricted exclusively to robotics and circuits. Take a clear photo of your real breadboard, Arduino, or wiring nest and upload it. Rituu identifies misplaced wires, blown resistors, missing ground connections, and gives step-by-step fix instructions.',
+    a: 'Rituu is powered by Google Gemini Multimodal AI and restricted exclusively to robotics and circuits. Take a clear photo of your real breadboard, Arduino, or wiring nest and upload it. Rituu identifies misplaced wires, blown resistors, missing ground connections, and gives step-by-step fix instructions.',
   },
   {
     q: 'What is the Digital Student ID & Learning Passport?',

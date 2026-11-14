@@ -121,13 +121,14 @@ export function StoreScreen() {
     });
 
     if (checkoutRes.success && checkoutRes.data) {
-      const { razorpayOrderId } = checkoutRes.data;
+      const { razorpayOrderId, orderId } = checkoutRes.data;
 
       // Verify payment with mock signature
       const verifyRes = await mobileApiRequest('/store/verify-order', {
         method: 'POST',
         body: JSON.stringify({
           razorpayOrderId,
+          orderId,
           razorpayPaymentId: `pay_mobile_${Date.now()}`,
           razorpaySignature: 'mock_sig_mobile_dev_mode',
         }),

@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { CircuitComponent, PinDefinition } from '@roboverse/shared';
 import { useCircuitStore } from '@/store/useCircuitStore';
+import { labAudio } from '@/lib/synthAudio';
 
 interface Component3DProps {
   component: CircuitComponent;
@@ -31,6 +32,15 @@ export const Component3D: React.FC<Component3DProps> = ({ component }) => {
   const motorShaftRef = useRef<THREE.Mesh>(null);
   const servoHornRef = useRef<THREE.Group>(null);
 
+  // Audio pop & smoke notification when component burns out
+  const prevBurnedOutRef = useRef(false);
+  useEffect(() => {
+    if (output.isBurnedOut && !prevBurnedOutRef.current) {
+      labAudio.playBurnoutPop();
+    }
+    prevBurnedOutRef.current = !!output.isBurnedOut;
+  }, [output.isBurnedOut]);
+
   // Animate dynamic elements (motors spinning, servo angle)
   useFrame((_, delta) => {
     if (motorShaftRef.current && output.rpm && output.rpm > 0) {
@@ -49,8 +59,10 @@ export const Component3D: React.FC<Component3DProps> = ({ component }) => {
   const handlePinClick = (e: any, pin: PinDefinition) => {
     e.stopPropagation();
     if (wireDraftFrom) {
+      labAudio.playWireSnap();
       completeWireDraft(component.id, pin.id);
     } else {
+      labAudio.playClick();
       startWireDraft(component.id, pin.id);
     }
   };
@@ -161,6 +173,59 @@ export const Component3D: React.FC<Component3DProps> = ({ component }) => {
   );
 };
 
+// Animated Rising Smoke Particles for Overcurrent Component Burnout
+const SmokePuff: React.FC = () => {
+  const pointsRef = useRef<THREE.Points>(null);
+  const particleCount = 20;
+
+  const [positions] = useState(() => {
+    const arr = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      arr[i * 3 + 0] = (Math.random() - 0.5) * 0.15;
+      arr[i * 3 + 1] = 0.35 + Math.random() * 0.35;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 0.15;
+    }
+    return arr;
+  });
+
+  useFrame((_, delta) => {
+    if (pointsRef.current) {
+      const geo = pointsRef.current.geometry;
+      const posAttr = geo.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < particleCount; i++) {
+        let y = posAttr.getY(i) + delta * 0.5;
+        if (y > 1.2) {
+          y = 0.35;
+          posAttr.setX(i, (Math.random() - 0.5) * 0.15);
+          posAttr.setZ(i, (Math.random() - 0.5) * 0.15);
+        }
+        posAttr.setY(i, y);
+      }
+      posAttr.needsUpdate = true;
+    }
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={positions.length / 3}
+          array={positions}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.14}
+        color="#666666"
+        transparent
+        opacity={0.6}
+        depthWrite={false}
+      />
+    </points>
+  );
+};
+
 // Procedural high-detail 3D geometry for components
 function renderComponentGeometry(
   component: CircuitComponent,
@@ -267,9 +332,11 @@ function renderComponentGeometry(
 
   // 3. LED (5mm)
   if (type.includes('led')) {
-    const ledColor = component.properties?.color || '#FF3333';
-    const isLit = output.isOn || (output.brightness && output.brightness > 0);
-    const brightness = output.brightness || (isLit ? 1.0 : 0);
+    const isBurnedOut = !!output.isBurnedOut;
+    const rawColor = component.properties?.color || '#FF3333';
+    const ledColor = isBurnedOut ? '#1E120B' : rawColor;
+    const isLit = !isBurnedOut && (output.isOn || (output.brightness && output.brightness > 0));
+    const brightness = isLit ? (output.brightness || 1.0) : 0;
 
     return (
       <group>
@@ -278,12 +345,12 @@ function renderComponentGeometry(
           <cylinderGeometry args={[0.15, 0.15, 0.3, 16]} />
           <meshPhysicalMaterial
             color={ledColor}
-            transmission={0.6}
+            transmission={isBurnedOut ? 0.05 : 0.6}
             opacity={0.9}
             transparent
-            roughness={0.1}
-            emissive={ledColor}
-            emissiveIntensity={isLit ? 2.0 * brightness : 0.05}
+            roughness={isBurnedOut ? 0.95 : 0.1}
+            emissive={isBurnedOut ? '#FF3300' : ledColor}
+            emissiveIntensity={isBurnedOut ? 0.2 : isLit ? 2.0 * brightness : 0.05}
           />
         </mesh>
         {/* Top Dome Hemisphere */}
@@ -291,22 +358,26 @@ function renderComponentGeometry(
           <sphereGeometry args={[0.15, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
           <meshPhysicalMaterial
             color={ledColor}
-            transmission={0.6}
+            transmission={isBurnedOut ? 0.05 : 0.6}
             opacity={0.9}
             transparent
-            emissive={ledColor}
-            emissiveIntensity={isLit ? 2.5 * brightness : 0.05}
+            roughness={isBurnedOut ? 0.95 : 0.1}
+            emissive={isBurnedOut ? '#FF3300' : ledColor}
+            emissiveIntensity={isBurnedOut ? 0.2 : isLit ? 2.5 * brightness : 0.05}
           />
         </mesh>
         {/* Wire Leads */}
         <mesh position={[0, 0.05, -0.06]}>
           <cylinderGeometry args={[0.015, 0.015, 0.15, 8]} />
-          <meshStandardMaterial color="#B0B0B0" metalness={0.9} roughness={0.2} />
+          <meshStandardMaterial color={isBurnedOut ? '#333333' : '#B0B0B0'} metalness={0.9} roughness={0.2} />
         </mesh>
         <mesh position={[0, 0.05, 0.06]}>
           <cylinderGeometry args={[0.015, 0.015, 0.15, 8]} />
-          <meshStandardMaterial color="#B0B0B0" metalness={0.9} roughness={0.2} />
+          <meshStandardMaterial color={isBurnedOut ? '#333333' : '#B0B0B0'} metalness={0.9} roughness={0.2} />
         </mesh>
+
+        {/* Rising Smoke Particles when Burned Out */}
+        {isBurnedOut && <SmokePuff />}
 
         {/* Real PointLight when LED glows */}
         {isLit && (

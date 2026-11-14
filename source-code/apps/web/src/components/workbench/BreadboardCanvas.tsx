@@ -8,6 +8,7 @@ import { Component3D } from './Component3D';
 import { Wire3D } from './Wire3D';
 import { GridFloor } from '../3d/GridFloor';
 import { ParticleDust } from '../3d/ParticleDust';
+import { PerformanceMonitorHUD } from './PerformanceMonitorHUD';
 
 export const BreadboardCanvas: React.FC = () => {
   const {
@@ -92,6 +93,9 @@ export const BreadboardCanvas: React.FC = () => {
           <Wire3D key={wire.id} wire={wire} />
         ))}
       </Canvas>
+
+      {/* 3D Performance Monitor & Triangle Budget HUD */}
+      <PerformanceMonitorHUD />
 
       {/* Floating HUD Viewport Controls */}
       <div className="absolute top-4 right-4 flex items-center gap-2 bg-[#0E2A1F]/80 backdrop-blur-md p-1.5 rounded-xl border border-[#39FF6A]/20 shadow-lg text-xs">

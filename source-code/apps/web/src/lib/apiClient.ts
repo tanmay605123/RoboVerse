@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export async function apiRequest<T = any>(
   endpoint: string,
@@ -16,7 +16,10 @@ export async function apiRequest<T = any>(
   }
 
   try {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const targetUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${cleanEndpoint}`;
+
+    const res = await fetch(targetUrl, {
       ...options,
       headers,
     });

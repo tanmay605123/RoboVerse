@@ -1,3 +1,5 @@
+export * from './types/database';
+export * from './supabaseClient';
 export * from './types/auth';
 export * from './types/student';
 export * from './types/plans';
@@ -6,3 +8,19 @@ export * from './types/usage';
 export * from './types/simulator';
 export * from './types/rituu';
 export * from './types/api';
+export * from './types/componentLibrary';
+export * from './components/componentLibrary';
+export * from './components/componentLibraryAll';
+export * from './types/robotics';
+export * from './robotics/templatesAndArenas';
+export * from './types/store';
+export * from './store/catalog';
+export * from './types/certificates';
+export * from './types/hackathons';
+export * from './types/admin';
+export * from './types/subscriptions';
+export * from './subscriptions/plans';
+export * from './types/realtime';
+export * from './realtime/realtimeClient';
+export * from './performance/qualityPresets';
+

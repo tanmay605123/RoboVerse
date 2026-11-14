@@ -6,7 +6,7 @@ import { MobileRobotScene } from '../components/3d/MobileRobotScene';
 import { DigitalStudentIdCard } from '../components/hud/DigitalStudentIdCard';
 import { RadialGaugeCard } from '../components/hud/RadialGaugeCard';
 import { RobotStatusCard } from '../components/hud/RobotStatusCard';
-import { Cpu, Sparkles, Trophy, ShoppingBag, LogOut, ChevronRight } from 'lucide-react-native';
+import { Cpu, Sparkles, Trophy, ShoppingBag, LogOut, ChevronRight, Zap } from 'lucide-react-native';
 
 export function DashboardScreen({ navigation }: any) {
   const { profile, studentIdCard, planTier, logout } = useMobileAuthStore();
@@ -97,6 +97,21 @@ export function DashboardScreen({ navigation }: any) {
             <View style={styles.launchTextBox}>
               <Text style={styles.launchTitle}>TechSavyyy Store</Text>
               <Text style={styles.launchSub}>18% GST • {planTier === 'PRO' ? '10% OFF' : 'Hardware Kits'}</Text>
+            </View>
+            <ChevronRight size={16} color={COLORS.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.launchCard}
+            onPress={() => navigation.navigate('Subscription')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.launchIconBox, { borderColor: COLORS.neon }]}>
+              <Zap size={20} color={COLORS.neon} />
+            </View>
+            <View style={styles.launchTextBox}>
+              <Text style={styles.launchTitle}>Plans &amp; Subscriptions</Text>
+              <Text style={styles.launchSub}>Plus ₹299 • Pro ₹599 • Direct UPI</Text>
             </View>
             <ChevronRight size={16} color={COLORS.textMuted} />
           </TouchableOpacity>
