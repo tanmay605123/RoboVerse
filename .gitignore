@@ -1,22 +1,29 @@
 # Local environment and credentials
 .env
+.env*
 .env.*
 !.env.example
+!**/.env.example
 **/.env
 **/.env.*
-!**/.env.example
 
 # OS/editor files
 .DS_Store
 .vscode/
+*.log
 
 # JavaScript build/dependency output
 node_modules/
 .next/
+.next*/
 dist/
 coverage/
 .turbo/
+.vercel
 .expo/
+*.tsbuildinfo
+tmp/pdfs/
+output/pdf/
 
 # Android/Gradle generated files and local signing/configuration
 .gradle/
@@ -24,6 +31,7 @@ coverage/
 **/local.properties
 **/debug.keystore
 *.apk
+*.aab
 
 # iOS generated dependencies/build output
 Pods/

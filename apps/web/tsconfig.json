@@ -1,0 +1,67 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@roboverse/shared": [
+        "../../packages/shared/src/index.ts"
+      ],
+      "@roboverse/shared/*": [
+        "../../packages/shared/src/*"
+      ],
+      "@roboverse/components-lib": [
+        "../../packages/components-lib/src/index.ts"
+      ],
+      "@roboverse/components-lib/*": [
+        "../../packages/components-lib/src/*"
+      ],
+      "@roboverse/ui-tokens": [
+        "../../packages/ui-tokens/src/index.ts"
+      ],
+      "@roboverse/ui-tokens/*": [
+        "../../packages/ui-tokens/src/*"
+      ],
+      "@roboverse/sim-engine": [
+        "../../packages/sim-engine/src/index.ts"
+      ],
+      "@roboverse/sim-engine/*": [
+        "../../packages/sim-engine/src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next-dev-review/types/**/*.ts",
+    ".next-dev-review-3001/types/**/*.ts",
+    ".next-final-review/types/**/*.ts",
+    ".next-dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

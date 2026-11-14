@@ -1,282 +1,385 @@
-// Supabase Edge Function: rituu-chat
-// Handles Gemini-powered AI robotics mentor interactions, atomic plan quota consumption,
-// strict off-topic moderation, and multimodal breadboard photo analysis.
+// Follow Deno and Supabase Edge Function conventions
+import { corsHeaders } from '../_shared/cors.ts';
+import {
+  AIProvider,
+  GeminiAIProvider,
+  MockAIProvider,
+  StreamEvent,
+} from '../_shared/aiProvider.ts';
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+// In-memory per-user burst rate limit tracker (12 req/min)
+const userRequestTimestamps = new Map<string, number[]>();
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+function checkBurstRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxRequests = 12;
 
-const RITUU_SYSTEM_INSTRUCTION = `You are "Rituu", a warm, encouraging, brilliant Indian female robotics engineer and AI lab mentor for RoboVerse.
-Your mission is to guide students, hobbyists, and engineers in building real-world robotics and electronics projects.
+  const timestamps = (userRequestTimestamps.get(userId) || []).filter(
+    (t) => now - t < windowMs
+  );
+  timestamps.push(now);
+  userRequestTimestamps.set(userId, timestamps);
 
-YOUR DOMAIN OF EXPERTISE:
-- Microcontrollers: Arduino (Uno, Nano, Mega), ESP32, ESP8266, Raspberry Pi, Raspberry Pi Pico, ATmega328P.
-- Circuit Theory: Ohm's Law (V = IR), Kirchhoff's Laws (KCL, KVL), voltage dividers, RC filters, pull-up/pull-down resistors.
-- Components & Pinouts: Resistors, ceramic & electrolytic capacitors, LEDs, RGB LEDs, diodes (1N4007), transistors (2N2222, MOSFETs), relays, push buttons, potentiometers.
-- Sensors: HC-SR04 ultrasonic sonar, PIR motion, LDR photoresistors, DHT11/DHT22 temperature & humidity, MPU-6050 6-DOF IMUs, IR line arrays.
-- Actuators & Motors: SG90/MG996R servos, DC gearmotors, L298N/L293D motor drivers, stepper motors, BLDC brushless motors with ESCs.
-- Programming: Arduino C++, embedded C, Python (MicroPython), PID controllers, kinematics algorithms.
-- Hardware Store: Recommending matching components available in the TechSavyyy store with realistic prices in INR (₹).
+  return timestamps.length <= maxRequests;
+}
 
-STRICT OFF-TOPIC GUARDRAIL:
-- You ONLY answer queries regarding robotics, electronics, embedded coding, circuitry, physics, STEM, RoboVerse platform navigation, and hardware store component selection.
-- If a user asks something OFF-TOPIC (such as politics, celebrity gossip, movies, non-STEM essays, cooking recipes, general dating advice):
-  1. Politely and warmly deflect back to robotics: "Namaste! I'm your RoboVerse robotics and circuits mentor. I'm specially trained to help with Arduino code, breadboard circuits, and robot builds. How about we look at an electronics question or robot project instead?"
-  2. Clearly flag the response as off-topic.
+Deno.serve(async (req: Request) => {
+  const startTime = Date.now();
 
-MULTIMODAL CIRCUIT PHOTO DIAGNOSTICS:
-- When provided with an image of a breadboard, circuit, or diagram:
-  1. Identify all visible components and their placements.
-  2. Check for common circuit errors: missing current-limiting resistors for LEDs, reversed polarity (LED anode vs cathode, electrolytic capacitor negative stripe), floating inputs, missing common ground (GND), or short circuits between VCC and GND.
-  3. Provide step-by-step diagnostic fixes and jumper wire routing instructions.
-
-TONE AND FORMATTING:
-- Warm, enthusiastic, encouraging, clear, educational.
-- Format responses using clean GitHub-style Markdown with syntax-highlighted C++ code blocks.
-- Keep explanations concise with bullet points for easy reading in the lab.`;
-
-serve(async (req: Request) => {
-  // Handle CORS preflight
+  // 1. CORS Preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  // 2. Kill switch check via environment variable
+  if (Deno.env.get('RITUU_KILL_SWITCH') === 'true') {
+    return new Response(
+      JSON.stringify({
+        error: 'Rituu is currently paused for scheduled system maintenance. Please try again soon.',
+        code: 'KILL_SWITCH_ACTIVE',
+      }),
+      {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
-
-    const authHeader = req.headers.get('Authorization');
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: authHeader ? { Authorization: authHeader } : {} },
-    });
-
     const body = await req.json().catch(() => ({}));
     const {
-      message = '',
+      message,
+      history = [],
       mode = 'auto',
-      imageBase64 = null,
-      circuitJson = null,
-      sessionId = null,
+      hintFirst = false,
+      imageBase64,
+      circuitId,
+      robotId,
+      circuitContext: rawCircuitContext,
+      robotContext: rawRobotContext,
+      sessionId: incomingSessionId,
     } = body;
 
-    if (!message.trim() && !imageBase64) {
+    // Zod-compatible validation
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return new Response(
-        JSON.stringify({ error: 'Message or image attachment is required.' }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Message text is required (max 2000 characters)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Step 1: Enforce Daily Plan Limit via rituu_consume RPC
-    let quotaResult: any = {
-      allowed: true,
-      messages_used: 1,
-      messages_limit: 20,
-      photos_used: imageBase64 ? 1 : 0,
-      photos_limit: 3,
-    };
+    if (message.length > 2000) {
+      return new Response(
+        JSON.stringify({ error: 'Message exceeds maximum length of 2000 characters' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    if (authHeader) {
-      const { data: consumeData, error: consumeError } = await supabase.rpc('rituu_consume', {
-        p_is_photo: !!imageBase64,
-      });
+    // 3. User Authentication & Supabase Client Initialization
+    const authHeader = req.headers.get('Authorization');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-      if (!consumeError && consumeData) {
-        quotaResult = consumeData;
-        if (!consumeData.allowed) {
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ error: 'Rituu is not configured yet. Please try again later.', code: 'BACKEND_NOT_CONFIGURED' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    let userId: string | null = null;
+    let userClient: any = null;
+    let adminClient: any = null;
+
+    if (supabaseUrl && supabaseServiceKey) {
+      try {
+        const { createClient } = await import('npm:@supabase/supabase-js@2');
+        adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+        if (authHeader) {
+          userClient = createClient(supabaseUrl, supabaseServiceKey, {
+            global: { headers: { Authorization: authHeader } },
+          });
+
+          const { data: { user } } = await userClient.auth.getUser();
+          if (user) {
+            userId = user.id;
+          }
+        }
+      } catch (clientErr) {
+        console.warn('Supabase client initialization warning:', clientErr);
+      }
+    }
+
+    // Check DB Kill Switch in feature_flags
+    if (adminClient) {
+      try {
+        const { data: flag } = await adminClient
+          .from('feature_flags')
+          .select('enabled')
+          .eq('key', 'rituu_kill_switch')
+          .maybeSingle();
+
+        if (flag?.enabled) {
           return new Response(
             JSON.stringify({
-              success: false,
-              error: {
-                code: 'QUOTA_EXCEEDED',
-                message: consumeData.reason || 'Daily Rituu quota limit reached.',
-              },
-              quota: {
-                messagesUsed: consumeData.messages_used || 20,
-                messagesLimit: consumeData.messages_limit || 20,
-                messagesRemaining: 0,
-                photosUsed: consumeData.photos_used || 3,
-                photosLimit: consumeData.photos_limit || 3,
-                photosRemaining: 0,
-              },
+              error: 'Rituu is currently paused for scheduled system maintenance.',
+              code: 'KILL_SWITCH_ACTIVE',
             }),
-            { status: 429, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+      } catch {
+        // Continue if feature_flags table unpopulated
       }
     }
 
-    // Step 2: Off-Topic Filter Heuristic
-    const offTopicKeywords = [
-      'president', 'election', 'politics', 'bollywood', 'actor', 'actress',
-      'dating', 'gossip', 'cricket match score', 'recipe for cake', 'horoscope',
-      'movie review', 'crypto trading signal'
-    ];
-    const isOffTopicPrompt = offTopicKeywords.some((kw) =>
-      message.toLowerCase().includes(kw)
-    );
-
-    let assistantReply = '';
-    let isOffTopic = false;
-
-    if (isOffTopicPrompt) {
-      assistantReply = `Namaste! 🤖⚡ I'm **Rituu**, your RoboVerse robotics and circuits mentor.\n\nI specialize exclusively in electronics, Arduino/ESP32 coding, sensor wiring, motor kinematics, and hardware debugging. I don't answer general gossip or political queries.\n\n**Let's build something awesome instead!** Would you like to:\n- Connect an ultrasonic distance sensor?\n- Write a motor control sketch?\n- Calculate the resistor value for your circuit?`;
-      isOffTopic = true;
-    } else if (geminiApiKey) {
-      // Step 3: Call Google Gemini API (gemini-1.5-flash)
-      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
-
-      const contentsParts: any[] = [];
-
-      // Add image part if provided
-      if (imageBase64) {
-        const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-        contentsParts.push({
-          inline_data: {
-            mime_type: 'image/jpeg',
-            data: cleanBase64,
-          },
-        });
-        contentsParts.push({
-          text: `[CIRCUIT PHOTO ATTACHMENT]\nPlease examine this physical circuit/breadboard photo. Identify all components, check wiring polarity, detect missing current-limiting resistors, and provide step-by-step diagnostic guidance.\n\nUser Question: ${message}`,
-        });
-      } else {
-        let userPromptText = message;
-        if (circuitJson) {
-          userPromptText += `\n\n[ACTIVE CIRCUIT CONTEXT]:\n${typeof circuitJson === 'string' ? circuitJson : JSON.stringify(circuitJson)}`;
-        }
-        contentsParts.push({ text: userPromptText });
-      }
-
-      const geminiPayload = {
-        system_instruction: {
-          parts: [{ text: RITUU_SYSTEM_INSTRUCTION }],
-        },
-        contents: [
-          {
-            role: 'user',
-            parts: contentsParts,
-          },
-        ],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 1024,
-        },
-      };
-
-      const geminiRes = await fetch(geminiEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiPayload),
-      });
-
-      if (geminiRes.ok) {
-        const geminiData = await geminiRes.json();
-        assistantReply =
-          geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
-          'I analyzed your query. Here is how to configure your circuit...';
-      } else {
-        const errText = await geminiRes.text();
-        console.warn('Gemini API fallback triggered:', errText);
-        assistantReply = generateDeterministicRoboticsAnswer(message, imageBase64);
-      }
-    } else {
-      // Offline / Local Development Deterministic Robotics Engine
-      assistantReply = generateDeterministicRoboticsAnswer(message, imageBase64);
+    // 4. Rate Limiting Check
+    const rateLimitKey = userId || 'anon';
+    if (!checkBurstRateLimit(rateLimitKey)) {
+      return new Response(
+        JSON.stringify({
+          error: 'Too many requests (12 requests/minute limit). Please slow down and try again shortly.',
+          code: 'RATE_LIMITED',
+        }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Step 4: Persist message to Supabase chat tables if session provided
-    if (authHeader && sessionId) {
+    // 5. Atomic Daily Quota Consumption via rituu_consume RPC
+    const hasPhoto = Boolean(imageBase64);
+    if (userClient) {
       try {
-        await supabase.from('chat_messages').insert([
-          {
-            session_id: sessionId,
-            role: 'user',
-            content: message,
-            mode,
-            had_image: !!imageBase64,
-          },
-          {
-            session_id: sessionId,
-            role: 'assistant',
-            content: assistantReply,
-            mode,
-            off_topic: isOffTopic,
-            had_image: !!imageBase64,
-            model: 'gemini-1.5-flash',
-          },
-        ]);
-      } catch (dbErr) {
-        console.warn('Failed to persist chat message to database:', dbErr);
+        const { data: quotaResult, error: quotaError } = await userClient.rpc('rituu_consume', {
+          photo: hasPhoto,
+        });
+
+        if (!quotaError && quotaResult && quotaResult.allowed === false) {
+          return new Response(
+            JSON.stringify({
+              error: quotaResult.reason || 'Daily Rituu quota reached for your plan. Please upgrade to Plus or Pro for higher limits.',
+              code: 'QUOTA_EXCEEDED',
+              quota: quotaResult,
+            }),
+            { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (quotaErr) {
+        console.warn('Quota check warning:', quotaErr);
       }
     }
 
-    // Step 5: Return Standard Response
-    const responsePayload = {
-      success: true,
-      data: {
-        message: {
-          id: `msg_rituu_${Date.now()}`,
-          sender: 'rituu',
-          content: assistantReply,
-          mode,
-          offTopic: isOffTopic,
-          timestamp: new Date().toISOString(),
-        },
-        quota: {
-          messagesUsed: quotaResult.messages_used || 1,
-          messagesLimit: quotaResult.messages_limit || 20,
-          messagesRemaining: Math.max(0, (quotaResult.messages_limit || 20) - (quotaResult.messages_used || 1)),
-          photosUsed: quotaResult.photos_used || (imageBase64 ? 1 : 0),
-          photosLimit: quotaResult.photos_limit || 3,
-          photosRemaining: Math.max(0, (quotaResult.photos_limit || 3) - (quotaResult.photos_used || (imageBase64 ? 1 : 0))),
-          planTier: 'free',
-        },
-      },
-    };
+    // 6. Server-side Circuit & Robot Context with Ownership Verification
+    let enrichedCircuitContext = rawCircuitContext || '';
+    let enrichedRobotContext = rawRobotContext || '';
 
-    return new Response(JSON.stringify(responsePayload), {
-      status: 200,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    if (adminClient && circuitId) {
+      try {
+        const { data: circuit } = await adminClient
+          .from('circuit_projects')
+          .select('id, name, components, netlist, user_id, is_public')
+          .eq('id', circuitId)
+          .single();
+
+        if (circuit && (circuit.is_public || (userId && circuit.user_id === userId))) {
+          enrichedCircuitContext = `Project: ${circuit.name}\nComponents: ${JSON.stringify(circuit.components || [])}\nNetlist: ${JSON.stringify(circuit.netlist || [])}`;
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    if (adminClient && robotId) {
+      try {
+        const { data: robot } = await adminClient
+          .from('robot_designs')
+          .select('id, name, template_id, parts_data, user_id, is_public')
+          .eq('id', robotId)
+          .single();
+
+        if (robot && (robot.is_public || (userId && robot.user_id === userId))) {
+          enrichedRobotContext = `Robot: ${robot.name}\nParts Configuration: ${JSON.stringify(robot.parts_data || {})}`;
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    // 7. Ensure or Create Chat Session
+    let activeSessionId = incomingSessionId;
+    if (adminClient && userId && !activeSessionId) {
+      try {
+        const title = message.slice(0, 35) + (message.length > 35 ? '...' : '');
+        const { data: session } = await adminClient
+          .from('chat_sessions')
+          .insert({
+            user_id: userId,
+            title: title || 'Robotics Mentorship',
+            context_project_id: circuitId || null,
+          })
+          .select('id')
+          .single();
+
+        if (session?.id) {
+          activeSessionId = session.id;
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    // Save Student Message
+    if (adminClient && activeSessionId) {
+      try {
+        await adminClient.from('chat_messages').insert({
+          session_id: activeSessionId,
+          sender: 'user',
+          content: message,
+          image_url: hasPhoto ? 'data:image_attached' : null,
+        });
+      } catch {
+        // Continue
+      }
+    }
+
+    // 8. Select Gemini Model (default: gemini-2.5-flash; Pro for complex planning/debugging)
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    const defaultModel = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+    const proModel = Deno.env.get('GEMINI_MODEL_PRO') || 'gemini-2.5-pro';
+    const chosenModel = mode === 'plan' || mode === 'debug' ? proModel : defaultModel;
+
+    const provider: AIProvider = geminiApiKey
+      ? new GeminiAIProvider(geminiApiKey, chosenModel)
+      : new MockAIProvider();
+
+    // 9. Initialize Server-Sent Events (SSE) Stream
+    const textEncoder = new TextEncoder();
+    let accumulatedText = '';
+    let isOffTopic = false;
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const sendEvent = async (event: StreamEvent) => {
+          if (event.type === 'token' && event.text) {
+            accumulatedText += event.text;
+            controller.enqueue(
+              textEncoder.encode(`data: ${JSON.stringify({ t: event.text })}\n\n`)
+            );
+          } else if (event.type === 'tool_call' && event.toolCall) {
+            controller.enqueue(
+              textEncoder.encode(`data: ${JSON.stringify({ toolCall: event.toolCall })}\n\n`)
+            );
+          } else if (event.type === 'done') {
+            isOffTopic = Boolean(event.offTopic) || accumulatedText.trim().startsWith('[OFFTOPIC]');
+            inputTokens = event.usage?.inputTokens || Math.round(message.length / 4 + 100);
+            outputTokens = event.usage?.outputTokens || Math.round(accumulatedText.length / 4);
+
+            controller.enqueue(
+              textEncoder.encode(
+                `data: ${JSON.stringify({
+                  done: true,
+                  offTopic: isOffTopic,
+                  sessionId: activeSessionId,
+                  usage: { inputTokens, outputTokens },
+                })}\n\n`
+              )
+            );
+            controller.close();
+
+            // Persist AI reply and cost log
+            const latencyMs = Date.now() - startTime;
+            const inputRate = chosenModel.includes('pro') ? 1.25 / 1000000 : 0.075 / 1000000;
+            const outputRate = chosenModel.includes('pro') ? 5.0 / 1000000 : 0.30 / 1000000;
+            const estimatedCostUsd = Number(
+              (inputTokens * inputRate + outputTokens * outputRate).toFixed(6)
+            );
+
+            if (adminClient && activeSessionId) {
+              try {
+                await adminClient.from('chat_messages').insert({
+                  session_id: activeSessionId,
+                  sender: 'rituu',
+                  content: accumulatedText,
+                  off_topic: isOffTopic,
+                  input_tokens: inputTokens,
+                  output_tokens: outputTokens,
+                });
+
+                await adminClient
+                  .from('chat_sessions')
+                  .update({ updated_at: new Date().toISOString() })
+                  .eq('id', activeSessionId);
+              } catch (persistErr) {
+                console.warn('Persist assistant message warning:', persistErr);
+              }
+            }
+
+            if (adminClient && userId) {
+              try {
+                await adminClient.from('ai_cost_log').insert({
+                  user_id: userId,
+                  session_id: activeSessionId || null,
+                  model: chosenModel,
+                  input_tokens: inputTokens,
+                  output_tokens: outputTokens,
+                  estimated_cost_usd: estimatedCostUsd,
+                  is_offtopic: isOffTopic,
+                  latency_ms: latencyMs,
+                });
+              } catch (costErr) {
+                console.warn('Cost log warning:', costErr);
+              }
+            }
+          } else if (event.type === 'error') {
+            controller.enqueue(
+              textEncoder.encode(
+                `data: ${JSON.stringify({ error: event.error || 'Chat generation error' })}\n\n`
+              )
+            );
+            controller.close();
+          }
+        };
+
+        try {
+          await provider.streamChat({
+            message,
+            history,
+            mode,
+            hintFirst,
+            imageBase64,
+            circuitContext: enrichedCircuitContext,
+            robotContext: enrichedRobotContext,
+            onChunk: sendEvent,
+            signal: req.signal,
+          });
+        } catch (err: any) {
+          await sendEvent({ type: 'error', error: err?.message || 'Chat generation error' });
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+      },
     });
   } catch (err: any) {
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: err.message || 'An unexpected error occurred in Rituu.',
-        },
-      }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: err?.message || 'Internal Server Error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
-
-// Deterministic high-quality robotics responses when API key is missing or offline
-function generateDeterministicRoboticsAnswer(message: string, hasPhoto: boolean): string {
-  const query = message.toLowerCase();
-
-  if (hasPhoto || query.includes('photo') || query.includes('diagnos') || query.includes('burn')) {
-    return `### 🔍 Rituu Multimodal Circuit Diagnostic Report\n\nI have inspected the circuit wiring:\n\n1. **Component Identification:**\n   - **Microcontroller:** Arduino Uno R3 detected at 5V rail.\n   - **Actuator:** Red 5mm LED placed on breadboard.\n   - **Current-Limiting Resistor:** ⚠️ **MISSING OR BYPASSED!**\n\n2. **Critical Electrical Analysis:**\n   - Connecting a red LED ($V_f \\approx 2.0\\text{V}$) directly to 5V will draw **> 100mA** through the PN junction.\n   - This exceeds the maximum 25mA continuous rating and will cause **catastrophic overcurrent burnout** with dielectric smoke and pop sound.\n\n3. **Step-by-Step Fix:**\n   - Disconnect the 5V jumper wire immediately.\n   - Insert a **220Ω (Red-Red-Brown)** or **330Ω (Orange-Orange-Brown)** 1/4W resistor in series between Arduino Pin 13 and the LED Anode (+).\n   - Connect the LED Cathode (-) flat edge to Arduino **GND**.\n\n\`\`\`cpp\n// Verified Safe Arduino Blink Setup\nconst int LED_PIN = 13; // Connects through 220Ω to LED Anode\nvoid setup() {\n  pinMode(LED_PIN, OUTPUT);\n}\nvoid loop() {\n  digitalWrite(LED_PIN, HIGH); delay(1000);\n  digitalWrite(LED_PIN, LOW); delay(1000);\n}\n\`\`\``;
-  }
-
-  if (query.includes('resistor') || query.includes('ohm') || query.includes('calculate')) {
-    return `### ⚡ Resistor Sizing & Ohm's Law ($V = IR$)\n\nTo calculate the current-limiting resistor for an LED:\n\n$$R = \\frac{V_{\\text{source}} - V_{\\text{forward}}}{I_{\\text{desired}}}$$\n\n**Example for a Red 5mm LED on Arduino 5V:**\n- Supply Voltage $V_{\\text{source}} = 5.0\\text{V}$\n- Red LED Forward Voltage $V_f = 2.0\\text{V}$\n- Safe Operating Current $I = 15\\text{mA} = 0.015\\text{A}$\n\n$$R = \\frac{5.0\\text{V} - 2.0\\text{V}}{0.015\\text{A}} = \\frac{3.0\\text{V}}{0.015\\text{A}} = 200\\,\\Omega$$\n\n💡 **Recommendation:** Use standard **220Ω** (Color code: **Red - Red - Brown - Gold**). Available in the TechSavyyy store for ₹1.50.`;
-  }
-
-  if (query.includes('sonar') || query.includes('ultrasonic') || query.includes('hcsr04') || query.includes('distance')) {
-    return `### 📡 HC-SR04 Ultrasonic Sonar Pinout & Code\n\nThe **HC-SR04** uses high-frequency 40kHz sound waves to measure distance from 2cm to 400cm.\n\n**Pin Connections:**\n- **VCC:** Connect to Arduino 5V\n- **GND:** Connect to Arduino GND\n- **TRIG (Trigger):** Connect to Arduino Digital Pin 9\n- **ECHO:** Connect to Arduino Digital Pin 10\n\n\`\`\`cpp\nconst int TRIG_PIN = 9;\nconst int ECHO_PIN = 10;\n\nvoid setup() {\n  pinMode(TRIG_PIN, OUTPUT);\n  pinMode(ECHO_PIN, INPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);\n  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);\n  digitalWrite(TRIG_PIN, LOW);\n\n  long duration = pulseIn(ECHO_PIN, HIGH);\n  long distanceCm = duration * 0.034 / 2;\n\n  Serial.print("Distance: ");\n  Serial.print(distanceCm);\n  Serial.println(" cm");\n  delay(200);\n}\n\`\`\``;
-  }
-
-  if (query.includes('servo') || query.includes('sg90') || query.includes('motor')) {
-    return `### 🦾 SG90 Micro Servo Control\n\nThe **SG90** is a 9g PWM micro servo rotating from 0° to 180° with 1.8 kg-cm torque.\n\n**Pin Connections:**\n- **Brown Wire:** Ground (GND)\n- **Red Wire:** 5V Power ($4.8\\text{V} - 6.0\\text{V}$)\n- **Orange/Yellow Wire:** PWM Control Signal (e.g. Pin 9)\n\n\`\`\`cpp\n#include <Servo.h>\nServo myServo;\n\nvoid setup() {\n  myServo.attach(9); // Orange PWM signal wire\n}\n\nvoid loop() {\n  // Sweep from 0 to 180 degrees\n  for (int pos = 0; pos <= 180; pos += 10) {\n    myServo.write(pos);\n    delay(50);\n  }\n  for (int pos = 180; pos >= 0; pos -= 10) {\n    myServo.write(pos);\n    delay(50);\n  }\n}\n\`\`\``;
-  }
-
-  return `### Hello Builder! 🤖\n\nI'm **Rituu**, ready to assist with your robotics build.\n\nHere are some things we can do together:\n1. **Debug Circuit Errors:** Upload a photo of your breadboard or describe what isn't working.\n2. **Generate Arduino C++ Code:** Ask for motor drivers, sensors (ultrasonic, line follower, MPU6050), or displays.\n3. **Calculate Specs:** Sizing resistors, LiPo battery run-time, or motor torque for a rover.\n\nWhat are you building right now?`;
-}
