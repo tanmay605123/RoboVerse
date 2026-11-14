@@ -69,25 +69,25 @@ export async function GET(req: Request) {
     // Try executing database RPC admin_students
     try {
       const { data: dbStudents, error } = await (supabase.rpc as any)('admin_students', {
-        p_search: search || null,
-        p_plan: plan !== 'ALL' ? plan.toLowerCase() : null,
+        search: search || '',
+        filters: plan !== 'ALL' ? plan.toLowerCase() : 'ALL',
         p_limit: 50,
         p_offset: 0,
       });
 
       if (!error && dbStudents && dbStudents.length > 0) {
         studentList = dbStudents.map((s: any) => ({
-          id: s.id,
+          id: s.id || s.student_id,
           studentId: s.student_id,
-          fullName: s.full_name,
-          email: s.email,
+          fullName: s.full_name || s.name,
+          email: s.email || '',
           schoolOrCollege: s.school_or_college || s.school || 'RoboVerse Learning Hub',
           city: s.city || 'India',
-          planTier: (s.plan_tier || 'FREE').toUpperCase(),
-          currentActivity: s.current_activity || 'Exploring RoboVerse Labs',
+          planTier: (s.plan_tier || s.plan || 'FREE').toUpperCase(),
+          currentActivity: s.current_activity || s.current_project || 'Exploring RoboVerse Labs',
           xp: Number(s.xp || 0),
           streakDays: Number(s.streak_days || 0),
-          lastSeenAt: s.last_seen_at || new Date().toISOString(),
+          lastSeenAt: s.last_seen_at || s.last_active || new Date().toISOString(),
           createdAt: s.created_at || new Date().toISOString(),
         }));
       }

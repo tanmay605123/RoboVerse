@@ -22,13 +22,11 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../../lib/apiClient';
 import { useAuthStore } from '../../store/useAuthStore';
-import { STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
+import { RegisterInputSchema, STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
 import { OnboardingJourneyModal } from '../../components/onboarding/OnboardingJourneyModal';
-import { getSupabaseClient } from '../../lib/supabaseClient';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const setAuth = useAuthStore((s) => s.setAuth);
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
@@ -123,117 +121,79 @@ export default function RegisterPage() {
 
   // Step Validation
   const canProceedStep1 =
-    fullName.length >= 2 &&
-    email.includes('@') &&
-    passwordStrength >= 4 &&
-    mobileNumber.length >= 10 &&
-    (!isMinor || (parentEmail.includes('@') && parentalConsentGiven));
+    fullName.trim().length >= 2 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
+    passwordStrength === 5 &&
+    /^\+?[1-9]\d{9,14}$/.test(mobileNumber.trim()) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth.trim()) &&
+    (!isMinor || (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmail.trim()) && parentalConsentGiven));
 
   const canProceedStep2 =
-    schoolOrCollegeName.length >= 2 &&
-    classOrYear.length >= 1 &&
-    city.length >= 2 &&
-    state.length >= 2;
+    schoolOrCollegeName.trim().length >= 2 &&
+    classOrYear.trim().length >= 1 &&
+    city.trim().length >= 2 &&
+    state.trim().length >= 2 &&
+    pincode.trim().length >= 5;
 
   const canProceedStep3 = selectedInterests.length >= 1;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!acceptedTerms) {
-      setError('You must accept the Terms and Conditions to create an account.');
+
+    const payload = {
+      fullName: fullName.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      mobileNumber: mobileNumber.trim().replace(/[\s()-]/g, ''),
+      dateOfBirth: dateOfBirth.trim(),
+      parentEmail: isMinor ? parentEmail.trim().toLowerCase() : '',
+      parentalConsentGiven: isMinor ? parentalConsentGiven : true,
+      institutionType,
+      schoolOrCollegeName: schoolOrCollegeName.trim(),
+      classOrYear: classOrYear.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      country: 'India',
+      interests: selectedInterests,
+      acceptedTerms,
+      referralCode: referralCode.trim().toUpperCase(),
+    };
+
+    const parsedPayload = RegisterInputSchema.safeParse(payload);
+    if (!parsedPayload.success) {
+      setError(parsedPayload.error.issues[0]?.message || 'Please check the registration details.');
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const generatedSeqId = `RV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    try {
+      const response = await apiRequest<any>('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(parsedPayload.data),
+      });
 
-    const payload = {
-      fullName,
-      email,
-      password,
-      mobileNumber,
-      dateOfBirth,
-      parentEmail: isMinor ? parentEmail : undefined,
-      parentalConsentGiven: isMinor ? parentalConsentGiven : true,
-      institutionType,
-      schoolOrCollegeName,
-      classOrYear,
-      city,
-      state,
-      pincode,
-      locationConsent,
-      country: 'India',
-      interests: selectedInterests,
-      acceptedTerms,
-      referralCode: referralCode || undefined,
-    };
+      if (!response.success || !response.data?.user || !response.data?.tokens?.accessToken) {
+        const details = response.error?.details;
+        const firstDetail = Array.isArray(details) ? details.find((detail: any) => detail?.message)?.message : undefined;
+        setError(firstDetail || response.error?.message || 'Registration failed. Please check your inputs.');
+        return;
+      }
 
-    // 1. Try Supabase Auth SignUp
-    const supabase = getSupabaseClient();
-    const { data: supaData, error: supaError } = await supabase.auth.signUp({
-      email,
-      password,
-      phone: mobileNumber.startsWith('+') ? mobileNumber : `+91${mobileNumber}`,
-      options: {
-        data: {
-          full_name: fullName,
-          role: 'student',
-          student_id: generatedSeqId,
-          school_or_college: schoolOrCollegeName,
-          class_level: classOrYear,
-          city,
-          state,
-          pincode,
-          interests: selectedInterests,
-          is_minor: isMinor,
-          parent_email: isMinor ? parentEmail : null,
-          parental_consent: isMinor && parentalConsentGiven,
-          location_consent: locationConsent,
-        },
-      },
-    });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('roboverse_access_token', response.data.tokens.accessToken);
+        localStorage.setItem('roboverse_refresh_token', response.data.tokens.refreshToken);
+      }
 
-    // 2. Also register via backend API for complete database hydration
-    const res = await apiRequest('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-
-    setLoading(false);
-
-    const studentId = res.data?.studentIdCard?.studentId || supaData?.user?.user_metadata?.student_id || generatedSeqId;
-
-    setAuth({
-      user: res.data?.user || { id: supaData?.user?.id || 'new_user_id', email, role: 'student' },
-      profile: res.data?.profile || {
-        fullName,
-        studentId,
-        institutionType,
-        schoolOrCollegeName,
-        classOrYear,
-        city,
-        state,
-        pincode,
-        interests: selectedInterests,
-        level: 1,
-        xp: 250,
-        streakDays: 1,
-        totalLearningHours: 0,
-      },
-      studentIdCard: res.data?.studentIdCard || {
-        studentId,
-        qrCodeDataUrl: '',
-        verificationUrl: `https://roboverse-delta.vercel.app/verify/student/${studentId}`,
-        validUntil: '2027-12-31',
-      },
-      tokens: res.data?.tokens || { accessToken: supaData?.session?.access_token || 'demo_token', refreshToken: 'demo_refresh' },
-    });
-
-    // Trigger Onboarding Journey
-    setCreatedStudentData({ name: fullName, studentId });
-    setShowOnboarding(true);
+      useAuthStore.getState().setBackendAuth(response.data);
+      setCreatedStudentData({ name: payload.fullName, studentId: response.data.studentId });
+      setShowOnboarding(true);
+    } catch (err: any) {
+      setError(err.message || 'Registration failed. Please check your inputs.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
