@@ -1,13 +1,13 @@
 import React from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { DashboardScreen } from '../screens/DashboardScreen';
-import { LearnScreen } from '../screens/LearnScreen';
 import { WorkbenchScreen } from '../screens/WorkbenchScreen';
 import { RituuScreen } from '../screens/RituuScreen';
-import { ProfileScreen } from '../screens/ProfileScreen';
+import { ExploreScreen } from '../screens/ExploreScreen';
+import { StoreScreen } from '../screens/StoreScreen';
 import { COLORS } from '../theme/colors';
-import { LayoutDashboard, GraduationCap, Cpu, Sparkles, UserCheck } from 'lucide-react-native';
+import { LayoutDashboard, Cpu, Sparkles, Trophy, ShoppingBag } from 'lucide-react-native';
 
 const Tab = createBottomTabNavigator();
 
@@ -16,69 +16,51 @@ export function TabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: COLORS.card,
+          backgroundColor: '#05110C',
           borderBottomWidth: 1,
           borderBottomColor: COLORS.borderSubtle,
-          elevation: 2,
-          shadowColor: 'rgba(20, 30, 60, 0.06)',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 1,
-          shadowRadius: 6,
         },
         headerTitleStyle: {
-          color: COLORS.navy,
-          fontSize: 16,
-          fontWeight: '700',
-          letterSpacing: 0.2,
+          color: '#FFF',
+          fontSize: 15,
+          fontWeight: '800',
+          fontFamily: 'monospace',
+          letterSpacing: 1,
         },
-        headerTintColor: COLORS.primary,
+        headerTintColor: COLORS.neon,
         tabBarStyle: {
-          backgroundColor: COLORS.card,
+          backgroundColor: '#040C08',
           borderTopWidth: 1,
-          borderTopColor: COLORS.borderSubtle,
-          height: Platform.OS === 'ios' ? 84 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-          paddingTop: 8,
-          elevation: 8,
-          shadowColor: 'rgba(20, 30, 60, 0.08)',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 1,
-          shadowRadius: 12,
+          borderTopColor: 'rgba(57, 255, 106, 0.2)',
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
         },
-        tabBarActiveTintColor: COLORS.primary,
+        tabBarActiveTintColor: COLORS.neon,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
+          fontSize: 10,
+          fontWeight: '700',
+          fontFamily: 'monospace',
         },
       }}
     >
       <Tab.Screen
-        name="Home"
+        name="Dashboard"
         component={DashboardScreen}
         options={{
-          title: 'RoboVerse Hub',
-          tabBarLabel: 'Home',
+          title: 'Control Room',
+          tabBarLabel: 'Control',
           tabBarIcon: ({ color, size }) => <LayoutDashboard size={size - 2} color={color} />,
         }}
       />
 
       <Tab.Screen
-        name="Learn"
-        component={LearnScreen}
-        options={{
-          title: 'RoboVerse Academy',
-          tabBarLabel: 'Learn',
-          tabBarIcon: ({ color, size }) => <GraduationCap size={size - 2} color={color} />,
-        }}
-      />
-
-      <Tab.Screen
-        name="Lab"
+        name="Workbench"
         component={WorkbenchScreen}
         options={{
-          title: 'Circuit Lab 3D',
-          tabBarLabel: 'Lab',
+          title: '3D Circuit Workbench',
+          tabBarLabel: 'Workbench',
           tabBarIcon: ({ color, size }) => <Cpu size={size - 2} color={color} />,
         }}
       />
@@ -88,7 +70,7 @@ export function TabNavigator() {
         component={RituuScreen}
         options={{
           title: 'Rituu AI Mentor',
-          tabBarLabel: 'Rituu',
+          tabBarLabel: 'Rituu AI',
           tabBarIcon: ({ color, size }) => (
             <View style={styles.rituuTabIcon}>
               <Sparkles size={size - 2} color={color} />
@@ -98,12 +80,22 @@ export function TabNavigator() {
       />
 
       <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
+        name="Explore"
+        component={ExploreScreen}
         options={{
-          title: 'Student Passport',
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ color, size }) => <UserCheck size={size - 2} color={color} />,
+          title: 'Hackathons & Shops',
+          tabBarLabel: 'Explore',
+          tabBarIcon: ({ color, size }) => <Trophy size={size - 2} color={color} />,
+        }}
+      />
+
+      <Tab.Screen
+        name="Store"
+        component={StoreScreen}
+        options={{
+          title: 'TechSavyyy Hardware',
+          tabBarLabel: 'Store',
+          tabBarIcon: ({ color, size }) => <ShoppingBag size={size - 2} color={color} />,
         }}
       />
     </Tab.Navigator>
@@ -112,9 +104,9 @@ export function TabNavigator() {
 
 const styles = StyleSheet.create({
   rituuTabIcon: {
-    shadowColor: COLORS.primary,
+    shadowColor: COLORS.teal,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.6,
     shadowRadius: 6,
   },
 });

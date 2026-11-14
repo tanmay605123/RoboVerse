@@ -2,15 +2,14 @@
   "expo": {
     "name": "RoboVerse",
     "slug": "roboverse",
-    "scheme": "roboverse",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F5F6F8"
+      "backgroundColor": "#07110D"
     },
     "ios": {
       "supportsTablet": true,
@@ -23,7 +22,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F5F6F8"
+        "backgroundColor": "#07110D"
       },
       "package": "com.roboverse.app",
       "permissions": [

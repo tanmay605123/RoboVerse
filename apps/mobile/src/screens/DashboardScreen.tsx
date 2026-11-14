@@ -6,7 +6,7 @@ import { MobileRobotScene } from '../components/3d/MobileRobotScene';
 import { DigitalStudentIdCard } from '../components/hud/DigitalStudentIdCard';
 import { RadialGaugeCard } from '../components/hud/RadialGaugeCard';
 import { RobotStatusCard } from '../components/hud/RobotStatusCard';
-import { Cpu, Sparkles, Compass, ShoppingBag, LogOut, ChevronRight } from 'lucide-react-native';
+import { Cpu, Sparkles, Trophy, ShoppingBag, LogOut, ChevronRight, Zap } from 'lucide-react-native';
 
 export function DashboardScreen({ navigation }: any) {
   const { profile, studentIdCard, planTier, logout } = useMobileAuthStore();
@@ -43,30 +43,15 @@ export function DashboardScreen({ navigation }: any) {
         <View style={styles.buttonGrid}>
           <TouchableOpacity
             style={styles.launchCard}
-            onPress={() => navigation.navigate('Lab')}
+            onPress={() => navigation.navigate('Workbench')}
             activeOpacity={0.8}
           >
-            <View style={[styles.launchIconBox, { backgroundColor: 'rgba(255, 138, 31, 0.1)', borderColor: 'rgba(255, 138, 31, 0.3)' }]}>
-              <Cpu size={20} color={COLORS.primary} />
+            <View style={[styles.launchIconBox, { borderColor: COLORS.neon }]}>
+              <Cpu size={20} color={COLORS.neon} />
             </View>
             <View style={styles.launchTextBox}>
-              <Text style={styles.launchTitle}>3D Circuit Lab</Text>
-              <Text style={styles.launchSub}>MNA Simulator &amp; Breadboard</Text>
-            </View>
-            <ChevronRight size={16} color={COLORS.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.launchCard}
-            onPress={() => navigation.navigate('Learn')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.launchIconBox, { backgroundColor: 'rgba(18, 183, 106, 0.1)', borderColor: 'rgba(18, 183, 106, 0.3)' }]}>
-              <Cpu size={20} color={COLORS.green} />
-            </View>
-            <View style={styles.launchTextBox}>
-              <Text style={styles.launchTitle}>RoboVerse Academy</Text>
-              <Text style={styles.launchSub}>4 Curriculum Tracks &amp; Live Labs</Text>
+              <Text style={styles.launchTitle}>3D Workbench</Text>
+              <Text style={styles.launchSub}>MNA Electrical Solver</Text>
             </View>
             <ChevronRight size={16} color={COLORS.textMuted} />
           </TouchableOpacity>
@@ -76,12 +61,12 @@ export function DashboardScreen({ navigation }: any) {
             onPress={() => navigation.navigate('Rituu')}
             activeOpacity={0.8}
           >
-            <View style={[styles.launchIconBox, { backgroundColor: 'rgba(76, 141, 255, 0.1)', borderColor: 'rgba(76, 141, 255, 0.3)' }]}>
-              <Sparkles size={20} color={COLORS.blue} />
+            <View style={[styles.launchIconBox, { borderColor: COLORS.teal }]}>
+              <Sparkles size={20} color={COLORS.teal} />
             </View>
             <View style={styles.launchTextBox}>
               <Text style={styles.launchTitle}>Rituu AI Mentor</Text>
-              <Text style={styles.launchSub}>Vision Diagnostics &amp; Arduino Help</Text>
+              <Text style={styles.launchSub}>Vision &amp; Firmware Help</Text>
             </View>
             <ChevronRight size={16} color={COLORS.textMuted} />
           </TouchableOpacity>
@@ -91,12 +76,12 @@ export function DashboardScreen({ navigation }: any) {
             onPress={() => navigation.navigate('Explore')}
             activeOpacity={0.8}
           >
-            <View style={[styles.launchIconBox, { backgroundColor: 'rgba(255, 107, 107, 0.1)', borderColor: 'rgba(255, 107, 107, 0.3)' }]}>
-              <Compass size={20} color={COLORS.coral} />
+            <View style={[styles.launchIconBox, { borderColor: COLORS.warning }]}>
+              <Trophy size={20} color={COLORS.warning} />
             </View>
             <View style={styles.launchTextBox}>
               <Text style={styles.launchTitle}>Hackathons &amp; Shops</Text>
-              <Text style={styles.launchSub}>Delhi, Bangalore &amp; Mumbai Radar</Text>
+              <Text style={styles.launchSub}>Matchmaking &amp; GPS Radar</Text>
             </View>
             <ChevronRight size={16} color={COLORS.textMuted} />
           </TouchableOpacity>
@@ -106,12 +91,27 @@ export function DashboardScreen({ navigation }: any) {
             onPress={() => navigation.navigate('Store')}
             activeOpacity={0.8}
           >
-            <View style={[styles.launchIconBox, { backgroundColor: 'rgba(18, 183, 106, 0.1)', borderColor: 'rgba(18, 183, 106, 0.3)' }]}>
-              <ShoppingBag size={20} color={COLORS.green} />
+            <View style={[styles.launchIconBox, { borderColor: COLORS.neon }]}>
+              <ShoppingBag size={20} color={COLORS.neon} />
             </View>
             <View style={styles.launchTextBox}>
               <Text style={styles.launchTitle}>TechSavyyy Store</Text>
-              <Text style={styles.launchSub}>18% GST • {planTier === 'PRO' ? '10% OFF PRO' : 'Hardware Kits'}</Text>
+              <Text style={styles.launchSub}>18% GST • {planTier === 'PRO' ? '10% OFF' : 'Hardware Kits'}</Text>
+            </View>
+            <ChevronRight size={16} color={COLORS.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.launchCard}
+            onPress={() => navigation.navigate('Subscription')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.launchIconBox, { borderColor: COLORS.neon }]}>
+              <Zap size={20} color={COLORS.neon} />
+            </View>
+            <View style={styles.launchTextBox}>
+              <Text style={styles.launchTitle}>Plans &amp; Subscriptions</Text>
+              <Text style={styles.launchSub}>Plus ₹299 • Pro ₹599 • Direct UPI</Text>
             </View>
             <ChevronRight size={16} color={COLORS.textMuted} />
           </TouchableOpacity>
@@ -139,53 +139,48 @@ const styles = StyleSheet.create({
   },
   quickLaunchContainer: {
     paddingHorizontal: 16,
-    marginTop: 12,
+    marginTop: 10,
   },
   sectionHeader: {
     color: COLORS.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: 10,
-    textTransform: 'uppercase',
+    fontSize: 9,
+    fontFamily: 'monospace',
+    letterSpacing: 1,
+    marginBottom: 8,
   },
   buttonGrid: {
-    gap: 10,
+    gap: 8,
   },
   launchCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
-    padding: 14,
+    backgroundColor: '#091C14',
+    borderRadius: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    shadowColor: 'rgba(20, 30, 60, 0.05)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 2,
   },
   launchIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(4, 11, 8, 0.7)',
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   launchTextBox: {
     flex: 1,
   },
   launchTitle: {
     color: COLORS.textPrimary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   launchSub: {
-    color: COLORS.textMuted,
-    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontSize: 11,
     marginTop: 2,
   },
   logoutRow: {
@@ -196,16 +191,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
   },
   logoutText: {
     color: COLORS.textMuted,
     fontSize: 12,
-    fontWeight: '600',
   },
 });

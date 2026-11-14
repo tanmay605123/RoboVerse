@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { CircuitComponent, PinDefinition } from '@roboverse/shared';
 import { useCircuitStore } from '@/store/useCircuitStore';
+import { labAudio } from '@/lib/synthAudio';
 
 interface Component3DProps {
   component: CircuitComponent;
@@ -21,35 +22,24 @@ export const Component3D: React.FC<Component3DProps> = ({ component }) => {
     completeWireDraft,
     componentOutputs,
     pinStates,
-    components,
-    wires,
-    isSimulating,
-    digitalInputs,
-    setDigitalInput,
   } = useCircuitStore();
 
   const isSelected = selectedComponentId === component.id;
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
-  const [buttonHeld, setButtonHeld] = useState(false);
 
   const output = componentOutputs.get(component.id)?.state || {};
   const groupRef = useRef<THREE.Group>(null);
   const motorShaftRef = useRef<THREE.Mesh>(null);
   const servoHornRef = useRef<THREE.Group>(null);
-  const isButton = component.typeId.includes('button');
-  const buttonInputPin = isButton
-    ? wires
-        .filter((wire) => wire.fromComponentId === component.id || wire.toComponentId === component.id)
-        .map((wire) => {
-          const otherId = wire.fromComponentId === component.id ? wire.toComponentId : wire.fromComponentId;
-          const pinId = wire.fromComponentId === component.id ? wire.toPinId : wire.fromPinId;
-          const other = components.find((item) => item.id === otherId);
-          const pinName = other?.pins.find((pin) => pin.id === pinId)?.name || '';
-          return other?.typeId.includes('arduino') ? Number(pinName.match(/D(\d+)/i)?.[1]) : NaN;
-        })
-        .find((pin) => Number.isInteger(pin))
-    : undefined;
-  const buttonPressed = buttonHeld || (buttonInputPin !== undefined && digitalInputs[buttonInputPin] === false);
+
+  // Audio pop & smoke notification when component burns out
+  const prevBurnedOutRef = useRef(false);
+  useEffect(() => {
+    if (output.isBurnedOut && !prevBurnedOutRef.current) {
+      labAudio.playBurnoutPop();
+    }
+    prevBurnedOutRef.current = !!output.isBurnedOut;
+  }, [output.isBurnedOut]);
 
   // Animate dynamic elements (motors spinning, servo angle)
   useFrame((_, delta) => {
@@ -69,8 +59,10 @@ export const Component3D: React.FC<Component3DProps> = ({ component }) => {
   const handlePinClick = (e: any, pin: PinDefinition) => {
     e.stopPropagation();
     if (wireDraftFrom) {
+      labAudio.playWireSnap();
       completeWireDraft(component.id, pin.id);
     } else {
+      labAudio.playClick();
       startWireDraft(component.id, pin.id);
     }
   };
@@ -94,34 +86,7 @@ export const Component3D: React.FC<Component3DProps> = ({ component }) => {
       )}
 
       {/* RENDER SPECIFIC COMPONENT 3D GEOMETRY */}
-      {isButton ? (
-        <group
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            setButtonHeld(true);
-            if (isSimulating && buttonInputPin !== undefined) setDigitalInput(buttonInputPin, false);
-          }}
-          onPointerUp={(e) => {
-            e.stopPropagation();
-            setButtonHeld(false);
-            if (buttonInputPin !== undefined) setDigitalInput(buttonInputPin, true);
-          }}
-          onPointerOut={() => {
-            if (!buttonPressed) return;
-            setButtonHeld(false);
-            if (buttonInputPin !== undefined) setDigitalInput(buttonInputPin, true);
-          }}
-        >
-          <mesh position={[0, 0.16, 0]}>
-            <boxGeometry args={[0.8, 0.24, 0.72]} />
-            <meshStandardMaterial color="#1C3428" roughness={0.65} />
-          </mesh>
-          <mesh position={[0, buttonPressed ? 0.29 : 0.4, 0]}>
-            <cylinderGeometry args={[0.2, 0.2, 0.18, 24]} />
-            <meshStandardMaterial color={buttonPressed ? '#FF9A1F' : '#39FF6A'} emissive={buttonPressed ? '#FF9A1F' : '#39FF6A'} emissiveIntensity={0.25} />
-          </mesh>
-        </group>
-      ) : renderComponentGeometry(component, output, motorShaftRef, servoHornRef)}
+      {renderComponentGeometry(component, output, motorShaftRef, servoHornRef)}
 
       {/* INTERACTIVE CONNECTION PINS */}
       {component.pins.map((pin) => {
@@ -205,6 +170,59 @@ export const Component3D: React.FC<Component3DProps> = ({ component }) => {
         );
       })}
     </group>
+  );
+};
+
+// Animated Rising Smoke Particles for Overcurrent Component Burnout
+const SmokePuff: React.FC = () => {
+  const pointsRef = useRef<THREE.Points>(null);
+  const particleCount = 20;
+
+  const [positions] = useState(() => {
+    const arr = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      arr[i * 3 + 0] = (Math.random() - 0.5) * 0.15;
+      arr[i * 3 + 1] = 0.35 + Math.random() * 0.35;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 0.15;
+    }
+    return arr;
+  });
+
+  useFrame((_, delta) => {
+    if (pointsRef.current) {
+      const geo = pointsRef.current.geometry;
+      const posAttr = geo.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < particleCount; i++) {
+        let y = posAttr.getY(i) + delta * 0.5;
+        if (y > 1.2) {
+          y = 0.35;
+          posAttr.setX(i, (Math.random() - 0.5) * 0.15);
+          posAttr.setZ(i, (Math.random() - 0.5) * 0.15);
+        }
+        posAttr.setY(i, y);
+      }
+      posAttr.needsUpdate = true;
+    }
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={positions.length / 3}
+          array={positions}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.14}
+        color="#666666"
+        transparent
+        opacity={0.6}
+        depthWrite={false}
+      />
+    </points>
   );
 };
 
@@ -314,9 +332,11 @@ function renderComponentGeometry(
 
   // 3. LED (5mm)
   if (type.includes('led')) {
-    const ledColor = component.properties?.color || '#FF3333';
-    const isLit = output.isOn || (output.brightness && output.brightness > 0);
-    const brightness = output.brightness || (isLit ? 1.0 : 0);
+    const isBurnedOut = !!output.isBurnedOut;
+    const rawColor = component.properties?.color || '#FF3333';
+    const ledColor = isBurnedOut ? '#1E120B' : rawColor;
+    const isLit = !isBurnedOut && (output.isOn || (output.brightness && output.brightness > 0));
+    const brightness = isLit ? (output.brightness || 1.0) : 0;
 
     return (
       <group>
@@ -325,12 +345,12 @@ function renderComponentGeometry(
           <cylinderGeometry args={[0.15, 0.15, 0.3, 16]} />
           <meshPhysicalMaterial
             color={ledColor}
-            transmission={0.6}
+            transmission={isBurnedOut ? 0.05 : 0.6}
             opacity={0.9}
             transparent
-            roughness={0.1}
-            emissive={ledColor}
-            emissiveIntensity={isLit ? 2.0 * brightness : 0.05}
+            roughness={isBurnedOut ? 0.95 : 0.1}
+            emissive={isBurnedOut ? '#FF3300' : ledColor}
+            emissiveIntensity={isBurnedOut ? 0.2 : isLit ? 2.0 * brightness : 0.05}
           />
         </mesh>
         {/* Top Dome Hemisphere */}
@@ -338,22 +358,26 @@ function renderComponentGeometry(
           <sphereGeometry args={[0.15, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
           <meshPhysicalMaterial
             color={ledColor}
-            transmission={0.6}
+            transmission={isBurnedOut ? 0.05 : 0.6}
             opacity={0.9}
             transparent
-            emissive={ledColor}
-            emissiveIntensity={isLit ? 2.5 * brightness : 0.05}
+            roughness={isBurnedOut ? 0.95 : 0.1}
+            emissive={isBurnedOut ? '#FF3300' : ledColor}
+            emissiveIntensity={isBurnedOut ? 0.2 : isLit ? 2.5 * brightness : 0.05}
           />
         </mesh>
         {/* Wire Leads */}
         <mesh position={[0, 0.05, -0.06]}>
           <cylinderGeometry args={[0.015, 0.015, 0.15, 8]} />
-          <meshStandardMaterial color="#B0B0B0" metalness={0.9} roughness={0.2} />
+          <meshStandardMaterial color={isBurnedOut ? '#333333' : '#B0B0B0'} metalness={0.9} roughness={0.2} />
         </mesh>
         <mesh position={[0, 0.05, 0.06]}>
           <cylinderGeometry args={[0.015, 0.015, 0.15, 8]} />
-          <meshStandardMaterial color="#B0B0B0" metalness={0.9} roughness={0.2} />
+          <meshStandardMaterial color={isBurnedOut ? '#333333' : '#B0B0B0'} metalness={0.9} roughness={0.2} />
         </mesh>
+
+        {/* Rising Smoke Particles when Burned Out */}
+        {isBurnedOut && <SmokePuff />}
 
         {/* Real PointLight when LED glows */}
         {isLit && (
@@ -500,223 +524,6 @@ function renderComponentGeometry(
         <mesh position={[0, 0.43, 0]}>
           <cylinderGeometry args={[0.08, 0.08, 0.02, 16]} />
           <meshStandardMaterial color="#000000" roughness={0.9} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 9. Potentiometer
-  if (type.includes('potentiometer')) {
-    return (
-      <group>
-        <mesh position={[0, 0.2, 0]}>
-          <boxGeometry args={[0.6, 0.4, 0.6]} />
-          <meshStandardMaterial color="#1D4ED8" roughness={0.5} />
-        </mesh>
-        <mesh position={[0, 0.5, 0]}>
-          <cylinderGeometry args={[0.22, 0.22, 0.3, 20]} />
-          <meshStandardMaterial color="#CBD5E1" metalness={0.7} roughness={0.3} />
-        </mesh>
-        <mesh position={[0, 0.68, 0]}>
-          <cylinderGeometry args={[0.18, 0.18, 0.15, 20]} />
-          <meshStandardMaterial color="#0F172A" roughness={0.7} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 10. Tactile Pushbutton
-  if (type.includes('push') || type.includes('button')) {
-    const isPressed = output.isPressed || component.properties?.isPressed;
-    return (
-      <group>
-        <mesh position={[0, 0.1, 0]}>
-          <boxGeometry args={[0.5, 0.2, 0.5]} />
-          <meshStandardMaterial color="#1F2937" roughness={0.8} />
-        </mesh>
-        <mesh position={[0, isPressed ? 0.21 : 0.25, 0]}>
-          <cylinderGeometry args={[0.15, 0.15, 0.12, 16]} />
-          <meshStandardMaterial color={isPressed ? '#39FF6A' : '#111827'} roughness={0.4} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 11. Relay Module
-  if (type.includes('relay')) {
-    const isEnergized = output.isEnergized || output.state;
-    return (
-      <group>
-        <mesh position={[0, 0.06, 0]}>
-          <boxGeometry args={[1.2, 0.12, 0.8]} />
-          <meshStandardMaterial color="#006699" roughness={0.4} />
-        </mesh>
-        <mesh position={[0, 0.3, 0]}>
-          <boxGeometry args={[0.7, 0.38, 0.55]} />
-          <meshStandardMaterial color="#1D4ED8" roughness={0.3} />
-        </mesh>
-        {isEnergized && (
-          <mesh position={[-0.4, 0.15, 0]}>
-            <sphereGeometry args={[0.04, 8, 8]} />
-            <meshStandardMaterial color="#39FF6A" emissive="#39FF6A" emissiveIntensity={2.0} />
-          </mesh>
-        )}
-      </group>
-    );
-  }
-
-  // 12. LCD 16x2 Display
-  if (type.includes('lcd')) {
-    return (
-      <group>
-        <mesh position={[0, 0.1, 0]}>
-          <boxGeometry args={[2.5, 0.2, 1.2]} />
-          <meshStandardMaterial color="#0284C7" roughness={0.4} />
-        </mesh>
-        <mesh position={[0, 0.22, 0]}>
-          <boxGeometry args={[2.0, 0.06, 0.7]} />
-          <meshStandardMaterial color="#0C4A6E" roughness={0.2} emissive="#0284C7" emissiveIntensity={0.4} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 13. OLED 0.96" Display
-  if (type.includes('oled')) {
-    return (
-      <group>
-        <mesh position={[0, 0.06, 0]}>
-          <boxGeometry args={[0.9, 0.12, 0.9]} />
-          <meshStandardMaterial color="#0F172A" roughness={0.5} />
-        </mesh>
-        <mesh position={[0, 0.14, 0]}>
-          <boxGeometry args={[0.7, 0.04, 0.5]} />
-          <meshStandardMaterial color="#020617" emissive="#38BDF8" emissiveIntensity={0.3} roughness={0.1} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 14. PIR Motion Sensor
-  if (type.includes('pir')) {
-    return (
-      <group>
-        <mesh position={[0, 0.06, 0]}>
-          <boxGeometry args={[1.0, 0.12, 0.8]} />
-          <meshStandardMaterial color="#065F46" roughness={0.4} />
-        </mesh>
-        <mesh position={[0, 0.35, 0]}>
-          <sphereGeometry args={[0.35, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          <meshPhysicalMaterial color="#F8FAFC" transmission={0.6} roughness={0.3} opacity={0.85} transparent />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 15. DHT11 / DHT22 Sensor
-  if (type.includes('dht')) {
-    const isDht22 = type.includes('dht22');
-    return (
-      <group>
-        <mesh position={[0, 0.25, 0]}>
-          <boxGeometry args={[0.55, 0.5, 0.35]} />
-          <meshStandardMaterial color={isDht22 ? '#F8FAFC' : '#0284C7'} roughness={0.6} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 16. LDR Photoresistor
-  if (type.includes('ldr') || type.includes('photoresistor')) {
-    return (
-      <group>
-        <mesh position={[0, 0.18, 0]}>
-          <cylinderGeometry args={[0.14, 0.14, 0.06, 16]} />
-          <meshStandardMaterial color="#EA580C" roughness={0.5} />
-        </mesh>
-        <mesh position={[0, 0.22, 0]}>
-          <cylinderGeometry args={[0.11, 0.11, 0.03, 16]} />
-          <meshStandardMaterial color="#F97316" roughness={0.2} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 17. 9V Battery / Battery Pack
-  if (type.includes('battery')) {
-    const is9v = type.includes('9v');
-    return (
-      <group>
-        <mesh position={[0, is9v ? 0.5 : 0.3, 0]}>
-          <boxGeometry args={is9v ? [0.65, 1.0, 0.45] : [1.4, 0.5, 0.9]} />
-          <meshStandardMaterial color={is9v ? '#B45309' : '#111827'} roughness={0.4} />
-        </mesh>
-        {is9v && (
-          <mesh position={[0, 1.05, 0]}>
-            <cylinderGeometry args={[0.08, 0.08, 0.1, 12]} />
-            <meshStandardMaterial color="#CBD5E1" metalness={0.9} roughness={0.2} />
-          </mesh>
-        )}
-      </group>
-    );
-  }
-
-  // 18. L298N Dual Motor Driver Module
-  if (type.includes('l298n')) {
-    return (
-      <group>
-        <mesh position={[0, 0.1, 0]}>
-          <boxGeometry args={[1.8, 0.2, 1.8]} />
-          <meshStandardMaterial color="#B91C1C" roughness={0.4} />
-        </mesh>
-        {/* Aluminum Heatsink */}
-        <mesh position={[0, 0.5, 0]}>
-          <boxGeometry args={[0.8, 0.6, 0.5]} />
-          <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.2} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 19. MPU6050 6-Axis IMU Sensor
-  if (type.includes('mpu6050')) {
-    return (
-      <group>
-        <mesh position={[0, 0.06, 0]}>
-          <boxGeometry args={[0.7, 0.12, 0.55]} />
-          <meshStandardMaterial color="#1E3A8A" roughness={0.4} />
-        </mesh>
-        <mesh position={[0, 0.14, 0]}>
-          <boxGeometry args={[0.25, 0.05, 0.25]} />
-          <meshStandardMaterial color="#111827" roughness={0.8} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 20. 7-Segment Display
-  if (type.includes('segment')) {
-    return (
-      <group>
-        <mesh position={[0, 0.2, 0]}>
-          <boxGeometry args={[0.8, 0.4, 1.1]} />
-          <meshStandardMaterial color="#111827" roughness={0.7} />
-        </mesh>
-        <mesh position={[0, 0.41, 0]}>
-          <boxGeometry args={[0.7, 0.02, 0.95]} />
-          <meshStandardMaterial color="#EF4444" emissive="#EF4444" emissiveIntensity={0.8} />
-        </mesh>
-      </group>
-    );
-  }
-
-  // 21. Robot Gripper / Chassis
-  if (type.includes('gripper') || type.includes('chassis')) {
-    return (
-      <group>
-        <mesh position={[0, 0.1, 0]}>
-          <boxGeometry args={[1.8, 0.2, 1.4]} />
-          <meshStandardMaterial color="#0284C7" roughness={0.4} />
         </mesh>
       </group>
     );

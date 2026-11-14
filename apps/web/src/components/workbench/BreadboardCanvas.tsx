@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, ContactShadows } from '@react-three/drei';
-import { Vector3 } from 'three';
 import { useCircuitStore } from '@/store/useCircuitStore';
 import { Component3D } from './Component3D';
 import { Wire3D } from './Wire3D';
 import { GridFloor } from '../3d/GridFloor';
 import { ParticleDust } from '../3d/ParticleDust';
+import { PerformanceMonitorHUD } from './PerformanceMonitorHUD';
 
 export const BreadboardCanvas: React.FC = () => {
   const {
@@ -34,51 +34,6 @@ export const BreadboardCanvas: React.FC = () => {
       controlsRef.current.update();
     }
   };
-
-  const rotateCamera = (angle: number) => {
-    const controls = controlsRef.current;
-    if (!controls) return;
-    const offset = controls.object.position.clone().sub(controls.target);
-    offset.applyAxisAngle(new Vector3(0, 1, 0), angle);
-    controls.object.position.copy(controls.target).add(offset);
-    controls.update();
-  };
-
-  const zoomCamera = (factor: number) => {
-    const controls = controlsRef.current;
-    if (!controls) return;
-    const offset = controls.object.position.clone().sub(controls.target);
-    const distance = Math.max(2, Math.min(18, offset.length() * factor));
-    offset.setLength(distance);
-    controls.object.position.copy(controls.target).add(offset);
-    controls.update();
-  };
-
-  useEffect(() => {
-    const handleCameraKeys = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLElement && /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
-      const key = event.key.toLowerCase();
-      if (key === 'q' || key === 'e') {
-        rotateCamera(key === 'q' ? -Math.PI / 12 : Math.PI / 12);
-        return;
-      }
-      if (!['w', 'a', 's', 'd'].includes(key)) return;
-      const controls = controlsRef.current;
-      if (!controls) return;
-      const forward = new Vector3().subVectors(controls.target, controls.object.position);
-      forward.y = 0;
-      forward.normalize();
-      const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize();
-      const direction = key === 'w' ? forward : key === 's' ? forward.clone().negate() : key === 'a' ? right.clone().negate() : right;
-      const movement = direction.multiplyScalar(event.shiftKey ? 0.8 : 0.35);
-      controls.target.add(movement);
-      controls.object.position.add(movement);
-      controls.update();
-      event.preventDefault();
-    };
-    window.addEventListener('keydown', handleCameraKeys);
-    return () => window.removeEventListener('keydown', handleCameraKeys);
-  }, []);
 
   return (
     <div
@@ -139,13 +94,11 @@ export const BreadboardCanvas: React.FC = () => {
         ))}
       </Canvas>
 
+      {/* 3D Performance Monitor & Triangle Budget HUD */}
+      <PerformanceMonitorHUD />
+
       {/* Floating HUD Viewport Controls */}
       <div className="absolute top-4 right-4 flex items-center gap-2 bg-[#0E2A1F]/80 backdrop-blur-md p-1.5 rounded-xl border border-[#39FF6A]/20 shadow-lg text-xs">
-          <button onClick={() => rotateCamera(-Math.PI / 12)} className="px-2 py-1 text-gray-300 hover:text-[#39FF6A] hover:bg-[#39FF6A]/10 rounded-lg transition font-mono" title="Turn left (Q)" aria-label="Turn left">↶</button>
-          <button onClick={() => rotateCamera(Math.PI / 12)} className="px-2 py-1 text-gray-300 hover:text-[#39FF6A] hover:bg-[#39FF6A]/10 rounded-lg transition font-mono" title="Turn right (E)" aria-label="Turn right">↷</button>
-        <button onClick={() => zoomCamera(1.2)} className="px-2 py-1 text-gray-300 hover:text-[#39FF6A] hover:bg-[#39FF6A]/10 rounded-lg transition font-mono" title="Zoom out" aria-label="Zoom out">−</button>
-        <button onClick={() => zoomCamera(0.83)} className="px-2 py-1 text-gray-300 hover:text-[#39FF6A] hover:bg-[#39FF6A]/10 rounded-lg transition font-mono" title="Zoom in" aria-label="Zoom in">+</button>
-        <div className="w-[1px] h-4 bg-gray-700" />
         <button
           onClick={resetCamera}
           className="px-2.5 py-1 text-gray-300 hover:text-[#39FF6A] hover:bg-[#39FF6A]/10 rounded-lg transition font-mono"

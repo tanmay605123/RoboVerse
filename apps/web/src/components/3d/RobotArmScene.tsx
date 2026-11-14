@@ -7,63 +7,6 @@ import * as THREE from 'three';
 import { GridFloor } from './GridFloor';
 import { ParticleDust } from './ParticleDust';
 
-interface FloatingLabelChipProps {
-  name: string;
-  tag: string;
-  percentage: number;
-  statusColor?: string;
-  position: [number, number, number];
-}
-
-function FloatingLabelChip({
-  name,
-  tag,
-  percentage,
-  statusColor = '#39FF6A',
-  position,
-}: FloatingLabelChipProps) {
-  const circumference = 2 * Math.PI * 10;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-  return (
-    <Html position={position} center distanceFactor={7}>
-      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-[#040B08]/95 border border-[rgba(57,255,106,0.35)] backdrop-blur-md shadow-[0_0_15px_rgba(57,255,106,0.25)] pointer-events-none select-none">
-        <div className="relative w-6 h-6 flex items-center justify-center">
-          <svg className="w-6 h-6 transform -rotate-90">
-            <circle cx="12" cy="12" r="10" stroke="#0E2A1F" strokeWidth="2.5" fill="none" />
-            <circle
-              cx="12"
-              cy="12"
-              r="10"
-              stroke={statusColor}
-              strokeWidth="2.5"
-              strokeDasharray={`${circumference} ${circumference}`}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              fill="none"
-            />
-          </svg>
-          <span className="absolute text-[8px] font-mono font-bold text-[#EAF7EF]">
-            {percentage}%
-          </span>
-        </div>
-        <div className="flex flex-col text-left pr-1">
-          <div className="flex items-center gap-1.5">
-            <span
-              className="w-1.5 h-1.5 rounded-full animate-ping"
-              style={{ backgroundColor: statusColor }}
-            />
-            <span className="text-[10px] font-bold text-[#EAF7EF] tracking-tight whitespace-nowrap">
-              {name}
-            </span>
-          </div>
-          <span className="text-[8px] font-mono text-[#8FA99B] whitespace-nowrap">{tag}</span>
-        </div>
-      </div>
-    </Html>
-  );
-}
-
 function ArticulatedRobotArm() {
   const baseRef = useRef<THREE.Group>(null);
   const shoulderRef = useRef<THREE.Group>(null);
@@ -75,6 +18,7 @@ function ArticulatedRobotArm() {
   const { pointer } = useThree();
 
   useFrame((state, delta) => {
+    // Smooth lerp robot base rotation to point towards cursor
     const targetY = pointer.x * 0.9;
     const targetShoulderX = -pointer.y * 0.45;
     const targetElbowX = pointer.y * 0.35 + 0.3;
@@ -96,6 +40,7 @@ function ArticulatedRobotArm() {
       wristRef.current.rotation.y += delta * 0.8;
     }
 
+    // Micro pulsing on grippers
     const gripPulse = Math.sin(state.clock.elapsedTime * 2.5) * 0.05 + 0.15;
     if (gripperLeftRef.current) gripperLeftRef.current.position.x = -gripPulse;
     if (gripperRightRef.current) gripperRightRef.current.position.x = gripPulse;
@@ -195,152 +140,16 @@ function ArticulatedRobotArm() {
                 <meshBasicMaterial color="#39FF6A" transparent opacity={0.6} />
               </mesh>
 
-              {/* Floating Label Chip with Percentage Ring */}
-              <FloatingLabelChip
-                name="6-DOF Articulated Arm"
-                tag="Inverse Kinematics • Calibrated"
-                percentage={84}
-                statusColor="#39FF6A"
-                position={[1.2, 1.4, 0]}
-              />
+              {/* HUD 3D Tooltip Tag */}
+              <Html position={[0.7, 0.6, 0]} center distanceFactor={8}>
+                <div className="bg-[#040B08]/90 border border-robo-neon px-2.5 py-1 rounded-full text-[10px] font-mono text-robo-neon whitespace-nowrap shadow-neon-subtle flex items-center gap-1.5 backdrop-blur-md pointer-events-none">
+                  <span className="w-1.5 h-1.5 rounded-full bg-robo-neon animate-ping" />
+                  <span>6-DOF ARM • ONLINE</span>
+                </div>
+              </Html>
             </group>
           </group>
         </group>
-      </group>
-    </group>
-  );
-}
-
-function AutonomousRoverPlatform() {
-  const roverRef = useRef<THREE.Group>(null);
-
-  useFrame((state, delta) => {
-    if (roverRef.current) {
-      roverRef.current.position.y = -1.35 + Math.sin(state.clock.elapsedTime * 1.5) * 0.04;
-    }
-  });
-
-  return (
-    <group position={[-3.6, -1.8, -0.6]}>
-      {/* Platform Pedestal */}
-      <mesh position={[0, 0.12, 0]}>
-        <cylinderGeometry args={[1.3, 1.5, 0.24, 28]} />
-        <meshStandardMaterial color="#0A2218" roughness={0.3} metalness={0.8} />
-      </mesh>
-      {/* Glowing Teal Ring */}
-      <mesh position={[0, 0.25, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[1.0, 1.15, 28]} />
-        <meshBasicMaterial color="#7FE7D6" side={THREE.DoubleSide} />
-      </mesh>
-
-      {/* Rover Body */}
-      <group ref={roverRef} position={[0, 0.45, 0]}>
-        {/* Chassis */}
-        <mesh position={[0, 0.15, 0]}>
-          <boxGeometry args={[1.4, 0.22, 1.8]} />
-          <meshStandardMaterial color="#0E2B1E" roughness={0.4} metalness={0.8} />
-        </mesh>
-        {/* Wheels */}
-        {[-0.8, 0.8].map((x) =>
-          [-0.6, 0.6].map((z) => (
-            <mesh key={`${x}-${z}`} position={[x, 0.1, z]} rotation={[0, 0, Math.PI / 2]}>
-              <cylinderGeometry args={[0.26, 0.26, 0.22, 16]} />
-              <meshStandardMaterial color="#040B08" roughness={0.8} />
-            </mesh>
-          ))
-        )}
-        {/* Ultrasonic Sensor Eyes */}
-        <mesh position={[-0.2, 0.35, 0.9]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.12, 0.12, 0.15, 16]} />
-          <meshStandardMaterial color="#7FE7D6" emissive="#7FE7D6" emissiveIntensity={0.5} />
-        </mesh>
-        <mesh position={[0.2, 0.35, 0.9]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.12, 0.12, 0.15, 16]} />
-          <meshStandardMaterial color="#7FE7D6" emissive="#7FE7D6" emissiveIntensity={0.5} />
-        </mesh>
-
-        {/* Floating Label Chip with Percentage Ring */}
-        <FloatingLabelChip
-          name="Autonomous 4WD Rover"
-          tag="PID Control • 4/4 Subsystems"
-          percentage={92}
-          statusColor="#39FF6A"
-          position={[0, 1.2, 0]}
-        />
-      </group>
-    </group>
-  );
-}
-
-function DronePlatform() {
-  const droneRef = useRef<THREE.Group>(null);
-  const prop1Ref = useRef<THREE.Mesh>(null);
-  const prop2Ref = useRef<THREE.Mesh>(null);
-  const prop3Ref = useRef<THREE.Mesh>(null);
-  const prop4Ref = useRef<THREE.Mesh>(null);
-
-  useFrame((state, delta) => {
-    if (droneRef.current) {
-      droneRef.current.position.y = -1.2 + Math.sin(state.clock.elapsedTime * 2.0) * 0.06;
-      droneRef.current.rotation.y += delta * 0.2;
-    }
-    const propSpeed = delta * 25;
-    if (prop1Ref.current) prop1Ref.current.rotation.y += propSpeed;
-    if (prop2Ref.current) prop2Ref.current.rotation.y -= propSpeed;
-    if (prop3Ref.current) prop3Ref.current.rotation.y += propSpeed;
-    if (prop4Ref.current) prop4Ref.current.rotation.y -= propSpeed;
-  });
-
-  return (
-    <group position={[3.6, -1.8, -0.6]}>
-      {/* Platform Pedestal */}
-      <mesh position={[0, 0.12, 0]}>
-        <cylinderGeometry args={[1.3, 1.5, 0.24, 28]} />
-        <meshStandardMaterial color="#0A2218" roughness={0.3} metalness={0.8} />
-      </mesh>
-      {/* Glowing Orange Warning Ring (Needs Attention / Fault) */}
-      <mesh position={[0, 0.25, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[1.0, 1.15, 28]} />
-        <meshBasicMaterial color="#FF9A1F" side={THREE.DoubleSide} />
-      </mesh>
-
-      {/* Drone Quadcopter */}
-      <group ref={droneRef} position={[0, 0.6, 0]}>
-        {/* Core Hub */}
-        <mesh position={[0, 0.1, 0]}>
-          <cylinderGeometry args={[0.3, 0.35, 0.15, 16]} />
-          <meshStandardMaterial color="#0E2B1E" roughness={0.4} metalness={0.8} />
-        </mesh>
-        {/* 4 Carbon Arms */}
-        {[Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4].map((angle, idx) => {
-          const armX = Math.cos(angle) * 0.7;
-          const armZ = Math.sin(angle) * 0.7;
-          return (
-            <group key={idx} position={[armX, 0.1, armZ]}>
-              <mesh>
-                <cylinderGeometry args={[0.08, 0.08, 0.15, 12]} />
-                <meshStandardMaterial color="#39FF6A" emissive="#39FF6A" emissiveIntensity={0.3} />
-              </mesh>
-              {/* Spinning Propeller */}
-              <mesh
-                ref={idx === 0 ? prop1Ref : idx === 1 ? prop2Ref : idx === 2 ? prop3Ref : prop4Ref}
-                position={[0, 0.12, 0]}
-              >
-                <boxGeometry args={[0.7, 0.015, 0.08]} />
-                <meshBasicMaterial color="#7FE7D6" transparent opacity={0.7} />
-              </mesh>
-            </group>
-          );
-        })}
-
-        {/* Floating Label Chip with Percentage Ring (Needs Attention / Orange) */}
-        <FloatingLabelChip
-          name="AeroDrone Quad X1"
-          tag="IMU Echo Jitter • Firmware Fix"
-          percentage={65}
-          statusColor="#FF9A1F"
-          position={[0, 1.3, 0]}
-        />
       </group>
     </group>
   );
@@ -368,16 +177,19 @@ function FloatingElectronics() {
   return (
     <>
       {/* Floating Microcontroller IC Chip */}
-      <Float speed={2.5} rotationIntensity={1} floatIntensity={1.5} position={[-2.4, 2.2, 0.8]}>
-        <group ref={chipRef} scale={0.65}>
+      <Float speed={2.5} rotationIntensity={1} floatIntensity={1.5} position={[-2.8, 1.4, 0.5]}>
+        <group ref={chipRef} scale={0.7}>
+          {/* Chip Body */}
           <mesh>
             <boxGeometry args={[1.2, 0.2, 1.2]} />
             <meshStandardMaterial color="#0A1812" roughness={0.3} metalness={0.9} />
           </mesh>
+          {/* Logo on IC */}
           <mesh position={[0, 0.11, 0]}>
             <planeGeometry args={[0.7, 0.7]} />
             <meshBasicMaterial color="#39FF6A" />
           </mesh>
+          {/* IC Pins */}
           {[-0.4, -0.2, 0, 0.2, 0.4].map((x, i) => (
             <React.Fragment key={i}>
               <mesh position={[x, -0.05, 0.68]}>
@@ -391,7 +203,7 @@ function FloatingElectronics() {
             </React.Fragment>
           ))}
           <Html position={[0, -0.8, 0]} center distanceFactor={7}>
-            <div className="text-[9px] font-mono text-[#7FE7D6] bg-black/80 px-2 py-0.5 rounded border border-[#7FE7D6]/40">
+            <div className="text-[10px] font-mono text-robo-teal bg-black/80 px-2 py-0.5 rounded border border-robo-teal/40">
               ATmega328P
             </div>
           </Html>
@@ -399,16 +211,19 @@ function FloatingElectronics() {
       </Float>
 
       {/* Floating 220Ω Resistor */}
-      <Float speed={3} rotationIntensity={1.5} floatIntensity={2} position={[2.6, 2.3, 0.3]}>
-        <group ref={resistorRef} scale={0.75}>
+      <Float speed={3} rotationIntensity={1.5} floatIntensity={2} position={[2.9, 1.6, -0.2]}>
+        <group ref={resistorRef} scale={0.8}>
+          {/* Wire Leads */}
           <mesh rotation={[0, 0, Math.PI / 2]}>
             <cylinderGeometry args={[0.03, 0.03, 1.8, 8]} />
             <meshStandardMaterial color="#C0C0C0" metalness={1} />
           </mesh>
+          {/* Ceramic Body */}
           <mesh rotation={[0, 0, Math.PI / 2]}>
             <cylinderGeometry args={[0.18, 0.18, 0.8, 16]} />
             <meshStandardMaterial color="#D2B48C" roughness={0.5} />
           </mesh>
+          {/* Color Bands (Red, Red, Brown, Gold) */}
           <mesh position={[-0.2, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
             <cylinderGeometry args={[0.185, 0.185, 0.06, 16]} />
             <meshBasicMaterial color="#FF3333" />
@@ -429,8 +244,9 @@ function FloatingElectronics() {
       </Float>
 
       {/* Floating 5mm Glowing Neon Green LED */}
-      <Float speed={2} rotationIntensity={1.2} floatIntensity={1.8} position={[0, 2.6, -1.0]}>
-        <group ref={ledRef} scale={0.65}>
+      <Float speed={2} rotationIntensity={1.2} floatIntensity={1.8} position={[2.5, -0.6, 1.2]}>
+        <group ref={ledRef} scale={0.7}>
+          {/* Dome */}
           <mesh position={[0, 0.2, 0]}>
             <sphereGeometry args={[0.25, 16, 16]} />
             <meshStandardMaterial color="#39FF6A" emissive="#39FF6A" emissiveIntensity={0.8} transparent opacity={0.85} />
@@ -439,6 +255,7 @@ function FloatingElectronics() {
             <cylinderGeometry args={[0.25, 0.28, 0.4, 16]} />
             <meshStandardMaterial color="#39FF6A" emissive="#39FF6A" emissiveIntensity={0.6} transparent opacity={0.85} />
           </mesh>
+          {/* Pins */}
           <mesh position={[-0.08, -0.4, 0]}>
             <cylinderGeometry args={[0.02, 0.02, 0.5, 8]} />
             <meshStandardMaterial color="#C0C0C0" metalness={1} />
@@ -455,43 +272,40 @@ function FloatingElectronics() {
 
 export function RobotArmScene() {
   return (
-    <div className="w-full h-full min-h-[480px] md:min-h-[580px] relative">
+    <div className="w-full h-full min-h-[460px] md:min-h-[620px] relative">
       <Canvas
-        camera={{ position: [0, 1.8, 6.5], fov: 46 }}
+        camera={{ position: [0, 1.5, 5.8], fov: 48 }}
         gl={{ antialias: true, alpha: true }}
       >
         <Suspense fallback={null}>
-          {/* Ambient Cyber Control-Room Lighting */}
-          <ambientLight intensity={0.45} />
+          {/* Ambient Cyber Lighting */}
+          <ambientLight intensity={0.4} />
           
-          {/* Directional Soft Lighting */}
-          <directionalLight position={[6, 9, 5]} intensity={1.2} color="#FFFFFF" />
-          <directionalLight position={[-6, 7, -4]} intensity={0.8} color="#7FE7D6" />
+          {/* Soft Directional Rim Light */}
+          <directionalLight position={[6, 8, 4]} intensity={1.2} color="#FFFFFF" />
+          <directionalLight position={[-6, 6, -4]} intensity={0.8} color="#7FE7D6" />
 
-          {/* Accent Neon Point Lights */}
-          <pointLight position={[0, 3, 2]} intensity={2.0} color="#39FF6A" distance={9} />
-          <pointLight position={[-3.6, 1, 2]} intensity={1.5} color="#7FE7D6" distance={7} />
-          <pointLight position={[3.6, 1, 2]} intensity={1.5} color="#FF9A1F" distance={7} />
+          {/* Accent Colored Point Lights */}
+          <pointLight position={[0, 3, 2]} intensity={1.8} color="#39FF6A" distance={8} />
+          <pointLight position={[0, -1, 3]} intensity={1.2} color="#7FE7D6" distance={6} />
 
-          {/* 3D Objects on Platforms with Glow Rings & Floating Percentage-Ring Labels */}
+          {/* 3D Objects */}
           <ArticulatedRobotArm />
-          <AutonomousRoverPlatform />
-          <DronePlatform />
           <FloatingElectronics />
           <GridFloor />
-          <ParticleDust count={75} />
+          <ParticleDust count={60} />
         </Suspense>
       </Canvas>
 
       {/* Cybernetic HUD Corner Accents */}
-      <div className="absolute top-4 left-4 pointer-events-none font-mono text-[10px] text-[#8FA99B] flex flex-col gap-0.5">
-        <span className="text-[#39FF6A] font-bold">ROBOVERSE_LAB // 3D_HUD_ACTIVE</span>
-        <span>STATUS: 3 ROBOTS SYNCHRONIZED • 60 FPS</span>
+      <div className="absolute top-4 left-4 pointer-events-none font-mono text-[10px] text-robo-textMuted flex flex-col gap-0.5">
+        <span className="text-robo-neon font-bold">SYS // 3D_WORKBENCH_ACTIVE</span>
+        <span>LATENCY: 12ms • REFRESH: 60FPS</span>
       </div>
 
-      <div className="absolute bottom-4 right-4 pointer-events-none font-mono text-[10px] text-[#8FA99B] flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-[#39FF6A] animate-pulse shadow-[0_0_8px_#39FF6A]" />
-        <span>INTERACTIVE 3D LAB • ORBIT/ZOOM ENABLED</span>
+      <div className="absolute bottom-4 right-4 pointer-events-none font-mono text-[10px] text-robo-textMuted flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-robo-neon animate-pulse" />
+        <span>INTERACTIVE 3D ARM • DRAG CURSOR</span>
       </div>
     </div>
   );

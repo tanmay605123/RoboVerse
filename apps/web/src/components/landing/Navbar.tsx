@@ -12,34 +12,38 @@ export function Navbar() {
   const { isAuthenticated, user, profile, studentIdCard } = useAuthStore();
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-40 bg-[#07110D]/90 backdrop-blur-xl border-b border-[rgba(57,255,106,0.15)]">
+    <nav className="fixed top-0 left-0 right-0 z-40 bg-robo-bg/80 backdrop-blur-xl border-b border-robo-borderSubtle">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Logo */}
         <Logo variant="horizontal" size="md" />
 
         {/* Desktop Navigation Links */}
-        <div className="hidden lg:flex items-center gap-7 text-sm font-semibold text-[#CBD8D0]">
-          <Link href="/workbench" className="hover:text-[#39FF6A] transition-colors">
-            {lang === 'EN' ? 'Circuit Lab' : 'सर्किट लैब'}
+        <div className="hidden lg:flex items-center gap-7 text-sm font-medium text-robo-textSecondary">
+          <Link href="/workbench" className="hover:text-robo-neon transition-colors">
+            {lang === 'EN' ? '3D Workbench' : '3D वर्कबेंच'}
           </Link>
-          <Link href="/roadmap" className="hover:text-[#39FF6A] transition-colors">
+          <Link href="/arduino-studio" className="hover:text-robo-neon transition-colors flex items-center gap-1 text-[#39FF6A]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#39FF6A] animate-pulse" />
+            <span>Arduino Studio</span>
+          </Link>
+          <Link href="/roadmap" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? 'Curriculum' : 'पाठ्यक्रम'}
           </Link>
-          <Link href="/rituu" className="hover:text-[#39FF6A] transition-colors flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-[#39FF6A] animate-pulse" />
+          <Link href="/rituu" className="hover:text-robo-neon transition-colors flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-robo-teal animate-pulse" />
             <span>Rituu AI</span>
           </Link>
-          <Link href="/hackathons" className="hover:text-[#39FF6A] transition-colors">
+          <Link href="/hackathons" className="hover:text-robo-neon transition-colors">
             {lang === 'EN' ? 'Hackathons' : 'हैकथॉन'}
           </Link>
-          <Link href="/shops" className="hover:text-[#39FF6A] transition-colors">
-            {lang === 'EN' ? 'Nearby Shops' : 'पार्ट्स की दुकानें'}
+          <Link href="/shops" className="hover:text-robo-neon transition-colors">
+            {lang === 'EN' ? 'Nearby Shops' : 'पार्ट्स दुकानें'}
           </Link>
-          <Link href="/store" className="hover:text-[#39FF6A] transition-colors">
+          <Link href="/store" className="hover:text-robo-neon transition-colors">
             TechSavyyy Store
           </Link>
-          <Link href="/#pricing" className="hover:text-[#39FF6A] transition-colors">
-            {lang === 'EN' ? 'Pricing' : 'मूल्य'}
+          <Link href="/pricing" className="hover:text-robo-neon transition-colors">
+            {lang === 'EN' ? 'Pricing' : 'मूल्य निर्धारण'}
           </Link>
         </div>
 
@@ -48,17 +52,17 @@ export function Navbar() {
           {/* Language Switcher (EN / HI) */}
           <button
             onClick={() => setLang(lang === 'EN' ? 'HI' : 'EN')}
-            className="flex items-center gap-1 text-xs font-mono font-semibold text-[#8FA99B] hover:text-[#39FF6A] px-2.5 py-1.5 rounded-full bg-[#0E2A1F]/80 border border-[rgba(57,255,106,0.15)] hover:border-[#39FF6A] transition-colors"
+            className="flex items-center gap-1 text-xs font-mono text-robo-textSecondary hover:text-robo-neon px-2.5 py-1.5 rounded-lg border border-robo-borderSubtle hover:border-robo-neon/40 transition-colors"
             title="Switch Language"
           >
-            <Globe className="w-3.5 h-3.5 text-[#39FF6A]" />
+            <Globe className="w-3.5 h-3.5 text-robo-teal" />
             <span>{lang}</span>
           </button>
 
           {isAuthenticated ? (
             <Link
               href="/dashboard"
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#0E2A1F] border border-[rgba(57,255,106,0.3)] text-[#39FF6A] hover:bg-[#39FF6A] hover:text-[#07110D] transition-all font-bold text-sm shadow-[0_0_12px_rgba(57,255,106,0.25)]"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-robo-surfaceRaised border border-robo-neon text-robo-neon hover:bg-robo-neon hover:text-black transition-all font-semibold text-sm shadow-neon-subtle"
             >
               <User className="w-4 h-4" />
               <span>{profile?.fullName || studentIdCard?.studentId || 'Dashboard'}</span>
@@ -68,16 +72,16 @@ export function Navbar() {
             <>
               <Link
                 href="/login"
-                className="text-sm font-bold text-[#EAF7EF] hover:text-[#39FF6A] transition-colors px-3 py-2 font-mono"
+                className="text-sm font-semibold text-robo-text hover:text-robo-neon transition-colors px-3 py-2"
               >
                 {lang === 'EN' ? 'Log In' : 'लॉग इन'}
               </Link>
               <Link
                 href="/register"
-                className="btn-primary-neon px-5 py-2.5 text-sm font-bold shadow-neon-pill flex items-center gap-1.5"
+                className="relative group overflow-hidden px-5 py-2.5 rounded-xl bg-gradient-to-r from-robo-neon to-robo-neonHover text-black font-bold text-sm shadow-neon-glow hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5"
               >
-                <span>{lang === 'EN' ? 'Start Free' : 'शुरू करें'}</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>{lang === 'EN' ? 'Start Building Free' : 'मुफ़्त शुरू करें'}</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
             </>
           )}
@@ -86,7 +90,7 @@ export function Navbar() {
         {/* Mobile Menu Toggle */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="lg:hidden p-2 text-[#8FA99B] hover:text-[#39FF6A]"
+          className="lg:hidden p-2 text-robo-textSecondary hover:text-robo-neon"
           aria-label="Toggle Navigation Menu"
         >
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -95,64 +99,85 @@ export function Navbar() {
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden px-4 pt-3 pb-6 bg-[#07110D]/95 border-b border-[rgba(57,255,106,0.15)] backdrop-blur-2xl flex flex-col gap-4 text-sm font-bold">
+        <div className="lg:hidden px-4 pt-3 pb-6 bg-[#07110D]/95 border-b border-robo-borderSubtle backdrop-blur-2xl flex flex-col gap-4 text-base">
           <Link
             href="/workbench"
             onClick={() => setMobileMenuOpen(false)}
-            className="text-[#EAF7EF] hover:text-[#39FF6A]"
+            className="hover:text-robo-neon py-1"
           >
-            Circuit Lab
+            3D Circuit Workbench
           </Link>
           <Link
             href="/roadmap"
             onClick={() => setMobileMenuOpen(false)}
-            className="text-[#EAF7EF] hover:text-[#39FF6A]"
+            className="hover:text-robo-neon py-1"
           >
-            Curriculum
+            Curriculum Roadmap
           </Link>
           <Link
             href="/rituu"
             onClick={() => setMobileMenuOpen(false)}
-            className="text-[#EAF7EF] hover:text-[#39FF6A]"
+            className="hover:text-robo-neon py-1 flex items-center gap-2"
           >
-            Rituu AI Mentor
+            <Sparkles className="w-4 h-4 text-robo-teal" />
+            <span>Rituu AI Assistant</span>
           </Link>
           <Link
             href="/hackathons"
             onClick={() => setMobileMenuOpen(false)}
-            className="text-[#EAF7EF] hover:text-[#39FF6A]"
+            className="hover:text-robo-neon py-1"
           >
-            Hackathons
+            Robotics Hackathons
           </Link>
           <Link
             href="/shops"
             onClick={() => setMobileMenuOpen(false)}
-            className="text-[#EAF7EF] hover:text-[#39FF6A]"
+            className="hover:text-robo-neon py-1"
           >
-            Nearby Shops
+            Nearby Component Shops
           </Link>
           <Link
             href="/store"
             onClick={() => setMobileMenuOpen(false)}
-            className="text-[#EAF7EF] hover:text-[#39FF6A]"
+            className="hover:text-robo-neon py-1"
           >
             TechSavyyy Store
           </Link>
-          <div className="pt-2 border-t border-[rgba(57,255,106,0.15)] flex flex-col gap-2">
-            <Link
-              href="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-center py-2 text-[#EAF7EF] font-bold"
-            >
-              Log In
-            </Link>
-            <Link
-              href="/register"
-              onClick={() => setMobileMenuOpen(false)}
-              className="btn-primary-neon text-center py-2.5 font-bold shadow-neon-pill"
-            >
-              Start Building Free
-            </Link>
+          <Link
+            href="/pricing"
+            onClick={() => setMobileMenuOpen(false)}
+            className="hover:text-robo-neon py-1"
+          >
+            Plans & Pricing
+          </Link>
+
+          <div className="pt-4 border-t border-robo-borderSubtle flex flex-col gap-3">
+            {isAuthenticated ? (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full text-center py-2.5 rounded-xl bg-robo-neon text-black font-bold"
+              >
+                Go to Student Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 rounded-xl border border-robo-borderSubtle text-robo-text font-semibold hover:border-robo-neon"
+                >
+                  Log In
+                </Link>
+                <Link
+                  href="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 rounded-xl bg-robo-neon text-black font-bold shadow-neon-glow"
+                >
+                  Start Building Free
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

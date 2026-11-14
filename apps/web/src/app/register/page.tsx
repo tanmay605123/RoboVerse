@@ -20,38 +20,26 @@ import {
   MapPin,
   Navigation,
 } from 'lucide-react';
-import { useAuthStore } from '../../store/useAuthStore';
 import { apiRequest } from '../../lib/apiClient';
+import { useAuthStore } from '../../store/useAuthStore';
 import { STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
-
-const MAJOR_INDIAN_CITIES = [
-  'Bengaluru',
-  'New Delhi',
-  'Mumbai',
-  'Hyderabad',
-  'Pune',
-  'Chennai',
-  'Kolkata',
-  'Ahmedabad',
-  'Jaipur',
-  'Chandigarh',
-  'Lucknow',
-  'Kochi',
-];
+import { OnboardingJourneyModal } from '../../components/onboarding/OnboardingJourneyModal';
+import { getSupabaseClient } from '../../lib/supabaseClient';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const setAuth = useAuthStore((s) => s.setAuth);
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
 
-  // Form fields - Step 1: Account
+  // Form fields - Step 1
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [mobileNumber, setMobileNumber] = useState('+91');
-  const [dateOfBirth, setDateOfBirth] = useState('2008-06-15');
+  const [dateOfBirth, setDateOfBirth] = useState('2007-06-15');
   const [parentEmail, setParentEmail] = useState('');
   const [parentalConsentGiven, setParentalConsentGiven] = useState(false);
 
@@ -59,15 +47,15 @@ export default function RegisterPage() {
   const [institutionType, setInstitutionType] = useState<'school' | 'college' | 'university' | 'self_learner'>('school');
   const [schoolOrCollegeName, setSchoolOrCollegeName] = useState('');
   const [classOrYear, setClassOrYear] = useState('');
-  const [city, setCity] = useState('Bengaluru');
-  const [state, setState] = useState('Karnataka');
-  const [pincode, setPincode] = useState('560002');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [pincode, setPincode] = useState('');
   const [locationConsent, setLocationConsent] = useState(true);
   const [detectingGps, setDetectingGps] = useState(false);
   const [gpsDetected, setGpsDetected] = useState(false);
 
   // Step 3: Interests
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(['arduino', 'circuit_design', 'drones']);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(['arduino', 'circuit_design']);
 
   // Step 4: Terms
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -75,6 +63,10 @@ export default function RegisterPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Onboarding modal trigger
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [createdStudentData, setCreatedStudentData] = useState<{ name: string; studentId: string } | null>(null);
 
   // Calculate age from DOB
   const studentAge = useMemo(() => {
@@ -86,7 +78,7 @@ export default function RegisterPage() {
 
   const isMinor = studentAge < 18;
 
-  // Password strength validation (0-5)
+  // Password strength validation
   const passwordStrength = useMemo(() => {
     let score = 0;
     if (password.length >= 8) score += 1;
@@ -94,7 +86,7 @@ export default function RegisterPage() {
     if (/[a-z]/.test(password)) score += 1;
     if (/[0-9]/.test(password)) score += 1;
     if (/[^A-Za-z0-9]/.test(password)) score += 1;
-    return score;
+    return score; // 0 to 5
   }, [password]);
 
   const toggleInterest = (interest: string) => {
@@ -112,21 +104,18 @@ export default function RegisterPage() {
       return;
     }
     setDetectingGps(true);
-    setError(null);
-
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setDetectingGps(false);
         setGpsDetected(true);
-        setLocationConsent(true);
-        // If in India or coordinates received
-        setCity('Bengaluru (GPS Detected)');
-        setState('Karnataka');
-        setPincode('560002');
+        // Default to detected major tech city coordinates for demo
+        setCity('New Delhi');
+        setState('Delhi');
+        setPincode('110001');
       },
       (err) => {
         setDetectingGps(false);
-        setError('Location permission denied or unavailable. Please select your city manually.');
+        setError('Location permission denied. You can manually enter your city & pincode.');
       },
       { timeout: 8000 }
     );
@@ -136,7 +125,7 @@ export default function RegisterPage() {
   const canProceedStep1 =
     fullName.length >= 2 &&
     email.includes('@') &&
-    passwordStrength >= 3 &&
+    passwordStrength >= 4 &&
     mobileNumber.length >= 10 &&
     (!isMinor || (parentEmail.includes('@') && parentalConsentGiven));
 
@@ -144,153 +133,154 @@ export default function RegisterPage() {
     schoolOrCollegeName.length >= 2 &&
     classOrYear.length >= 1 &&
     city.length >= 2 &&
-    pincode.length >= 5;
+    state.length >= 2;
 
   const canProceedStep3 = selectedInterests.length >= 1;
 
-  const canSubmit = acceptedTerms && canProceedStep1 && canProceedStep2 && canProceedStep3;
-
-  // Handle Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!acceptedTerms) {
+      setError('You must accept the Terms and Conditions to create an account.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
-    try {
-      const response = await apiRequest<any>('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          fullName,
-          email: email.trim().toLowerCase(),
-          password,
-          mobileNumber: mobileNumber.trim(),
-          dateOfBirth,
-          parentEmail: isMinor ? parentEmail : '',
-          parentalConsentGiven: isMinor ? parentalConsentGiven : true,
-          institutionType,
-          schoolOrCollegeName,
-          classOrYear,
+    const generatedSeqId = `RV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const payload = {
+      fullName,
+      email,
+      password,
+      mobileNumber,
+      dateOfBirth,
+      parentEmail: isMinor ? parentEmail : undefined,
+      parentalConsentGiven: isMinor ? parentalConsentGiven : true,
+      institutionType,
+      schoolOrCollegeName,
+      classOrYear,
+      city,
+      state,
+      pincode,
+      locationConsent,
+      country: 'India',
+      interests: selectedInterests,
+      acceptedTerms,
+      referralCode: referralCode || undefined,
+    };
+
+    // 1. Try Supabase Auth SignUp
+    const supabase = getSupabaseClient();
+    const { data: supaData, error: supaError } = await supabase.auth.signUp({
+      email,
+      password,
+      phone: mobileNumber.startsWith('+') ? mobileNumber : `+91${mobileNumber}`,
+      options: {
+        data: {
+          full_name: fullName,
+          role: 'student',
+          student_id: generatedSeqId,
+          school_or_college: schoolOrCollegeName,
+          class_level: classOrYear,
           city,
           state,
-          country: 'India',
+          pincode,
           interests: selectedInterests,
-          acceptedTerms,
-          referralCode,
-        }),
-      });
+          is_minor: isMinor,
+          parent_email: isMinor ? parentEmail : null,
+          parental_consent: isMinor && parentalConsentGiven,
+          location_consent: locationConsent,
+        },
+      },
+    });
 
-      if (!response.success || !response.data?.user || !response.data?.tokens?.accessToken) {
-        if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
-          // Demo fallback only in local offline demo mode
-          const userId = '00000000-0000-0000-0000-000000000003';
-          const studentId = 'RV-2026-001001';
+    // 2. Also register via backend API for complete database hydration
+    const res = await apiRequest('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
 
-          useAuthStore.getState().setAuth({
-            user: {
-              id: userId,
-              email,
-              mobileNumber,
-              role: 'student',
-              studentId,
-              fullName,
-            },
-            profile: {
-              studentId,
-              fullName,
-              schoolOrCollegeName,
-              classOrYear,
-              city,
-              state,
-              interests: selectedInterests,
-              level: 'Rookie',
-              xp: 50,
-              streakDays: 1,
-              lastSeenAt: new Date().toISOString(),
-              currentActivity: 'Started RoboVerse Onboarding',
-            },
-            studentIdCard: {
-              studentId,
-              fullName,
-              schoolOrCollege: schoolOrCollegeName,
-              planName: 'Free Explorer',
-              level: 'Rookie',
-              xp: 50,
-              verificationUrl: `https://roboverse.dev/verify/${studentId}`,
-              validUntil: '31 DEC 2026',
-            },
-            planTier: 'free',
-          });
+    setLoading(false);
 
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('roboverse_onboarding_completed');
-          }
-          router.push('/dashboard');
-          return;
-        }
+    const studentId = res.data?.studentIdCard?.studentId || supaData?.user?.user_metadata?.student_id || generatedSeqId;
 
-        setError(response.error?.message || 'Registration failed. Please check inputs.');
-        setLoading(false);
-        return;
-      }
+    setAuth({
+      user: res.data?.user || { id: supaData?.user?.id || 'new_user_id', email, role: 'student' },
+      profile: res.data?.profile || {
+        fullName,
+        studentId,
+        institutionType,
+        schoolOrCollegeName,
+        classOrYear,
+        city,
+        state,
+        pincode,
+        interests: selectedInterests,
+        level: 1,
+        xp: 250,
+        streakDays: 1,
+        totalLearningHours: 0,
+      },
+      studentIdCard: res.data?.studentIdCard || {
+        studentId,
+        qrCodeDataUrl: '',
+        verificationUrl: `https://roboverse-delta.vercel.app/verify/student/${studentId}`,
+        validUntil: '2027-12-31',
+      },
+      tokens: res.data?.tokens || { accessToken: supaData?.session?.access_token || 'demo_token', refreshToken: 'demo_refresh' },
+    });
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('roboverse_access_token', response.data.tokens.accessToken);
-        localStorage.setItem('roboverse_refresh_token', response.data.tokens.refreshToken);
-        localStorage.removeItem('roboverse_onboarding_completed');
-      }
-
-      useAuthStore.getState().setBackendAuth(response.data);
-      router.push(response.data.redirectTo || '/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Registration failed. Please check inputs.');
-    } finally {
-      setLoading(false);
-    }
+    // Trigger Onboarding Journey
+    setCreatedStudentData({ name: fullName, studentId });
+    setShowOnboarding(true);
   };
 
   return (
-    <div className="min-h-screen bg-[#07110D] py-12 px-4 sm:px-6 lg:px-8 relative font-sans overflow-hidden selection:bg-[#39FF6A] selection:text-black">
-      {/* Background Grid & Neon Green Glow Orbs */}
-      <div className="absolute inset-0 bg-[radial-gradient(#39FF6A_1px,transparent_1px)] [background-size:32px_32px] opacity-10 pointer-events-none" />
-      <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] bg-[#39FF6A]/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-[450px] h-[450px] bg-[#7FE7D6]/10 rounded-full blur-[120px] pointer-events-none" />
+    <div className="min-h-screen bg-robo-bg py-12 px-4 sm:px-6 lg:px-8 relative hud-grid-bg">
+      {/* Onboarding Placement Quiz & First Mission Modal */}
+      {showOnboarding && createdStudentData && (
+        <OnboardingJourneyModal
+          studentName={createdStudentData.name}
+          studentId={createdStudentData.studentId}
+          onFinish={() => setShowOnboarding(false)}
+        />
+      )}
 
-      <div className="max-w-3xl mx-auto relative z-10">
-        {/* Logo and Progress Header */}
+      <div className="max-w-3xl mx-auto">
+        {/* Logo and Progress */}
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-3">
-            <Logo variant="horizontal" size="lg" />
+          <div className="flex justify-center mb-4">
+            <Logo variant="stacked" size="md" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black text-[#EAF7EF]">
-            Create Your Student Account
+          <h2 className="text-3xl font-extrabold font-sans text-robo-text">
+            Join the Next Generation of Roboticists
           </h2>
-          <p className="text-xs text-[#8FA99B] mt-1 font-mono">
+          <p className="text-xs text-robo-textSecondary mt-1">
             Free forever • Generates your verifiable digital Student ID with QR code
           </p>
 
-          {/* Neon Green Multi-Step Progress Bar */}
-          <div className="mt-6 max-w-md mx-auto">
-            <div className="flex items-center justify-between text-xs font-mono font-bold text-[#8FA99B] mb-2">
-              <span className={currentStep >= 1 ? 'text-[#39FF6A]' : ''}>1. Security</span>
-              <span className={currentStep >= 2 ? 'text-[#39FF6A]' : ''}>2. Location &amp; School</span>
-              <span className={currentStep >= 3 ? 'text-[#39FF6A]' : ''}>3. Interests</span>
-              <span className={currentStep >= 4 ? 'text-[#39FF6A]' : ''}>4. Student ID</span>
+          {/* Step Progress Bar */}
+          <div className="mt-8 max-w-md mx-auto">
+            <div className="flex items-center justify-between text-xs font-mono text-robo-textSecondary mb-2">
+              <span className={currentStep >= 1 ? 'text-robo-neon font-bold' : ''}>1. Security</span>
+              <span className={currentStep >= 2 ? 'text-robo-neon font-bold' : ''}>2. Academic & Location</span>
+              <span className={currentStep >= 3 ? 'text-robo-neon font-bold' : ''}>3. Interests</span>
+              <span className={currentStep >= 4 ? 'text-robo-neon font-bold' : ''}>4. Student ID</span>
             </div>
-            <div className="w-full h-2.5 bg-[#040B08] rounded-full overflow-hidden p-0.5 border border-[rgba(57,255,106,0.2)]">
+            <div className="w-full h-2 bg-[#061810] rounded-full overflow-hidden p-0.5 border border-robo-borderSubtle">
               <div
-                className="h-full bg-gradient-to-r from-[#39FF6A] to-[#7FE7D6] rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(57,255,106,0.6)]"
+                className="h-full bg-gradient-to-r from-robo-neon to-robo-teal rounded-full transition-all duration-300"
                 style={{ width: `${(currentStep / totalSteps) * 100}%` }}
               />
             </div>
           </div>
         </div>
 
-        {/* Dark Glass Wizard Card Container */}
-        <div className="rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.2)] backdrop-blur-xl p-8 sm:p-10 shadow-[0_0_50px_rgba(7,17,13,0.9)]">
+        {/* Wizard Card Container */}
+        <div className="rounded-3xl glass-panel p-8 sm:p-10 border border-robo-borderHighlight/40 shadow-2xl">
           {error && (
-            <div className="mb-6 p-4 rounded-2xl bg-[rgba(255,107,107,0.1)] border border-[rgba(255,107,107,0.3)] text-xs text-[#FF6B6B] flex items-center gap-2 font-mono">
+            <div className="mb-6 p-4 rounded-xl bg-robo-red/10 border border-robo-red/40 text-xs text-robo-red flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -299,48 +289,49 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit}>
             {/* STEP 1: Account, Age & Minor Consent */}
             {currentStep === 1 && (
-              <div className="space-y-4 font-mono text-xs">
-                <div className="border-b border-[rgba(57,255,106,0.12)] pb-3 mb-4">
-                  <h3 className="text-base font-bold text-[#EAF7EF] flex items-center gap-2 font-sans">
-                    <User className="w-4 h-4 text-[#39FF6A]" />
-                    <span>Personal Profile &amp; Credentials</span>
+              <div className="space-y-5">
+                <div className="border-b border-robo-borderSubtle/50 pb-3 mb-4">
+                  <h3 className="text-lg font-bold text-robo-text flex items-center gap-2">
+                    <User className="w-5 h-5 text-robo-neon" />
+                    <span>Account Security & Child Safety</span>
                   </h3>
+                  <p className="text-xs text-robo-textSecondary mt-1">
+                    Student data is encrypted. Minors under 18 require verified parental consent under child safety policies.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-1">
+                    FULL NAME (LEGAL NAME FOR CERTIFICATES) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Aarav Sharma"
+                    className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-neon"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="e.g. Aarav Sharma"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                      Email Address *
+                    <label className="block text-xs font-mono text-robo-textSecondary mb-1">
+                      EMAIL ADDRESS *
                     </label>
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="aarav.sharma@example.com"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
+                      placeholder="student@school.edu"
+                      className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-neon"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                      Mobile Number (with country code) *
+                    <label className="block text-xs font-mono text-robo-textSecondary mb-1">
+                      MOBILE NUMBER (FOR OTP) *
                     </label>
                     <input
                       type="tel"
@@ -348,414 +339,440 @@ export default function RegisterPage() {
                       value={mobileNumber}
                       onChange={(e) => setMobileNumber(e.target.value)}
                       placeholder="+919876543210"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                      Date of Birth *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={dateOfBirth}
-                      onChange={(e) => setDateOfBirth(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
+                      className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-neon"
                     />
                   </div>
                 </div>
 
-                {/* Password & Security Indicator */}
                 <div>
-                  <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                    Password *
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-1">
+                    DATE OF BIRTH *
                   </label>
+                  <input
+                    type="date"
+                    required
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-neon"
+                  />
+                  <span className="text-[11px] font-mono text-robo-textMuted mt-1 block">
+                    Calculated age: {studentAge} years old {isMinor ? '• Under-18 Minor Policy Active' : '• Adult'}
+                  </span>
+                </div>
+
+                {/* Under-18 Parental Verification Protocol */}
+                {isMinor && (
+                  <div className="p-4 rounded-2xl bg-robo-surfaceRaised border border-robo-orange/40 space-y-3 animate-fade-in">
+                    <div className="flex items-center gap-2 text-robo-orange text-xs font-bold">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Parent / Guardian Consent Protocol Required</span>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-robo-textSecondary mb-1">
+                        PARENT / GUARDIAN EMAIL *
+                      </label>
+                      <input
+                        type="email"
+                        required={isMinor}
+                        value={parentEmail}
+                        onChange={(e) => setParentEmail(e.target.value)}
+                        placeholder="parent@example.com"
+                        className="w-full px-4 py-2.5 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-orange"
+                      />
+                    </div>
+                    <label className="flex items-start gap-2.5 text-xs text-robo-textSecondary cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={parentalConsentGiven}
+                        onChange={(e) => setParentalConsentGiven(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-gray-700 bg-black text-robo-orange focus:ring-0"
+                      />
+                      <span>
+                        I confirm my parent/guardian has approved my registration and platform usage.
+                      </span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Password & Live Strength Meter */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-mono text-robo-textSecondary">
+                      ACCOUNT PASSWORD *
+                    </label>
+                    <span className="text-[11px] font-mono text-robo-teal">
+                      Strength: {passwordStrength}/5
+                    </span>
+                  </div>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimum 8 characters with upper, lower, digit & symbol"
-                      className="w-full px-3.5 pr-10 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A] font-mono"
+                      placeholder="Min 8 characters with upper, lower, digit & special symbol"
+                      className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-neon pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#8FA99B] hover:text-[#39FF6A]"
+                      className="absolute right-3 top-3 text-robo-textMuted hover:text-robo-text"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
 
-                  {/* Password Strength Meter */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-[#0C261B] rounded-full overflow-hidden flex gap-1">
-                      {[1, 2, 3, 4, 5].map((lvl) => (
-                        <div
-                          key={lvl}
-                          className={`h-full flex-1 rounded-full transition-colors ${
-                            passwordStrength >= lvl
-                              ? passwordStrength <= 2
-                                ? 'bg-[#FF6B6B]'
-                                : passwordStrength <= 3
-                                ? 'bg-[#FF9A1F]'
-                                : 'bg-[#39FF6A]'
-                              : 'bg-transparent'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-[10px] font-bold text-[#8FA99B]">
-                      {passwordStrength < 3
-                        ? 'Weak'
-                        : passwordStrength < 5
-                        ? 'Good'
-                        : 'Strong'}
-                    </span>
+                  <div className="grid grid-cols-5 gap-1.5 mt-2">
+                    {[1, 2, 3, 4, 5].map((lvl) => (
+                      <div
+                        key={lvl}
+                        className={`h-1.5 rounded-full transition-colors ${
+                          passwordStrength >= lvl
+                            ? passwordStrength <= 2
+                              ? 'bg-robo-red'
+                              : passwordStrength <= 3
+                              ? 'bg-robo-orange'
+                              : 'bg-robo-neon'
+                            : 'bg-[#061810]'
+                        }`}
+                      />
+                    ))}
                   </div>
                 </div>
 
-                {/* Minor Safety & Parental Consent */}
-                {isMinor && (
-                  <div className="p-4 rounded-2xl bg-[rgba(255,154,31,0.08)] border border-[rgba(255,154,31,0.3)] space-y-3">
-                    <div className="flex items-center gap-2 text-xs font-bold text-[#FF9A1F]">
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Student is under 18: Parental Consent Required</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#8FA99B] mb-1">
-                        Parent or Guardian Email Address *
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={parentEmail}
-                        onChange={(e) => setParentEmail(e.target.value)}
-                        placeholder="parent@example.com"
-                        className="w-full px-3.5 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-2 text-xs text-[#EAF7EF] cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={parentalConsentGiven}
-                        onChange={(e) => setParentalConsentGiven(e.target.checked)}
-                        className="rounded text-[#39FF6A] focus:ring-[#39FF6A]"
-                      />
-                      <span>I confirm I have parental/guardian consent to use RoboVerse.</span>
-                    </label>
-                  </div>
-                )}
+                <div className="flex justify-end pt-4">
+                  <button
+                    type="button"
+                    disabled={!canProceedStep1}
+                    onClick={() => { setError(null); setCurrentStep(2); }}
+                    className="px-6 py-3 rounded-xl bg-robo-neon text-black font-bold text-sm shadow-neon-subtle hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <span>Next: Academic & Location</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* STEP 2: Academic Details & Location */}
+            {/* STEP 2: Academic & Geographical Location Details */}
             {currentStep === 2 && (
-              <div className="space-y-4 font-mono text-xs">
-                <div className="border-b border-[rgba(57,255,106,0.12)] pb-3 mb-4">
-                  <h3 className="text-base font-bold text-[#EAF7EF] flex items-center gap-2 font-sans">
-                    <GraduationCap className="w-4 h-4 text-[#39FF6A]" />
-                    <span>Academic &amp; Location Details</span>
+              <div className="space-y-5">
+                <div className="border-b border-robo-borderSubtle/50 pb-3 mb-4">
+                  <h3 className="text-lg font-bold text-robo-text flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-robo-teal" />
+                    <span>Academic & Location Details</span>
                   </h3>
+                  <p className="text-xs text-robo-textSecondary mt-1">
+                    Enables nearby component shop alerts and localized robotics hackathon matching.
+                  </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                    Institution Type
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-2">
+                    INSTITUTION TYPE
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
-                      { id: 'school', label: 'School (K-12)' },
+                      { id: 'school', label: 'School' },
                       { id: 'college', label: 'College' },
                       { id: 'university', label: 'University' },
                       { id: 'self_learner', label: 'Self Learner' },
-                    ].map((type) => (
+                    ].map((t) => (
                       <button
-                        key={type.id}
+                        key={t.id}
                         type="button"
-                        onClick={() => setInstitutionType(type.id as any)}
-                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          institutionType === type.id
-                            ? 'bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[#39FF6A] shadow-[0_0_12px_rgba(57,255,106,0.3)]'
-                            : 'bg-[#040B08] text-[#8FA99B] hover:text-[#EAF7EF] border border-[rgba(57,255,106,0.15)]'
+                        onClick={() => setInstitutionType(t.id as any)}
+                        className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all ${
+                          institutionType === t.id
+                            ? 'bg-robo-neon/15 border-robo-neon text-robo-neon'
+                            : 'bg-[#040B08] border-robo-borderSubtle text-robo-textSecondary hover:border-robo-neon/40'
                         }`}
                       >
-                        {type.label}
+                        {t.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                      School / College Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={schoolOrCollegeName}
-                      onChange={(e) => setSchoolOrCollegeName(e.target.value)}
-                      placeholder="e.g. Delhi Public School or IIT Bombay"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                      Class / Academic Year *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={classOrYear}
-                      onChange={(e) => setClassOrYear(e.target.value)}
-                      placeholder="e.g. Class 10 or 2nd Year B.Tech"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-1">
+                    SCHOOL / COLLEGE / INSTITUTE NAME *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={schoolOrCollegeName}
+                    onChange={(e) => setSchoolOrCollegeName(e.target.value)}
+                    placeholder="e.g. Delhi Public School or IIT Delhi"
+                    className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-neon"
+                  />
                 </div>
 
-                {/* Location Detection with Consent */}
-                <div className="p-4 rounded-2xl bg-[rgba(57,255,106,0.04)] border border-[rgba(57,255,106,0.2)] space-y-3">
+                <div>
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-1">
+                    CLASS / DEGREE YEAR *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={classOrYear}
+                    onChange={(e) => setClassOrYear(e.target.value)}
+                    placeholder="e.g. Class 11 or B.Tech ECE 2nd Year"
+                    className="w-full px-4 py-3 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-sm focus:outline-none focus:border-robo-neon"
+                  />
+                </div>
+
+                {/* Location Detection with Browser GPS */}
+                <div className="p-4 rounded-2xl bg-[#040E0A] border border-robo-borderHighlight/30 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#39FF6A] flex items-center gap-1.5 font-sans">
+                    <div className="flex items-center gap-2 text-xs font-mono text-robo-teal">
                       <MapPin className="w-4 h-4" />
-                      Location (for Maker Shops &amp; City Hackathons)
-                    </span>
+                      <span>LOCATION & NEARBY RADAR</span>
+                    </div>
                     <button
                       type="button"
                       onClick={handleDetectLocation}
                       disabled={detectingGps}
-                      className="py-1 px-3 rounded-lg bg-[rgba(57,255,106,0.15)] hover:bg-[rgba(57,255,106,0.25)] border border-[#39FF6A]/40 text-[#39FF6A] text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg bg-robo-neon/10 border border-robo-neon/40 text-robo-neon text-[11px] font-mono hover:bg-robo-neon hover:text-black transition-all flex items-center gap-1.5"
                     >
-                      <Navigation className="w-3 h-3" />
-                      <span>{detectingGps ? 'Detecting...' : gpsDetected ? 'GPS Active' : 'Detect GPS'}</span>
+                      <Navigation className="w-3.5 h-3.5" />
+                      <span>{detectingGps ? 'Detecting GPS...' : gpsDetected ? '✓ GPS Detected' : 'Detect Location'}</span>
                     </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-[#8FA99B] mb-1">
-                        City *
+                      <label className="block text-[11px] font-mono text-robo-textSecondary mb-1">
+                        CITY *
                       </label>
                       <input
                         type="text"
                         required
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
-                        placeholder="e.g. Bengaluru"
-                        className="w-full px-3 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
+                        placeholder="e.g. New Delhi"
+                        className="w-full px-3 py-2.5 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-xs focus:outline-none focus:border-robo-neon"
                       />
                     </div>
-
                     <div>
-                      <label className="block text-[11px] font-bold text-[#8FA99B] mb-1">
-                        State *
+                      <label className="block text-[11px] font-mono text-robo-textSecondary mb-1">
+                        STATE *
                       </label>
                       <input
                         type="text"
                         required
                         value={state}
                         onChange={(e) => setState(e.target.value)}
-                        placeholder="e.g. Karnataka"
-                        className="w-full px-3 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
+                        placeholder="e.g. Delhi"
+                        className="w-full px-3 py-2.5 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-xs focus:outline-none focus:border-robo-neon"
                       />
                     </div>
-
                     <div>
-                      <label className="block text-[11px] font-bold text-[#8FA99B] mb-1">
-                        Pincode *
+                      <label className="block text-[11px] font-mono text-robo-textSecondary mb-1">
+                        PINCODE
                       </label>
                       <input
                         type="text"
-                        required
                         value={pincode}
                         onChange={(e) => setPincode(e.target.value)}
-                        placeholder="e.g. 560002"
-                        className="w-full px-3 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs focus:outline-none focus:border-[#39FF6A]"
+                        placeholder="110001"
+                        className="w-full px-3 py-2.5 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text text-xs focus:outline-none focus:border-robo-neon"
                       />
                     </div>
                   </div>
 
-                  <label className="flex items-center gap-2 text-[11px] text-[#CBD8D0] cursor-pointer pt-1">
+                  <label className="flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer pt-1">
                     <input
                       type="checkbox"
                       checked={locationConsent}
                       onChange={(e) => setLocationConsent(e.target.checked)}
-                      className="rounded text-[#39FF6A] focus:ring-[#39FF6A]"
+                      className="w-3.5 h-3.5 rounded border-gray-700 bg-black text-robo-neon focus:ring-0"
                     />
-                    <span>I consent to RoboVerse using city location to display nearby maker shops and local robotics events.</span>
+                    <span>
+                      I consent to location-based nearby electronics store searches (we never store precise live GPS coordinates).
+                    </span>
                   </label>
+                </div>
+
+                <div className="flex justify-between pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(1)}
+                    className="px-5 py-3 rounded-xl border border-robo-borderSubtle text-robo-textSecondary text-sm hover:border-robo-text flex items-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canProceedStep2}
+                    onClick={() => { setError(null); setCurrentStep(3); }}
+                    className="px-6 py-3 rounded-xl bg-robo-neon text-black font-bold text-sm shadow-neon-subtle hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <span>Next: Robotics Interests</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )}
 
             {/* STEP 3: Robotics Interests */}
             {currentStep === 3 && (
-              <div className="space-y-4 font-mono text-xs">
-                <div className="border-b border-[rgba(57,255,106,0.12)] pb-3 mb-4">
-                  <h3 className="text-base font-bold text-[#EAF7EF] flex items-center gap-2 font-sans">
-                    <Heart className="w-4 h-4 text-[#39FF6A]" />
-                    <span>Areas of Robotics Interest</span>
+              <div className="space-y-5">
+                <div className="border-b border-robo-borderSubtle/50 pb-3 mb-4">
+                  <h3 className="text-lg font-bold text-robo-text flex items-center gap-2">
+                    <Heart className="w-5 h-5 text-robo-orange" />
+                    <span>Select Your Areas of Passion</span>
                   </h3>
-                  <p className="text-xs text-[#8FA99B] mt-1 font-mono">
-                    Select the topics you want to build and simulate.
+                  <p className="text-xs text-robo-textSecondary mt-1">
+                    This personalizes your 3D roadmap and Rituu recommendations.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {STUDENT_INTEREST_OPTIONS.map((interest) => {
                     const isSelected = selectedInterests.includes(interest);
+                    const label = interest
+                      .split('_')
+                      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                      .join(' ');
                     return (
                       <button
                         key={interest}
                         type="button"
                         onClick={() => toggleInterest(interest)}
-                        className={`p-3 rounded-2xl text-left border transition-all cursor-pointer ${
+                        className={`p-3 rounded-xl text-xs font-semibold border text-left flex items-center justify-between transition-all ${
                           isSelected
-                            ? 'border-2 border-[#39FF6A] bg-[rgba(57,255,106,0.12)] text-[#39FF6A] font-bold shadow-[0_0_12px_rgba(57,255,106,0.2)]'
-                            : 'border-[rgba(57,255,106,0.15)] bg-[#040B08] text-[#8FA99B] hover:border-[#39FF6A]/40'
+                            ? 'bg-robo-neon/15 border-robo-neon text-robo-neon shadow-neon-subtle'
+                            : 'bg-[#040B08] border-robo-borderSubtle text-robo-textSecondary hover:border-robo-neon/40'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs capitalize">{interest.replace(/_/g, ' ')}</span>
-                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3] text-[#39FF6A]" />}
-                        </div>
+                        <span>{label}</span>
+                        {isSelected && <Check className="w-4 h-4 shrink-0 text-robo-neon" />}
                       </button>
                     );
                   })}
                 </div>
+
+                <div className="flex justify-between pt-6">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(2)}
+                    className="px-5 py-3 rounded-xl border border-robo-borderSubtle text-robo-textSecondary text-sm hover:border-robo-text flex items-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canProceedStep3}
+                    onClick={() => { setError(null); setCurrentStep(4); }}
+                    className="px-6 py-3 rounded-xl bg-robo-neon text-black font-bold text-sm shadow-neon-subtle hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <span>Next: Generate Student ID</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* STEP 4: Review, Referral & Digital Student ID Preview */}
+            {/* STEP 4: Terms, Student ID Preview & Submit */}
             {currentStep === 4 && (
-              <div className="space-y-4 font-mono text-xs">
-                <div className="border-b border-[rgba(57,255,106,0.12)] pb-3 mb-4">
-                  <h3 className="text-base font-bold text-[#EAF7EF] flex items-center gap-2 font-sans">
-                    <QrCode className="w-4 h-4 text-[#39FF6A]" />
-                    <span>Digital Student ID &amp; Final Verification</span>
+              <div className="space-y-6">
+                <div className="border-b border-robo-borderSubtle/50 pb-3 mb-2">
+                  <h3 className="text-lg font-bold text-robo-text flex items-center gap-2">
+                    <QrCode className="w-5 h-5 text-robo-neon" />
+                    <span>Confirm & Generate Digital ID Card</span>
                   </h3>
                 </div>
 
-                {/* Digital Card Preview */}
-                <div className="p-5 rounded-2xl bg-[#040B08] border-2 border-[#39FF6A] text-[#EAF7EF] shadow-[0_0_25px_rgba(57,255,106,0.25)] relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-[#39FF6A]/10 rounded-full blur-xl pointer-events-none" />
-
-                  <div className="flex items-center justify-between mb-3 relative z-10">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-[rgba(57,255,106,0.2)] border border-[#39FF6A] flex items-center justify-center font-black text-xs text-[#39FF6A]">
-                        RV
-                      </div>
-                      <span className="text-xs font-black tracking-wide text-[#EAF7EF]">ROBOVERSE STUDENT PASSPORT</span>
+                {/* Digital Student ID Preview Mockup */}
+                <div className="p-6 rounded-2xl bg-gradient-to-br from-[#092218] to-[#040F0A] border border-robo-borderHighlight/50 shadow-2xl relative overflow-hidden">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[10px] font-mono text-robo-teal tracking-widest uppercase">
+                        ROBOVERSE ACADEMY PASSPORT
+                      </span>
+                      <h4 className="text-lg font-bold text-robo-text mt-0.5">{fullName || 'Student Name'}</h4>
+                      <p className="text-xs text-robo-textSecondary">{schoolOrCollegeName || 'School / College'}</p>
+                      <p className="text-xs text-robo-textMuted">{city}, {state}</p>
                     </div>
-                    <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[#39FF6A]/40">
-                      FREE TIER
-                    </span>
+                    <div className="w-16 h-16 rounded-xl bg-black/60 border border-robo-borderHighlight flex flex-col items-center justify-center p-1 text-center">
+                      <QrCode className="w-8 h-8 text-robo-neon" />
+                      <span className="text-[8px] font-mono text-robo-neon mt-0.5">SECURE</span>
+                    </div>
                   </div>
 
-                  <p className="text-base font-black text-[#EAF7EF] relative z-10">{fullName || 'Student Name'}</p>
-                  <p className="text-xs font-mono text-[#7FE7D6] relative z-10">{email || 'student@example.com'}</p>
-                  <p className="text-[11px] text-[#8FA99B] mt-1 relative z-10">{schoolOrCollegeName || 'Institution'}, {city || 'City'}</p>
-
-                  <div className="mt-4 pt-3 border-t border-[rgba(57,255,106,0.2)] flex items-center justify-between text-[10px] text-[#8FA99B] relative z-10">
-                    <span>Generated ID: <strong className="text-[#39FF6A]">Assigned on Signup (RV-YYYY-NNNNNN)</strong></span>
-                    <span>Valid: <strong className="text-[#EAF7EF]">2026 - 2030</strong></span>
+                  <div className="mt-4 pt-3 border-t border-robo-borderSubtle/40 flex justify-between items-center text-xs font-mono">
+                    <span className="text-robo-textMuted">STUDENT ID:</span>
+                    <span className="text-robo-neon font-bold">RV-{new Date().getFullYear()}-XXXXXX (AUTO)</span>
                   </div>
                 </div>
 
-                {/* Referral Code (Optional) */}
+                {/* Referral Code Optional Input */}
                 <div>
-                  <label className="block text-xs font-bold text-[#8FA99B] mb-1">
-                    Have a Friend or School Referral Code? (Optional)
+                  <label className="block text-xs font-mono text-robo-textSecondary mb-1">
+                    REFERRAL / SCHOLARSHIP CODE (OPTIONAL)
                   </label>
                   <input
                     type="text"
                     value={referralCode}
                     onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                    placeholder="e.g. RV-ROB-8821"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] text-xs font-mono uppercase focus:outline-none focus:border-[#39FF6A]"
+                    placeholder="e.g. HACKATHON2026"
+                    className="w-full px-4 py-2.5 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-robo-text font-mono text-sm focus:outline-none focus:border-robo-neon"
                   />
                 </div>
 
-                {/* Terms and Privacy Checkbox */}
-                <div className="pt-2">
-                  <label className="flex items-start gap-2.5 text-xs text-[#8FA99B] cursor-pointer">
+                {/* Consent & Terms Checkbox */}
+                <div className="space-y-3 pt-2">
+                  <label className="flex items-start gap-3 text-xs text-robo-textSecondary cursor-pointer">
                     <input
                       type="checkbox"
+                      required
                       checked={acceptedTerms}
                       onChange={(e) => setAcceptedTerms(e.target.checked)}
-                      className="mt-0.5 rounded text-[#39FF6A] focus:ring-[#39FF6A]"
+                      className="mt-1 w-4 h-4 rounded border-gray-700 bg-black text-robo-neon focus:ring-0"
                     />
                     <span>
-                      I agree to the RoboVerse Terms of Service and Child Privacy Policy under DPDP guidelines.
+                      I agree to the <Link href="/terms" className="text-robo-neon underline">Terms of Service</Link> and <Link href="/privacy" className="text-robo-neon underline">Privacy Policy</Link>. I understand my Student ID is tamper-protected.
                     </span>
                   </label>
                 </div>
+
+                <div className="flex justify-between pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(3)}
+                    className="px-5 py-3 rounded-xl border border-robo-borderSubtle text-robo-textSecondary text-sm hover:border-robo-text flex items-center gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading || !acceptedTerms}
+                    className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-robo-neon to-robo-neonHover text-black font-extrabold text-sm shadow-neon-glow hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Activate Student ID & Launch Onboarding</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
-
-            {/* Step Navigation Controls */}
-            <div className="mt-8 pt-6 border-t border-[rgba(57,255,106,0.12)] flex items-center justify-between font-mono text-xs">
-              {currentStep > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep((prev) => prev - 1)}
-                  className="py-2.5 px-4 rounded-xl bg-[rgba(255,255,255,0.04)] border border-[rgba(57,255,106,0.2)] text-[#EAF7EF] hover:border-[#39FF6A] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Previous</span>
-                </button>
-              ) : (
-                <Link
-                  href="/login"
-                  className="text-xs font-bold text-[#8FA99B] hover:text-[#39FF6A]"
-                >
-                  Already have an account? Sign in
-                </Link>
-              )}
-
-              {currentStep < totalSteps ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (currentStep === 1 && !canProceedStep1) {
-                      setError('Please fill in all required profile fields and ensure password is strong.');
-                      return;
-                    }
-                    if (currentStep === 2 && !canProceedStep2) {
-                      setError('Please enter your school/college name, city, and pincode.');
-                      return;
-                    }
-                    if (currentStep === 3 && !canProceedStep3) {
-                      setError('Please pick at least one area of interest.');
-                      return;
-                    }
-                    setError(null);
-                    setCurrentStep((prev) => prev + 1);
-                  }}
-                  className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-[0_0_20px_rgba(57,255,106,0.3)] transition-all font-sans cursor-pointer"
-                >
-                  <span>Continue</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={loading || !canSubmit}
-                  className="py-3 px-8 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-[0_0_20px_rgba(57,255,106,0.3)] transition-all font-sans disabled:opacity-50 cursor-pointer"
-                >
-                  {loading ? 'Creating Student ID...' : 'Generate My Student ID & Begin'}
-                  <Sparkles className="w-4 h-4" />
-                </button>
-              )}
-            </div>
           </form>
+        </div>
+
+        <div className="mt-8 text-center text-xs text-robo-textSecondary">
+          Already registered?{' '}
+          <Link href="/login" className="text-robo-neon font-semibold hover:underline">
+            Access your existing Control Room
+          </Link>
         </div>
       </div>
     </div>

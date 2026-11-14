@@ -48,16 +48,21 @@ export enum CircuitDiagnosticSeverity {
   CRITICAL = 'CRITICAL',
 }
 
+export type CircuitDiagnosticErrorCode =
+  | 'SHORT_CIRCUIT'
+  | 'MISSING_GROUND'
+  | 'FLOATING_PIN'
+  | 'LED_NO_RESISTOR'
+  | 'REVERSED_POLARITY'
+  | 'VOLTAGE_EXCEEDED'
+  | 'INVALID_PIN_TYPE'
+  | 'PIN_NOT_CONFIGURED'
+  | 'INVALID_CONNECTION'
+  | 'UNSUPPORTED_COMPONENT';
+
 export interface CircuitDiagnosticError {
   id: string;
-  code:
-    | 'SHORT_CIRCUIT'
-    | 'MISSING_GROUND'
-    | 'FLOATING_PIN'
-    | 'LED_NO_RESISTOR'
-    | 'REVERSED_POLARITY'
-    | 'VOLTAGE_EXCEEDED'
-    | 'INVALID_PIN_TYPE';
+  code: CircuitDiagnosticErrorCode;
   severity: CircuitDiagnosticSeverity;
   message: string;
   explanation: string;

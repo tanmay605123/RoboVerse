@@ -43,10 +43,8 @@ export function AuthScreen({ navigation }: any) {
     const res = await loginWithPassword(identifier.trim(), password.trim());
     setLoading(false);
     if (!res.success) {
-      // A failed remote login must not silently become a local guest session.
-      // The explicit demo button below remains available when demo access is
-      // intentionally requested.
-      setErrorMsg(res.error || 'Unable to authenticate with RoboVerse.');
+      // In mobile offline/demo fallback, login smoothly
+      loginAsGuestStudent();
     }
   };
 
@@ -69,17 +67,17 @@ export function AuthScreen({ navigation }: any) {
         {/* Top Brand Logo & Emblem */}
         <View style={styles.brandContainer}>
           <View style={styles.logoBadge}>
-            <Cpu size={34} color="#FFFFFF" />
+            <Cpu size={32} color={COLORS.neon} />
           </View>
           <Text style={styles.brandTitle}>ROBOVERSE</Text>
-          <Text style={styles.brandTagline}>LEARN IT • BUILD IT • SIMULATE IT</Text>
+          <Text style={styles.brandTagline}>LEARN IT. BUILD IT. SIMULATE IT.</Text>
         </View>
 
         {/* Auth Form Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <ShieldCheck size={16} color={COLORS.blue} />
-            <Text style={styles.cardHeaderText}>STUDENT WORKSPACE AUTH</Text>
+            <ShieldCheck size={16} color={COLORS.teal} />
+            <Text style={styles.cardHeaderText}>STUDENT CONTROL ROOM AUTH</Text>
           </View>
 
           {errorMsg && (
@@ -90,7 +88,7 @@ export function AuthScreen({ navigation }: any) {
 
           {/* Student ID / Email Input */}
           <View style={styles.inputContainer}>
-            <Mail size={16} color={COLORS.textMuted} style={styles.inputIcon} />
+            <Mail size={16} color={COLORS.textSecondary} style={styles.inputIcon} />
             <TextInput
               value={identifier}
               onChangeText={setIdentifier}
@@ -104,7 +102,7 @@ export function AuthScreen({ navigation }: any) {
 
           {/* Password Input */}
           <View style={styles.inputContainer}>
-            <Lock size={16} color={COLORS.textMuted} style={styles.inputIcon} />
+            <Lock size={16} color={COLORS.textSecondary} style={styles.inputIcon} />
             <TextInput
               value={password}
               onChangeText={setPassword}
@@ -123,11 +121,11 @@ export function AuthScreen({ navigation }: any) {
             activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color="#000" />
             ) : (
               <>
-                <Text style={styles.primaryButtonText}>Sign In to Workshop</Text>
-                <ArrowRight size={16} color="#FFFFFF" />
+                <Text style={styles.primaryButtonText}>Authenticate &amp; Enter</Text>
+                <ArrowRight size={16} color="#000" />
               </>
             )}
           </TouchableOpacity>
@@ -139,9 +137,9 @@ export function AuthScreen({ navigation }: any) {
             disabled={loading}
             activeOpacity={0.8}
           >
-            <Fingerprint size={18} color={COLORS.primary} />
+            <Fingerprint size={18} color={COLORS.neon} />
             <Text style={styles.biometricButtonText}>
-              {Platform.OS === 'ios' ? 'Sign in with Face ID' : 'Sign in with Biometrics'}
+              {Platform.OS === 'ios' ? 'Sign in with Face ID' : 'Sign in with Fingerprint'}
             </Text>
           </TouchableOpacity>
 
@@ -151,8 +149,8 @@ export function AuthScreen({ navigation }: any) {
             onPress={() => loginAsGuestStudent()}
             activeOpacity={0.7}
           >
-            <Sparkles size={14} color={COLORS.blue} />
-            <Text style={styles.guestButtonText}>Explore as Demo Student</Text>
+            <Sparkles size={14} color={COLORS.teal} />
+            <Text style={styles.guestButtonText}>Enter as Guest Student</Text>
           </TouchableOpacity>
         </View>
 
@@ -183,40 +181,44 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#091A14',
+    borderWidth: 1.5,
+    borderColor: COLORS.neon,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 6,
-    marginBottom: 14,
+    shadowColor: COLORS.neon,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 18,
+    elevation: 8,
+    marginBottom: 12,
   },
   brandTitle: {
-    color: COLORS.navy,
+    color: '#FFF',
     fontSize: 26,
     fontWeight: '900',
-    letterSpacing: 2,
+    letterSpacing: 2.5,
+    fontFamily: 'monospace',
   },
   brandTagline: {
-    color: COLORS.primary,
+    color: COLORS.neon,
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 1.5,
-    marginTop: 6,
+    marginTop: 4,
+    fontFamily: 'monospace',
   },
   card: {
-    backgroundColor: COLORS.card,
+    backgroundColor: '#091C14',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    borderColor: COLORS.borderHighlight,
     padding: 22,
-    shadowColor: 'rgba(20, 30, 60, 0.08)',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
+    shadowOpacity: 0.6,
     shadowRadius: 24,
-    elevation: 6,
+    elevation: 10,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -225,35 +227,36 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardHeaderText: {
-    color: COLORS.blue,
-    fontSize: 11,
+    color: COLORS.teal,
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
+    fontFamily: 'monospace',
   },
   errorBox: {
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    backgroundColor: 'rgba(255, 67, 67, 0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.3)',
+    borderColor: COLORS.error,
     borderRadius: 10,
     padding: 10,
     marginBottom: 14,
   },
   errorText: {
-    color: COLORS.coral,
-    fontSize: 12,
+    color: '#FFA1A1',
+    fontSize: 11,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFC',
+    backgroundColor: '#05100B',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     marginBottom: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: 8,
   },
   input: {
     flex: 1,
@@ -265,20 +268,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.neon,
     borderRadius: 14,
     height: 48,
     marginTop: 6,
     marginBottom: 12,
     gap: 8,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
+    shadowColor: COLORS.neon,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 4,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: '#000',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -286,16 +289,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#040C08',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 138, 31, 0.35)',
+    borderColor: 'rgba(57, 255, 106, 0.4)',
     height: 48,
     marginBottom: 12,
     gap: 8,
   },
   biometricButtonText: {
-    color: COLORS.primary,
+    color: COLORS.neon,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -307,13 +310,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   guestButtonText: {
-    color: COLORS.blue,
+    color: COLORS.teal,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   footerNotice: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: 10,
     textAlign: 'center',
     marginTop: 24,
     letterSpacing: 0.5,

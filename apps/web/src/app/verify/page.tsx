@@ -2,170 +2,103 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Search, ShieldCheck, Award, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
+import { Navbar } from '../../components/landing/Navbar';
+import {
+  ShieldCheck,
+  Search,
+  Award,
+  CheckCircle2,
+  FileCheck,
+  ArrowRight,
+  ExternalLink,
+} from 'lucide-react';
 
-const FEATURED_VERIFICATIONS = [
-  {
-    code: 'RV-CERT-2026-001001',
-    studentName: 'Tanmay Chawda',
-    courseName: 'Arduino & Electronics Foundations',
-    track: 'HARDWARE & EMBEDDED SYSTEMS',
-    grade: '98.5%',
-  },
-  {
-    code: 'RV-CERT-2026-001002',
-    studentName: 'Aarav Sharma',
-    courseName: 'Autonomous Mobile Robotics: Line Tracers & Rovers',
-    track: 'ROBOTICS & CONTROL SYSTEMS',
-    grade: '96.0%',
-  },
-];
-
-export default function CertificateLookupPage() {
+export default function VerifySearchPage() {
   const router = useRouter();
-  const [inputCode, setInputCode] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = inputCode.trim().toUpperCase();
-    if (!trimmed) {
-      setError('Please enter a certificate verification code.');
+    if (!code.trim()) {
+      setError('Please enter a valid RoboVerse Certificate Code.');
       return;
     }
-    router.push(`/verify/${encodeURIComponent(trimmed)}`);
+    setError(null);
+    router.push(`/verify/${encodeURIComponent(code.trim().toUpperCase())}`);
   };
 
   return (
-    <div className="min-h-screen bg-[#040B08] text-[#EAF7EF] font-sans selection:bg-[#39FF6A] selection:text-black">
-      {/* Header */}
-      <header className="border-b border-gray-800 bg-[#07110D]/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#39FF6A] text-black font-extrabold flex items-center justify-center font-mono text-sm shadow">
-              RV
-            </div>
-            <div>
-              <span className="font-extrabold tracking-tight text-white text-base">RoboVerse</span>
-              <span className="text-[10px] text-[#7FE7D6] font-mono block -mt-1">
-                Official Credential Verification Service
-              </span>
-            </div>
-          </Link>
+    <div className="min-h-screen bg-[#05100B] text-robo-text font-sans selection:bg-robo-neon selection:text-black">
+      <Navbar />
 
-          <Link
-            href="/login"
-            className="text-xs font-mono text-gray-300 hover:text-[#39FF6A] transition"
-          >
-            Student Portal
-          </Link>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-3xl mx-auto px-4 py-16 text-center space-y-8">
-        <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#39FF6A]/10 border border-[#39FF6A]/30 text-[#39FF6A] text-xs font-mono font-bold">
+      <main className="pt-28 pb-20 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-robo-surfaceRaised border border-robo-neon/40 text-robo-neon text-xs font-mono mb-4">
             <ShieldCheck className="w-4 h-4" />
-            <span>PUBLIC REGISTRY LOOKUP</span>
+            <span>ROBOVERSE PUBLIC CREDENTIAL DIRECTORY</span>
           </div>
-
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
-            Verify a RoboVerse Certificate
+          <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
+            Verify a Certificate
           </h1>
-
-          <p className="text-sm text-gray-400 font-mono max-w-xl mx-auto leading-relaxed">
-            Enter the unique credential identifier found on the physical or digital certificate
-            to verify student authenticity, course completion, and assessed robotics competencies.
+          <p className="text-sm sm:text-base text-robo-textSecondary max-w-lg mx-auto">
+            Validate the authenticity, track score, and student credential details of any official RoboVerse robotics certification.
           </p>
         </div>
 
-        {/* Verification Input Form */}
-        <form onSubmit={handleSearch} className="max-w-xl mx-auto space-y-3">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              value={inputCode}
-              onChange={(e) => {
-                setInputCode(e.target.value);
-                setError(null);
-              }}
-              placeholder="e.g. RV-CERT-2026-001001"
-              className="w-full pl-12 pr-32 py-3.5 bg-[#07110D] border-2 border-gray-800 focus:border-[#39FF6A] rounded-2xl text-sm font-mono text-white placeholder-gray-500 uppercase tracking-wider focus:outline-none transition shadow-xl"
-            />
+        {/* Search Card */}
+        <div className="p-8 sm:p-10 rounded-3xl bg-gradient-to-b from-[#092016] to-[#05110C] border border-robo-neon/40 shadow-2xl space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <label className="block text-xs font-mono text-robo-textSecondary">
+              ENTER UNIQUE CERTIFICATE CODE (E.G. RV-CERT-2026-991234)
+            </label>
+
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-robo-textSecondary" />
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="RV-CERT-2026-XXXXXX"
+                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-black/60 border border-robo-borderSubtle text-white font-mono text-base uppercase placeholder:normal-case placeholder-robo-textSecondary/50 focus:outline-none focus:border-robo-neon transition-colors"
+              />
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-400 font-mono">{error}</p>
+            )}
+
             <button
               type="submit"
-              className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-[#39FF6A] hover:bg-[#32e55e] text-black font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow font-sans"
+              className="w-full py-4 rounded-xl bg-robo-neon hover:bg-robo-neonHover text-black font-bold text-sm shadow-neon-glow flex items-center justify-center gap-2 transition-transform hover:scale-[1.01]"
             >
-              <span>Verify</span>
+              <FileCheck className="w-4 h-4" />
+              <span>Verify Institutional Credential</span>
               <ArrowRight className="w-4 h-4" />
             </button>
-          </div>
+          </form>
 
-          {error && <p className="text-xs font-mono text-red-400">{error}</p>}
-        </form>
-
-        {/* Quick Demo Verification Cards */}
-        <div className="pt-8 text-left space-y-4">
-          <div className="flex items-center justify-between text-xs font-mono text-gray-400 border-b border-gray-800 pb-2">
-            <span className="uppercase tracking-wider font-bold">Example Verified Credentials</span>
-            <span>Click to inspect live certificate</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {FEATURED_VERIFICATIONS.map((item) => (
-              <Link
-                key={item.code}
-                href={`/verify/${item.code}`}
-                className="group p-5 bg-[#07110D] border border-gray-800 hover:border-[#39FF6A]/50 rounded-2xl transition flex flex-col justify-between space-y-3 shadow-lg"
+          {/* Quick Sample Links */}
+          <div className="pt-6 border-t border-robo-borderSubtle/60 text-xs font-mono">
+            <span className="text-robo-textSecondary block mb-2">QUICK TEST CODES:</span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => router.push('/verify/RV-CERT-2026-991234')}
+                className="px-3 py-1.5 rounded-lg bg-black/40 border border-robo-borderSubtle hover:border-robo-teal text-robo-teal flex items-center gap-1.5 transition-colors"
               >
-                <div>
-                  <div className="flex items-center justify-between text-[11px] font-mono text-gray-400 mb-2">
-                    <span className="text-[#39FF6A] font-bold">{item.code}</span>
-                    <span className="px-2 py-0.5 rounded bg-[#39FF6A]/10 text-[#39FF6A] text-[10px] font-bold">
-                      Grade: {item.grade}
-                    </span>
-                  </div>
-                  <h3 className="text-base font-bold text-white group-hover:text-[#39FF6A] transition-colors font-sans">
-                    {item.studentName}
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-1 line-clamp-1">
-                    {item.courseName}
-                  </p>
-                </div>
+                <span>RV-CERT-2026-991234 (Verified)</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
 
-                <div className="flex items-center justify-between text-xs font-mono text-[#7FE7D6] pt-2 border-t border-gray-800/80">
-                  <span>Track: {item.track}</span>
-                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Security & Cryptographic Guarantee */}
-        <div className="pt-8 border-t border-gray-800/80 grid grid-cols-1 sm:grid-cols-3 gap-6 text-left text-xs font-mono text-gray-400">
-          <div className="flex items-start gap-2.5">
-            <ShieldCheck className="w-5 h-5 text-[#39FF6A] shrink-0" />
-            <div>
-              <strong className="text-white block font-sans">Immutable Registry</strong>
-              <span>Conferred certificates are recorded in Supabase PostgreSQL with unique SHA hash fingerprints.</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5">
-            <Award className="w-5 h-5 text-[#7FE7D6] shrink-0" />
-            <div>
-              <strong className="text-white block font-sans">Accredited Rigor</strong>
-              <span>Issued exclusively upon 100% completion of MNA circuit labs, firmware exams, and telemetry tests.</span>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5">
-            <Lock className="w-5 h-5 text-[#39FF6A] shrink-0" />
-            <div>
-              <strong className="text-white block font-sans">Anti-Tampering</strong>
-              <span>Revoked or forged credentials are instantly flagged by the public verification sentinel.</span>
+              <button
+                type="button"
+                onClick={() => router.push('/verify/RV-CERT-2026-REVOKED')}
+                className="px-3 py-1.5 rounded-lg bg-black/40 border border-red-500/40 hover:border-red-500 text-red-400 flex items-center gap-1.5 transition-colors"
+              >
+                <span>RV-CERT-2026-REVOKED (Revoked Test)</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
             </div>
           </div>
         </div>

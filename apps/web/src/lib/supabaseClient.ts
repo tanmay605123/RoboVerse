@@ -1,14 +1,20 @@
-import { createBrowserClient } from '@supabase/ssr';
-import type { Database } from '@roboverse/shared';
+import { createRoboVerseSupabaseClient, RoboVerseSupabaseClient } from '@roboverse/shared';
 
-// Keep builds and the seeded demo usable without a configured Supabase project.
-// Set these environment variables to connect the app to a real backend.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321';
-const supabaseKey =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  'roboverse-local-anon-key-not-configured';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_roboverse_2026';
 
-export const supabase = createBrowserClient<Database>(supabaseUrl, supabaseKey);
+let clientInstance: RoboVerseSupabaseClient | null = null;
 
-export const getSupabaseClient = () => supabase;
+export function getSupabaseClient(): RoboVerseSupabaseClient {
+  if (!clientInstance) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('roboverse_access_token') : null;
+    clientInstance = createRoboVerseSupabaseClient({
+      supabaseUrl: SUPABASE_URL,
+      supabaseKey: SUPABASE_ANON_KEY,
+      authToken: token,
+    });
+  }
+  return clientInstance;
+}
+
+export const supabase = getSupabaseClient();

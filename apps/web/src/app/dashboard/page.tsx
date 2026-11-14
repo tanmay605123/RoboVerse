@@ -3,1241 +3,766 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AppSidebar } from '../../components/layout/AppSidebar';
-import { AppTopBar } from '../../components/layout/AppTopBar';
-import { ChallengeBanner } from '../../components/dashboard/ChallengeBanner';
-import { OnboardingJourneyModal } from '../../components/dashboard/OnboardingJourneyModal';
-import { StatCard } from '../../components/ui/StatCard';
-import { ItemCard } from '../../components/ui/ItemCard';
-import { AddPlaceholderCard } from '../../components/ui/AddPlaceholderCard';
-import { SelectableCard } from '../../components/ui/SelectableCard';
-import { RobotArmScene } from '../../components/3d/RobotArmScene';
-import { RobotStatusTiles } from '../../components/dashboard/RobotStatusTiles';
+import { Logo } from '../../components/brand/Logo';
+import { StudentIdCard3D } from '../../components/dashboard/StudentIdCard3D';
+import { SkillRadarChart } from '../../components/dashboard/SkillRadarChart';
 import { HudRadialGauge } from '../../components/dashboard/HudRadialGauge';
 import { TimelineScrubber } from '../../components/dashboard/TimelineScrubber';
-import { MiniMapCard } from '../../components/dashboard/MiniMapCard';
-import { useAuthStore } from '../../store/useAuthStore';
-import { supabase } from '../../lib/supabaseClient';
-import { StudentIdCard3D } from '../../components/dashboard/StudentIdCard3D';
+import { RobotStatusTiles } from '../../components/dashboard/RobotStatusTiles';
+import { DailyUsageMeterHud } from '../../components/dashboard/DailyUsageMeterHud';
+import { useAuthStore, calculateJourneyLevel } from '../../store/useAuthStore';
+import { apiRequest } from '../../lib/apiClient';
 import {
+  LayoutDashboard,
   Cpu,
-  Code2,
-  Box,
-  Bookmark,
-  Award,
-  Video,
-  Trophy,
+  Layers,
   Sparkles,
-  Calendar,
-  Grid,
-  List,
+  Trophy,
+  ShoppingBag,
+  Settings,
+  LogOut,
+  Bell,
   Search,
-  ArrowRight,
+  ExternalLink,
+  ChevronRight,
+  ShieldCheck,
+  Compass,
+  Terminal,
   Flame,
-  Clock,
+  Award,
+  Play,
   MapPin,
   Send,
-  Zap,
-  Play,
-  Copy,
-  Edit3,
-  Trash2,
-  FolderPlus,
-  Lock,
-  Globe,
-  GitFork,
-  Heart,
-  ChevronDown,
-  X,
-  Compass,
-  Activity,
-  ShieldCheck,
+  Store,
+  CheckCircle,
+  HelpCircle,
+  FolderGit2,
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, profile, studentIdCard, planTier, entitlements, initialized, isLoading, isAuthenticated, initAuth } = useAuthStore();
+  const { user, profile, studentIdCard, planTier, logout, isAuthenticated } = useAuthStore();
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showPassportModal, setShowPassportModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'workbench' | 'roadmap' | 'rituu' | 'hackathons' | 'store'>('overview');
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [rituuQuery, setRituuQuery] = useState('');
 
-  // Tabs & filters
-  const [activeCategoryTab, setActiveCategoryTab] = useState<
-    'all' | 'sample-projects' | 'circuits' | 'code' | '3d' | 'collections' | 'certificates'
-  >('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [searchFilter, setSearchFilter] = useState('');
-  const [sortBy, setSortBy] = useState<'modified' | 'name' | 'remixes'>('modified');
-  const [selectedCity, setSelectedCity] = useState<'Delhi' | 'Bengaluru' | 'Mumbai' | 'Online'>('Delhi');
-
-  // Quick Rituu ask state
-  const [quickRituuPrompt, setQuickRituuPrompt] = useState('');
-  const [isRituuAsking, setIsRituuAsking] = useState(false);
-  const [rituuQuickReply, setRituuQuickReply] = useState<string | null>(null);
-
-  // Modals state for card actions
-  const [renameModalItem, setRenameModalItem] = useState<{ id: string; title: string } | null>(null);
-  const [newTitle, setNewTitle] = useState('');
-  const [shareModalItem, setShareModalItem] = useState<{ id: string; title: string } | null>(null);
-  const [copiedShareLink, setCopiedShareLink] = useState(false);
-
-  // Initialize auth session from Supabase
+  // Fetch /api/v1/auth/me on mount if available
   useEffect(() => {
-    if (!initialized) {
-      initAuth();
+    async function loadDashboard() {
+      const res = await apiRequest('/auth/me');
+      if (res.success && res.data) {
+        setDashboardData(res.data);
+      }
+      setLoading(false);
     }
-  }, [initialized, initAuth]);
-
-  useEffect(() => {
-    if (initialized && !isLoading && !isAuthenticated) {
-      router.replace('/login?returnUrl=/dashboard');
-    }
-  }, [initialized, isLoading, isAuthenticated, router]);
-
-  // Check if first-time user for onboarding
-  useEffect(() => {
-    const hasSeenOnboarding = localStorage.getItem('roboverse_onboarding_completed');
-    if (!hasSeenOnboarding) {
-      setShowOnboarding(true);
-    }
+    loadDashboard();
   }, []);
 
-  const handleFinishOnboarding = () => {
-    localStorage.setItem('roboverse_onboarding_completed', 'true');
-    setShowOnboarding(false);
+  const handleLogout = () => {
+    logout();
+    router.push('/');
   };
 
-  // Sample Projects (Featured Starters)
-  const sampleProjects = [
-    {
-      id: 'starter_line_follower',
-      title: 'Autonomous Line Following Robot',
-      tag: 'PID Control & Robotics',
-      tagBg: 'bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[rgba(57,255,106,0.3)]',
-      description: 'Differential drive mobile robot with dual TCRT5000 infrared reflectance sensors and L298N dual H-bridge motor driver.',
-      components: ['Arduino Uno R3', 'Dual IR Sensors', 'L298N Motor Driver', '2x DC Gearmotors', '7.4V LiPo Pack'],
-      componentsCount: 6,
-      badge: 'Featured Starter',
-      difficulty: 'Intermediate',
-      href: '/workbench?starter=starter_line_follower',
-    },
-    {
-      id: 'starter_robotic_hand',
-      title: '5-Finger Articulated Robotic Hand',
-      tag: 'Bionics & Servo Kinematics',
-      tagBg: 'bg-[rgba(127,231,214,0.15)] text-[#7FE7D6] border border-[rgba(127,231,214,0.3)]',
-      description: 'Proportional 5-finger prosthetic hand driven by 5 individual SG90 micro servo motors with flex sensor triggers.',
-      components: ['Arduino Uno R3', '5x SG90 Micro Servos', 'PCA9685 16-Channel PWM', 'Flex Resistors', 'External 5V 3A Supply'],
-      componentsCount: 8,
-      badge: 'CapStone',
-      difficulty: 'Advanced',
-      href: '/workbench?starter=starter_robotic_hand',
-    },
-    {
-      id: 'starter_drone_quad',
-      title: 'Drone Quadcopter Flight Controller',
-      tag: 'IMU & Brushless ESC Telemetry',
-      tagBg: 'bg-[rgba(255,154,31,0.15)] text-[#FF9A1F] border border-[rgba(255,154,31,0.3)]',
-      description: '6-DOF IMU stabilization with MPU6050 gyroscope/accelerometer and high-speed PWM signals to 4 brushless ESCs.',
-      components: ['Arduino Uno R3', 'MPU6050 6-Axis Accelerometer', '4x 30A Brushless ESCs', '2212 920KV Motors', '3S 11.1V Battery'],
-      componentsCount: 9,
-      badge: 'High Performance',
-      difficulty: 'Expert',
-      href: '/workbench?starter=starter_drone_quad',
-    },
-  ];
+  const currentStudentId =
+    profile?.studentId ||
+    studentIdCard?.studentId ||
+    dashboardData?.studentIdCard?.studentId ||
+    'RV-2026-000101';
 
-  // My Saved Circuits state
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
-  const [circuits, setCircuits] = useState<any[]>(
-    isDemo
-      ? [
-          {
-            id: 'proj_mighty_bombul',
-            title: 'Sizzling Blad-Kieran',
-            category: 'Circuits',
-            timeAgo: '13 days ago',
-            isPublic: false,
-            remixCount: 4,
-            likeCount: 18,
-            componentsCount: 7,
-            thumbnailUrl: null,
-          },
-          {
-            id: 'proj_sonar_radar',
-            title: 'Ultrasonic Sonar Distance Radar',
-            category: 'Circuits',
-            timeAgo: '2 days ago',
-            isPublic: true,
-            remixCount: 12,
-            likeCount: 45,
-            componentsCount: 5,
-            thumbnailUrl: null,
-          },
-        ]
-      : []
-  );
+  const currentFullName =
+    profile?.fullName ||
+    dashboardData?.profile?.fullName ||
+    'Aarav Sharma';
 
-  // Load real circuits and certificates from database
-  useEffect(() => {
-    if (!user) return;
-    const loadUserData = async () => {
-      try {
-        const { data: dbCircuits } = await (supabase.from('circuit_projects') as any)
-          .select('id, name, is_public, remix_count, likes_count, thumbnail_url, updated_at')
-          .eq('user_id', user.id)
-          .order('updated_at', { ascending: false });
+  const currentPlan =
+    planTier ||
+    dashboardData?.planTier ||
+    'FREE';
 
-        if (dbCircuits && dbCircuits.length > 0) {
-          setCircuits(
-            dbCircuits.map((p: any) => ({
-              id: p.id,
-              title: p.name || 'Untitled Circuit',
-              category: 'Circuits',
-              timeAgo: new Date(p.updated_at).toLocaleDateString(),
-              isPublic: !!p.is_public,
-              remixCount: p.remix_count || 0,
-              likeCount: p.likes_count || 0,
-              componentsCount: 5,
-              thumbnailUrl: p.thumbnail_url || null,
-            }))
-          );
-        }
+  const currentSchool =
+    profile?.schoolOrCollegeName ||
+    dashboardData?.profile?.schoolOrCollegeName ||
+    'Delhi Public School';
 
-        const { data: dbCerts } = await (supabase.from('certificates') as any)
-          .select('id, certificate_code, metadata, issued_at, courses(title)')
-          .eq('user_id', user.id)
-          .order('issued_at', { ascending: false });
+  const currentXp = profile?.xp ?? (dashboardData?.profile?.xp || 240);
+  const currentStreak = profile?.streakDays ?? (dashboardData?.profile?.streakDays || 5);
+  const journey = calculateJourneyLevel(currentXp);
 
-        if (dbCerts && dbCerts.length > 0) {
-          setCertificates(
-            dbCerts.map((c: any) => ({
-              id: c.id,
-              title: c.courses?.title || 'Verified Robotics Credential',
-              track: 'Foundation Track',
-              issueDate: new Date(c.issued_at).toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              }),
-              verificationHash: c.certificate_code,
-              badge: 'Verified Credential',
-            }))
-          );
-        }
-      } catch (err) {
-        console.error('Failed to load user circuits/certificates:', err);
-      }
-    };
-    loadUserData();
-  }, [user]);
-
-  // Code Projects state
-  const codeProjects = [
-    {
-      id: 'code_blink_timer',
-      title: 'Non-Blocking Timer Interrupt Blink',
-      type: 'Text (C++)',
-      board: 'Arduino Uno R3',
-      timeAgo: '3 days ago',
-      linesCount: 42,
-    },
-    {
-      id: 'code_pid_speed',
-      title: 'PID Velocity Loop for DC Motors',
-      type: 'Text (C++)',
-      board: 'Arduino Uno R3',
-      timeAgo: '1 week ago',
-      linesCount: 88,
-    },
-    {
-      id: 'code_blockly_maze',
-      title: 'Blockly Visual Maze Navigator',
-      type: 'Blocks (Blockly)',
-      board: 'micro:bit',
-      timeAgo: '2 weeks ago',
-      linesCount: 15,
-    },
-  ];
-
-  // 3D Robot Builds state
-  const robotBuilds = [
-    {
-      id: 'robot_4wd_chassis',
-      title: '4WD Autonomous Obstacle Rover',
-      type: 'Mobile Robot',
-      timeAgo: '4 days ago',
-      partsCount: 18,
-    },
-    {
-      id: 'robot_arm_3dof',
-      title: '3-DOF Articulated Robotic Arm',
-      type: 'Manipulator',
-      timeAgo: '2 weeks ago',
-      partsCount: 14,
-    },
-  ];
-
-  // Collections state
-  const collections = [
-    { id: 'col_basics', name: 'Arduino Electronics 101', count: 5, color: '#39FF6A' },
-    { id: 'col_hackathon', name: 'National Rover Hackathon 2026', count: 3, color: '#7FE7D6' },
-    { id: 'col_iot', name: 'ESP32 Smart Home Sensors', count: 4, color: '#4C8DFF' },
-  ];
-
-  // Certificates state
-  const [certificates, setCertificates] = useState<any[]>(
-    isDemo
-      ? [
-          {
-            id: 'cert_rover_2026',
-            title: 'Autonomous Mobile Robotics & PID Control',
-            track: 'Capstone Certification',
-            issueDate: 'October 12, 2026',
-            verificationHash: 'sha256:7f3a9e2d09c8112a44',
-            badge: 'Verified Credential',
-          },
-        ]
-      : []
-  );
-
-  // City Hackathons data
-  const hackathonsByCity = {
-    Delhi: [
-      {
-        id: 'h1',
-        title: 'Delhi Robotics Sprint 2026',
-        venue: 'IIT Delhi, Hauz Khas',
-        date: 'Oct 24-26, 2026',
-        prize: '₹1,50,000 Pool',
-        teamsLooking: 8,
-      },
-      {
-        id: 'h2',
-        title: 'National Autonomous Rover Challenge',
-        venue: 'Pragati Maidan, New Delhi',
-        date: 'Nov 14-16, 2026',
-        prize: '₹2,50,000 Pool',
-        teamsLooking: 14,
-      },
-    ],
-    Bengaluru: [
-      {
-        id: 'h3',
-        title: 'Bengaluru IoT & Drone Hackathon',
-        venue: 'IISc Bengaluru, Malleshwaram',
-        date: 'Nov 02-04, 2026',
-        prize: '₹2,00,000 Pool',
-        teamsLooking: 11,
-      },
-    ],
-    Mumbai: [
-      {
-        id: 'h4',
-        title: 'Mumbai Autonomous Subsea & Robotics Jam',
-        venue: 'IIT Bombay, Powai',
-        date: 'Nov 20-22, 2026',
-        prize: '₹1,75,000 Pool',
-        teamsLooking: 6,
-      },
-    ],
-    Online: [
-      {
-        id: 'h5',
-        title: 'RoboVerse Global Virtual Circuit Sprint',
-        venue: 'RoboVerse 3D WebGL Arena',
-        date: 'Every Weekend',
-        prize: '₹50,000 + Pro Memberships',
-        teamsLooking: 25,
-      },
-    ],
+  const handleRituuAsk = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!rituuQuery.trim()) return;
+    router.push(`/rituu?q=${encodeURIComponent(rituuQuery.trim())}`);
   };
 
-  // Quick Rituu AI submission
-  const handleQuickAsk = async (text?: string) => {
-    const query = text || quickRituuPrompt;
-    if (!query.trim()) return;
-
-    setIsRituuAsking(true);
-    setRituuQuickReply('');
-
-    try {
-      const response = await fetch('/api/rituu/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: query, mode: 'auto' }),
-      });
-
-      if (!response.ok) {
-        setIsRituuAsking(false);
-        setRituuQuickReply(
-          `💡 Rituu Insight: For "${query}", wire a 220Ω resistor to Pin 9, configure PWM duty cycle using analogWrite(), and ensure common ground between the external 5V power supply and Arduino GND.`
-        );
-        return;
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No stream');
-      const decoder = new TextDecoder();
-      let accumulated = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split('\n\n')) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.replace('data: ', ''));
-              if (data.t) {
-                accumulated += data.t;
-                setRituuQuickReply(accumulated);
-              }
-            } catch {
-              // ignore
-            }
-          }
-        }
-      }
-      setIsRituuAsking(false);
-    } catch {
-      setIsRituuAsking(false);
-      setRituuQuickReply(
-        `💡 Rituu Insight: For "${query}", wire a 220Ω resistor to Pin 9, configure PWM duty cycle using analogWrite(), and ensure common ground between the external 5V power supply and Arduino GND.`
-      );
-    }
+  const handlePromptChipClick = (prompt: string) => {
+    router.push(`/rituu?q=${encodeURIComponent(prompt)}`);
   };
-
-  // Filter circuits by search query
-  const filteredCircuits = circuits.filter((c) =>
-    c.title.toLowerCase().includes(searchFilter.toLowerCase())
-  );
-
-  const studentName = profile?.fullName || user?.email?.split('@')[0] || 'RoboVerse Explorer';
-  const studentId = profile?.studentId || studentIdCard?.studentId || 'RV-XXXX-XXXXXX';
-  const currentPlan = entitlements?.badge || (planTier ? String(planTier).toUpperCase() : 'FREE');
 
   return (
-    <div className="flex h-screen bg-[#07110D] overflow-hidden text-[#EAF7EF] font-sans">
-      {/* 1. Left Sidebar (Slim Glass Rail / Nav) */}
-      <AppSidebar
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        isMobileOpen={isMobileSidebarOpen}
-        onCloseMobile={() => setIsMobileSidebarOpen(false)}
-      />
-
-      {/* 2. Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Sticky Translucent Top Bar with Timeline Scrubber */}
-        <AppTopBar
-          onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-        />
-
-        {/* Scrollable Page Body */}
-        <main className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6">
-          {/* Top Rotating Challenge Banner */}
-          <ChallengeBanner />
-
-          {/* Next Lesson Recommendation Card */}
-          <div className="glass-card p-4 md:p-5 bg-gradient-to-r from-[#0E2A1F]/80 via-[#0A1F17]/90 to-[#0E2A1F]/80 border border-[rgba(57,255,106,0.25)] rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 backdrop-blur-xl relative overflow-hidden shadow-[0_4px_24px_rgba(7,27,19,0.7)]">
-            <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-[#39FF6A] via-[#7FE7D6] to-[#39FF6A]" />
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-[rgba(57,255,106,0.15)] border border-[rgba(57,255,106,0.3)] text-[#39FF6A] flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(57,255,106,0.2)]">
-                <Play className="w-6 h-6 fill-current" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#39FF6A] bg-[rgba(57,255,106,0.12)] px-2 py-0.5 rounded-full border border-[rgba(57,255,106,0.25)]">
-                    NEXT LESSON • MISSION 01
-                  </span>
-                  <span className="text-[10px] font-mono text-[#8FA99B] flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> 15 MIN
-                  </span>
-                  <span className="text-[10px] font-mono text-[#7FE7D6] flex items-center gap-1">
-                    <Zap className="w-3 h-3 fill-current" /> +100 XP
-                  </span>
-                </div>
-                <h3 className="text-sm md:text-base font-bold text-[#EAF7EF] mt-1">
-                  Blink an LED with Arduino Uno R3
-                </h3>
-                <p className="text-xs text-[#8FA99B] font-mono mt-0.5">
-                  Learn digital output pin control, 220Ω resistor safety, and pinMode() C++ logic.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <Link
-                href="/workbench?starter=starter_blink"
-                className="btn-primary-neon px-5 py-2.5 rounded-full text-xs font-bold shadow-[0_0_15px_rgba(57,255,106,0.35)] flex items-center gap-1.5"
-              >
-                <span>Launch in 3D Lab</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+    <div className="min-h-screen bg-[#05100B] text-robo-text flex flex-col md:flex-row font-sans selection:bg-robo-neon selection:text-black">
+      {/* 1. Left Vertical Icon Rail Navigation (Desktop) */}
+      <aside className="w-full md:w-20 lg:w-64 bg-[#040C08] border-r border-robo-borderSubtle shrink-0 flex flex-col justify-between py-6 px-3 z-30">
+        <div>
+          {/* Top Brand Logo */}
+          <div className="flex items-center justify-center lg:justify-start px-2 mb-8">
+            <Logo variant="icon" size="md" className="hidden md:block lg:hidden" />
+            <Logo variant="horizontal" size="sm" className="hidden lg:block" />
+            <div className="block md:hidden">
+              <Logo variant="horizontal" size="sm" />
             </div>
           </div>
 
-          {/* 12-Column Responsive Control-Room Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* LEFT COLUMN: Data Overview, Gauges, Mini-Map, Rituu Quick-Ask (4 Columns on LG) */}
-            <div className="lg:col-span-4 space-y-6">
-              {/* Student Identity & Data Overview Card */}
-              <div className="glass-card p-6 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] flex flex-col items-center text-center relative overflow-hidden backdrop-blur-xl">
-                {/* Glowing Neon Top Accent Bar */}
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-[#39FF6A] via-[#7FE7D6] to-[#39FF6A] shadow-[0_0_10px_#39FF6A]" />
-
-                {/* Avatar with Journey Level Badge */}
-                <div className="relative mt-2">
-                  <div className="w-22 h-22 rounded-full bg-gradient-to-tr from-[#39FF6A] to-[#7FE7D6] p-1 shadow-[0_0_16px_rgba(57,255,106,0.4)]">
-                    <div className="w-full h-full rounded-full bg-[#07110D] flex items-center justify-center text-2xl font-black text-[#39FF6A]">
-                      {studentName.slice(0, 2).toUpperCase()}
-                    </div>
-                  </div>
-                  <span className="absolute bottom-0 right-0 px-2 py-0.5 rounded-full bg-[#040B08] text-[#39FF6A] text-[9.5px] font-mono font-black border border-[rgba(57,255,106,0.3)] shadow-xs">
-                    LVL {profile?.level || 14}
-                  </span>
-                </div>
-
-                {/* Student Name & Unique ID */}
-                <h3 className="text-lg font-black text-[#EAF7EF] mt-3">
-                  {studentName}
-                </h3>
-                <p className="text-xs font-mono text-[#8FA99B] mt-0.5">
-                  {studentId}
-                </p>
-
-                {/* Rank & Plan Badge */}
-                <div className="mt-2.5 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-[10.5px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full bg-[rgba(57,255,106,0.12)] text-[#39FF6A] border border-[rgba(57,255,106,0.3)]">
-                    <Compass className="w-3 h-3" /> Engineer Rank
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[10.5px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-full bg-[rgba(127,231,214,0.12)] text-[#7FE7D6] border border-[rgba(127,231,214,0.3)]">
-                    <Zap className="w-3 h-3 fill-current" /> {currentPlan} Student
-                  </span>
-                </div>
-
-                {/* XP Progress Bar to Next Level */}
-                <div className="w-full mt-4 text-left font-mono">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-[#8FA99B] mb-1.5">
-                    <span>Rank Progress:</span>
-                    <span className="text-[#39FF6A]">4,850 / 6,000 XP</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[#040B08] border border-[rgba(57,255,106,0.12)] overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#39FF6A] to-[#7FE7D6] transition-all duration-500 shadow-[0_0_8px_#39FF6A]"
-                      style={{ width: '80.8%' }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-[#8FA99B] mt-1 text-right">
-                    1,150 XP until <strong className="text-[#EAF7EF]">Innovator</strong> rank
-                  </p>
-                </div>
-
-                {/* Data Overview: Hours learned, XP, Streak, Lab Hours */}
-                <div className="w-full grid grid-cols-3 gap-2 mt-5 pt-4 border-t border-[rgba(57,255,106,0.12)] font-mono">
-                  <div>
-                    <p className="text-base font-black text-[#EAF7EF]">
-                      {profile?.xp || 4850}
-                    </p>
-                    <p className="text-[9.5px] font-bold text-[#8FA99B] uppercase">Total XP</p>
-                  </div>
-                  <div>
-                    <p className="text-base font-black text-[#39FF6A] flex items-center justify-center gap-0.5">
-                      <Flame className="w-4 h-4 fill-current text-[#FF9A1F]" /> 18
-                    </p>
-                    <p className="text-[9.5px] font-bold text-[#8FA99B] uppercase">Streak</p>
-                  </div>
-                  <div>
-                    <p className="text-base font-black text-[#7FE7D6]">52h</p>
-                    <p className="text-[9.5px] font-bold text-[#8FA99B] uppercase">Lab Hours</p>
-                  </div>
-                </div>
-
-                {/* View 3D Digital Student Passport */}
-                <div className="w-full mt-5">
-                  <button
-                    onClick={() => setShowPassportModal(true)}
-                    className="w-full btn-primary-neon py-2 text-xs font-bold shadow-[0_0_14px_rgba(57,255,106,0.35)] flex items-center justify-center gap-1.5"
+          {/* Navigation Links */}
+          <nav className="space-y-1.5">
+            {[
+              { id: 'overview', label: 'Control Room', icon: LayoutDashboard, href: '/dashboard' },
+              { id: 'workbench', label: '3D Workbench', icon: Cpu, badge: 'MNA', href: '/workbench' },
+              { id: 'arduino-studio', label: 'Arduino Studio', icon: Terminal, badge: 'SIM', href: '/arduino-studio' },
+              { id: 'roadmap', label: 'Learning Roadmap', icon: Layers, href: '/roadmap' },
+              { id: 'rituu', label: 'Rituu AI Mentor', icon: Sparkles, badge: 'AI', href: '/rituu' },
+              { id: 'hackathons', label: 'Hackathons Hub', icon: Trophy, href: '/hackathons' },
+              { id: 'shops', label: 'Nearby Shops', icon: Compass, href: '/shops' },
+              { id: 'store', label: 'TechSavyyy Store', icon: ShoppingBag, href: '/store' },
+              { id: 'admin', label: 'Admin Ops', icon: Settings, badge: 'OPS', href: '/admin' },
+            ].map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              if (item.href && item.id !== 'overview') {
+                return (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className="w-full flex items-center justify-center lg:justify-between px-3 py-3 rounded-xl text-sm font-semibold transition-all text-robo-textSecondary hover:text-robo-text hover:bg-robo-surfaceRaised/50"
+                    title={item.label}
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>View 3D Student Passport</span>
-                  </button>
+                    <div className="flex items-center gap-3">
+                      <Icon className="w-5 h-5 shrink-0" />
+                      <span className="hidden lg:inline">{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span className="hidden lg:inline text-[10px] font-mono px-2 py-0.5 rounded bg-black/60 text-robo-teal border border-robo-teal/30">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              }
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id as any)}
+                  className={`w-full flex items-center justify-center lg:justify-between px-3 py-3 rounded-xl text-sm font-semibold transition-all ${
+                    isActive
+                      ? 'bg-robo-neon/15 text-robo-neon border border-robo-neon/40 shadow-neon-subtle'
+                      : 'text-robo-textSecondary hover:text-robo-text hover:bg-robo-surfaceRaised/50'
+                  }`}
+                  title={item.label}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-robo-neon' : ''}`} />
+                    <span className="hidden lg:inline">{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span className="hidden lg:inline text-[10px] font-mono px-2 py-0.5 rounded bg-black/60 text-robo-teal border border-robo-teal/30">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Bottom User Profile Card & Logout */}
+        <div className="pt-4 border-t border-robo-borderSubtle/50 space-y-2">
+          <div className="hidden lg:flex items-center gap-3 px-2 py-2 rounded-xl bg-[#030906] border border-robo-borderSubtle">
+            <div className="w-8 h-8 rounded-lg bg-robo-neon/20 border border-robo-neon/40 flex items-center justify-center text-xs font-mono font-bold text-robo-neon shrink-0">
+              {currentFullName.charAt(0)}
+            </div>
+            <div className="overflow-hidden text-xs">
+              <div className="font-bold truncate text-robo-text">{currentFullName}</div>
+              <div className="text-[10px] font-mono text-robo-teal truncate">{currentStudentId}</div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-xl text-xs font-mono text-robo-textMuted hover:text-robo-red hover:bg-robo-red/10 transition-colors"
+            title="Log Out"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span className="hidden lg:inline">Disconnect Session</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* 2. Main Control Room Workspace */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {/* Top Control Bar Header */}
+        <header className="h-16 px-6 bg-[#040C08]/90 border-b border-robo-borderSubtle flex items-center justify-between gap-4 sticky top-0 z-20 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-robo-neon animate-pulse" />
+            <span className="font-mono text-xs text-robo-neon font-bold">
+              SYS // NOMINAL • ROBOVERSE OS v2.6
+            </span>
+          </div>
+
+          {/* Quick Search & Notification Bell */}
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#040B08] border border-robo-borderSubtle text-xs text-robo-textMuted">
+              <Search className="w-3.5 h-3.5" />
+              <span>Search components, lessons, or circuits... (Ctrl+K)</span>
+            </div>
+
+            <button
+              className="p-2 rounded-xl bg-robo-surfaceRaised border border-robo-borderSubtle text-robo-textSecondary hover:text-robo-neon relative"
+              title="Notifications"
+            >
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-robo-neon" />
+            </button>
+          </div>
+        </header>
+
+        {/* Dashboard Content Container */}
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+          {/* Journey Level & Status Bar */}
+          <div className="rounded-2xl glass-panel p-5 border border-robo-borderSubtle flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-gradient-to-r from-[#040E0A] via-[#051610] to-[#040E0A]">
+            <div className="flex items-center gap-4">
+              <div className="relative w-14 h-14 rounded-2xl bg-black/50 border border-robo-neon/40 flex items-center justify-center shadow-neon-glow shrink-0">
+                <span className="text-xl font-mono font-black text-robo-neon">
+                  L{journey.levelNumber}
+                </span>
+                <span className="absolute -bottom-1 -right-1 text-[9px] font-mono px-1.5 py-0.2 rounded bg-robo-neon text-black font-bold">
+                  {journey.levelName}
+                </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-lg font-bold text-robo-text">
+                    Welcome back, {currentFullName}!
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-robo-teal/15 text-robo-teal border border-robo-teal/30">
+                    {journey.levelName.toUpperCase()} RANK
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-robo-textSecondary mt-1">
+                  <span className="flex items-center gap-1 text-robo-neon font-mono">
+                    <Award className="w-3.5 h-3.5" />
+                    {currentXp} XP ({journey.progressPct}% to next rank)
+                  </span>
+                  <span className="flex items-center gap-1 text-robo-orange font-mono">
+                    <Flame className="w-3.5 h-3.5" />
+                    {currentStreak} Days Active Streak
+                  </span>
                 </div>
               </div>
+            </div>
 
-              {/* Radial Gauge Card (Milestones: Completed 24 / Planned 53) */}
-              <div className="glass-card p-5 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] backdrop-blur-xl">
-                <HudRadialGauge
-                  completed={24}
-                  total={53}
-                  title="Robotics & Circuit Modules"
-                  subtitle="CURRICULUM MILESTONE"
-                  accentColor="#39FF6A"
+            {/* Next Milestone Progress Bar */}
+            <div className="w-full md:w-64 space-y-1.5">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-robo-textMuted">Rank Progress</span>
+                <span className="text-robo-neon font-bold">{currentXp} / {journey.nextLevelXp} XP</span>
+              </div>
+              <div className="w-full h-2 bg-black/60 rounded-full overflow-hidden border border-robo-borderSubtle/60">
+                <div
+                  className="h-full bg-gradient-to-r from-robo-teal to-robo-neon rounded-full transition-all duration-500"
+                  style={{ width: `${journey.progressPct}%` }}
                 />
               </div>
+            </div>
+          </div>
 
-              {/* Hardware Mini-Map & City Leaderboard */}
-              <MiniMapCard />
+          {/* Timeline Scrubber Component */}
+          <TimelineScrubber />
 
-              {/* Rituu AI Quick-Ask in Dark Glass Panel */}
-              <div className="glass-card p-5 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] backdrop-blur-xl">
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-8 h-8 rounded-xl bg-purple-900/40 border border-purple-500/30 text-purple-400 flex items-center justify-center shadow-[0_0_8px_rgba(168,85,247,0.3)]">
-                    <Sparkles className="w-4 h-4" />
+          {/* Next Lesson Quick Resume & Rituu AI Quick-Ask Banner */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* NEXT LESSON CARD */}
+            <div className="lg:col-span-7 rounded-2xl glass-panel p-6 border border-robo-neon/40 shadow-neon-subtle relative overflow-hidden bg-gradient-to-br from-[#061B12] via-[#04100B] to-[#040C08]">
+              <div className="flex items-center justify-between text-xs font-mono text-robo-teal mb-3">
+                <span className="flex items-center gap-1.5 font-bold">
+                  <Play className="w-3.5 h-3.5 text-robo-neon fill-robo-neon" />
+                  NEXT MISSION IN YOUR JOURNEY
+                </span>
+                <span className="px-2 py-0.5 rounded bg-robo-neon/20 text-robo-neon border border-robo-neon/40 text-[10px]">
+                  LESSON 1 OF 16
+                </span>
+              </div>
+
+              <h3 className="text-xl font-bold text-robo-text font-sans">
+                Blink an LED: Digital GPIO & Current-Limiting Resistors
+              </h3>
+              <p className="text-xs text-robo-textSecondary mt-2 leading-relaxed">
+                Connect a 5mm LED and a 220Ω resistor to Arduino Digital Pin 13. Write and upload your first firmware sketch using <code className="text-robo-teal font-mono">pinMode()</code> and <code className="text-robo-teal font-mono">digitalWrite()</code> in the 3D simulator.
+              </p>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <Link
+                  href="/arduino-studio?lesson=1"
+                  className="px-5 py-2.5 rounded-xl bg-robo-neon text-black font-bold text-xs font-mono flex items-center gap-2 hover:bg-robo-teal transition-colors shadow-neon-glow"
+                >
+                  <Play className="w-4 h-4 fill-black" />
+                  <span>START MISSION IN SIMULATOR</span>
+                </Link>
+                <Link
+                  href="/workbench?lesson=1"
+                  className="px-4 py-2.5 rounded-xl bg-[#030A07] border border-robo-borderSubtle text-robo-textSecondary hover:text-robo-text text-xs font-mono flex items-center gap-1.5 transition-colors"
+                >
+                  <Cpu className="w-3.5 h-3.5 text-robo-teal" />
+                  <span>Open in 3D Workbench</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* RITUU QUICK-ASK CARD */}
+            <div className="lg:col-span-5 rounded-2xl glass-panel p-6 border border-robo-borderSubtle flex flex-col justify-between bg-[#040D09]">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-robo-neon/20 border border-robo-neon/40 flex items-center justify-center text-robo-neon">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-sm font-bold text-robo-text font-mono uppercase tracking-wider">
+                      Rituu AI Quick-Ask
+                    </h3>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-[#EAF7EF]">Rituu AI Quick Mentor</h4>
-                    <p className="text-[10px] font-mono text-[#8FA99B]">Ask anything about circuits or code</p>
-                  </div>
+                  <span className="text-[10px] font-mono text-robo-neon font-bold px-2 py-0.5 rounded bg-black/60 border border-robo-neon/30">
+                    GEMINI 2.5
+                  </span>
                 </div>
+                <p className="text-xs text-robo-textSecondary mb-3">
+                  Have a circuit question, burning component, or syntax error? Ask Rituu anytime.
+                </p>
 
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={quickRituuPrompt}
-                    onChange={(e) => setQuickRituuPrompt(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleQuickAsk()}
-                    placeholder="e.g. How to wire HC-SR04 with buzzer?"
-                    className="w-full pl-3.5 pr-10 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.15)] focus:border-[#39FF6A] text-xs font-mono text-[#EAF7EF] placeholder:text-[#527063] focus:outline-none"
-                  />
-                  <button
-                    onClick={() => handleQuickAsk()}
-                    disabled={isRituuAsking}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-[#39FF6A] text-[#07110D] hover:brightness-110 transition-colors disabled:opacity-50"
-                  >
-                    <Send className="w-3 h-3 stroke-[3]" />
-                  </button>
-                </div>
-
-                {/* Prompt Suggestion Chips */}
-                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {/* Quick Prompt Chips */}
+                <div className="flex flex-wrap gap-1.5 mb-3">
                   {[
-                    'Debug circuit wiring',
-                    'Arduino Servo Sweep',
-                    'Fix short circuit',
+                    'Why does an LED need a resistor?',
+                    'How to wire L298N motor driver?',
+                    'Explain pull-up vs pull-down',
                   ].map((chip) => (
                     <button
                       key={chip}
-                      onClick={() => {
-                        setQuickRituuPrompt(chip);
-                        handleQuickAsk(chip);
-                      }}
-                      className="text-[9.5px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[rgba(57,255,106,0.08)] border border-[rgba(57,255,106,0.2)] text-[#39FF6A] hover:bg-[rgba(57,255,106,0.18)] transition-colors"
+                      type="button"
+                      onClick={() => handlePromptChipClick(chip)}
+                      className="text-[11px] font-mono text-robo-teal hover:text-robo-neon bg-black/40 hover:bg-robo-neon/10 border border-robo-teal/20 hover:border-robo-neon/40 px-2 py-1 rounded-lg transition-colors text-left"
                     >
                       {chip}
                     </button>
                   ))}
                 </div>
+              </div>
 
-                {/* AI Reply Card */}
-                {rituuQuickReply && (
-                  <div className="mt-3 p-3 rounded-xl bg-[#040B08] border border-[rgba(168,85,247,0.3)] text-xs text-[#EAF7EF] animate-slide-up">
-                    {rituuQuickReply}
-                    <div className="mt-2 flex justify-end">
+              {/* Input Form */}
+              <form onSubmit={handleRituuAsk} className="flex items-center gap-2 mt-2">
+                <input
+                  type="text"
+                  value={rituuQuery}
+                  onChange={(e) => setRituuQuery(e.target.value)}
+                  placeholder="Ask Rituu a robotics question..."
+                  className="flex-1 bg-black/60 border border-robo-borderSubtle rounded-xl px-3 py-2 text-xs text-robo-text placeholder:text-robo-textMuted focus:outline-none focus:border-robo-neon font-sans"
+                />
+                <button
+                  type="submit"
+                  className="p-2 rounded-xl bg-robo-neon/20 hover:bg-robo-neon text-robo-neon hover:text-black border border-robo-neon/40 transition-colors shrink-0"
+                  title="Send to Rituu"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Top Metric Cards Row: HUD Gauge + Robot Status */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            {/* Radial Gauge Progress */}
+            <div className="lg:col-span-4 rounded-2xl glass-panel p-5 border border-robo-borderSubtle flex items-center justify-center">
+              <HudRadialGauge
+                completed={24}
+                total={53}
+                title="Curriculum & Circuits"
+                subtitle="Milestone Phase 1"
+              />
+            </div>
+
+            {/* Robot Diagnostic Status Tiles */}
+            <div className="lg:col-span-8">
+              <RobotStatusTiles />
+            </div>
+          </div>
+
+          {/* Middle Main Workspace Grid: Student ID Card & Skill Radar & Daily Quota */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* 3D Digital Flip Student ID Card */}
+            <div className="lg:col-span-4 space-y-6">
+              <div className="rounded-2xl glass-panel p-5 border border-robo-borderSubtle">
+                <StudentIdCard3D
+                  cardData={{
+                    studentId: currentStudentId,
+                    fullName: currentFullName,
+                    planName: currentPlan === 'PRO' ? 'Pro Member' : currentPlan === 'PLUS' ? 'Plus Member' : 'Free Explorer',
+                    schoolOrCollege: currentSchool,
+                    level: journey.levelNumber,
+                    xp: currentXp,
+                    streakDays: currentStreak,
+                    qrCodeDataUrl: studentIdCard?.qrCodeDataUrl || dashboardData?.studentIdCard?.qrCodeDataUrl,
+                  }}
+                />
+              </div>
+
+              {/* Today Usage Meter */}
+              <DailyUsageMeterHud
+                usage={dashboardData?.todayUsage}
+                planTier={currentPlan}
+              />
+
+              {/* CERTIFICATES SECTION */}
+              <div className="rounded-2xl glass-panel p-5 border border-robo-borderSubtle bg-[#040C08]">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold font-mono text-robo-text uppercase tracking-wider flex items-center gap-2">
+                    <Award className="w-4 h-4 text-robo-teal" />
+                    <span>Verified Certificates</span>
+                  </h3>
+                  <Link
+                    href={`/verify/student/${currentStudentId}`}
+                    className="text-[11px] font-mono text-robo-neon hover:underline flex items-center gap-1"
+                  >
+                    <span>Public Registry</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
+
+                <div className="p-3 rounded-xl bg-black/40 border border-robo-teal/30 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-bold text-robo-text">Arduino Robotics Apprentice</div>
+                      <div className="text-[10px] font-mono text-robo-teal">ID: RV-CERT-ARD-2026-0042</div>
+                    </div>
+                    <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-robo-neon/20 text-robo-neon border border-robo-neon/40 font-bold shrink-0">
+                      VERIFIED
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-robo-textSecondary">
+                    Completed 16 interactive lessons, 3 circuit projects, and hardware simulation quiz.
+                  </div>
+                  <div className="pt-2 border-t border-robo-borderSubtle/40 flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-robo-textMuted">Issued Nov 2026</span>
+                    <Link
+                      href="/verify/RV-CERT-ARD-2026-0042"
+                      className="text-[10px] font-mono text-robo-neon hover:underline"
+                    >
+                      View Certificate →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Center & Right Column: Learning Passport Skill Radar & Active Projects */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* Learning Passport Card */}
+              <div className="rounded-2xl glass-panel p-6 border border-robo-borderSubtle">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-robo-borderSubtle/50 pb-4 mb-6 gap-2">
+                  <div>
+                    <h3 className="text-lg font-bold font-sans text-robo-text flex items-center gap-2">
+                      <Compass className="w-5 h-5 text-robo-teal" />
+                      <span>Student Learning Passport & Skill Radar</span>
+                    </h3>
+                    <p className="text-xs text-robo-textSecondary mt-0.5">
+                      Evaluated across 6 core robotics competencies via simulator challenges and coding tasks.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-mono text-robo-neon font-bold">
+                      {dashboardData?.profile?.totalLearningHours || 4.5} HRS
+                    </span>
+                    <span className="text-[11px] text-robo-textMuted block">Learning Time</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                  {/* Skill Radar SVG Visualizer */}
+                  <SkillRadarChart />
+
+                  {/* Competency Badges & Quick Stats */}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs font-mono">
+                        <span className="text-robo-textSecondary">Electronics & Nodal Analysis</span>
+                        <span className="text-robo-neon font-bold">65%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#040B08] rounded-full overflow-hidden">
+                        <div className="h-full bg-robo-neon rounded-full" style={{ width: '65%' }} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs font-mono">
+                        <span className="text-robo-textSecondary">Arduino C++ Programming</span>
+                        <span className="text-robo-teal font-bold">70%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#040B08] rounded-full overflow-hidden">
+                        <div className="h-full bg-robo-teal rounded-full" style={{ width: '70%' }} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs font-mono">
+                        <span className="text-robo-textSecondary">Machine Learning & ROS</span>
+                        <span className="text-robo-orange font-bold">30%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-[#040B08] rounded-full overflow-hidden">
+                        <div className="h-full bg-robo-orange rounded-full" style={{ width: '30%' }} />
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-robo-borderSubtle/40 flex items-center justify-between text-xs">
+                      <span className="text-robo-textSecondary font-mono">1 Verified Certificate</span>
                       <Link
-                        href="/rituu"
-                        className="text-[10px] font-mono font-bold text-purple-400 hover:underline flex items-center gap-1"
+                        href={`/verify/student/${currentStudentId}`}
+                        className="text-robo-neon hover:underline flex items-center gap-1 font-mono text-[11px]"
                       >
-                        Open full Rituu lab chat <ArrowRight className="w-2.5 h-2.5" />
+                        <span>Public Registry</span>
+                        <ExternalLink className="w-3 h-3" />
                       </Link>
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* Hackathons in My City */}
-              <div className="glass-card p-5 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] backdrop-blur-xl">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-[#FF9A1F]" />
-                    <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#EAF7EF]">
-                      Hackathons in My City
-                    </h4>
-                  </div>
-                  <select
-                    value={selectedCity}
-                    onChange={(e) => setSelectedCity(e.target.value as any)}
-                    className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-[#39FF6A] focus:outline-none"
-                  >
-                    <option value="Delhi">Delhi NCR</option>
-                    <option value="Bengaluru">Bengaluru</option>
-                    <option value="Mumbai">Mumbai</option>
-                    <option value="Online">Online / Global</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2.5">
-                  {hackathonsByCity[selectedCity].map((h) => (
-                    <div
-                      key={h.id}
-                      className="p-3 rounded-xl bg-[#040B08]/70 border border-[rgba(57,255,106,0.10)]"
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-mono font-bold text-[#7FE7D6]">
-                        <span>{h.date}</span>
-                        <span className="text-[#39FF6A]">{h.prize}</span>
-                      </div>
-                      <h5 className="text-xs font-bold text-[#EAF7EF] mt-1">
-                        {h.title}
-                      </h5>
-                      <p className="text-[10px] text-[#8FA99B] font-mono flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-[#FF4D4D]" />
-                        <span>{h.venue}</span>
-                      </p>
-                      <div className="mt-2 flex items-center justify-between pt-2 border-t border-[rgba(57,255,106,0.08)]">
-                        <span className="text-[10px] font-mono text-[#8FA99B]">
-                          {h.teamsLooking} teams looking
-                        </span>
-                        <Link
-                          href="/hackathons"
-                          className="text-[10px] font-mono font-bold text-[#39FF6A] hover:underline"
-                        >
-                          Join Team &gt;
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT COLUMN: 3D Lab Scene (Hero), Status Tiles, Tinkercad Rows (8 Columns on LG) */}
-            <div className="lg:col-span-8 space-y-8">
-              {/* ============================================================== */}
-              {/* HERO & DASHBOARD CENTRE: Interactive 3D RoboVerse Lab Scene */}
-              {/* ============================================================== */}
-              <div className="glass-card overflow-hidden bg-[#07110D]/80 border border-[rgba(57,255,106,0.25)] shadow-[0_12px_50px_rgba(7,27,19,0.9)] relative">
-                <div className="absolute top-4 left-5 z-10 flex items-center gap-2 pointer-events-none">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#39FF6A] animate-ping" />
-                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#EAF7EF] drop-shadow-md">
-                    ROBOVERSE_LAB // 3D CONTROL ROOM
-                  </h3>
-                </div>
-
-                <div className="w-full h-[460px] md:h-[540px]">
-                  <RobotArmScene />
                 </div>
               </div>
 
-              {/* Status Tiles in a Glass Card (Total Projects / In Progress / Completed / Needs Fix) */}
-              <div className="space-y-3">
+              {/* CURRENT WORKING PROJECT & SAMPLE PROJECTS SHELF */}
+              <div className="rounded-2xl glass-panel p-6 border border-robo-borderSubtle space-y-5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#8FA99B]">
-                    Active Robot Fleet Telemetry
-                  </h4>
-                  <span className="text-[10px] font-mono text-[#39FF6A] flex items-center gap-1">
-                    <Activity className="w-3 h-3 animate-pulse" />
-                    3 SYSTEMS LINKED
-                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold font-mono text-robo-text uppercase tracking-wider flex items-center gap-2">
+                      <FolderGit2 className="w-4 h-4 text-robo-neon" />
+                      <span>Curated Sample Projects & Your Workbench</span>
+                    </h3>
+                    <p className="text-xs text-robo-textSecondary mt-0.5">
+                      Explore pre-built verified circuits or resume your current design.
+                    </p>
+                  </div>
+                  <Link
+                    href="/workbench"
+                    className="text-xs font-mono text-robo-teal hover:text-robo-neon flex items-center gap-1 shrink-0"
+                  >
+                    <span>Open Workbench</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
-                <RobotStatusTiles />
-              </div>
 
-              {/* Top Stat Cards Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <StatCard
-                  icon={Cpu}
-                  title="Circuits Designed"
-                  value={circuits.length.toString()}
-                  deltaText="+3 this week"
-                  isPositiveDelta={true}
-                  segments={[
-                    { label: 'Basic', percentage: 40, color: '#39FF6A' },
-                    { label: 'Arduino', percentage: 35, color: '#7FE7D6' },
-                    { label: 'Robots', percentage: 25, color: '#4C8DFF' },
-                  ]}
-                />
-                <StatCard
-                  icon={Code2}
-                  title="Arduino Sketches"
-                  value="24"
-                  deltaText="+120 LOC"
-                  isPositiveDelta={true}
-                  segments={[
-                    { label: 'C++', percentage: 65, color: '#7FE7D6' },
-                    { label: 'Blockly', percentage: 35, color: '#A855F7' },
-                  ]}
-                />
-              </div>
-
-              {/* ============================================================== */}
-              {/* SECTION: Sample Projects (Official Starters) */}
-              {/* ============================================================== */}
-              {(activeCategoryTab === 'all' || activeCategoryTab === 'sample-projects') && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-[rgba(57,255,106,0.15)] border border-[rgba(57,255,106,0.3)] text-[#39FF6A] flex items-center justify-center">
-                        <Sparkles className="w-4 h-4" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Sample 1: Blink an LED */}
+                  <div className="p-4 rounded-xl bg-[#040D09] border border-robo-borderSubtle hover:border-robo-neon/40 transition-colors flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-robo-neon/15 text-robo-neon font-bold">
+                          BEGINNER • DIGITAL OUT
+                        </span>
+                        <span className="text-[10px] font-mono text-robo-textMuted">Sample 01</span>
                       </div>
-                      <h3 className="text-base font-black text-[#EAF7EF]">
-                        Sample Projects
-                      </h3>
-                      <span className="text-xs font-mono text-[#8FA99B]">(Official Starters)</span>
+                      <h4 className="text-sm font-bold text-robo-text">
+                        Blink an LED Circuit
+                      </h4>
+                      <p className="text-xs text-robo-textSecondary mt-1">
+                        Arduino Uno R3 with a 5mm Red LED and 220Ω current limiter on Pin 13.
+                      </p>
                     </div>
-                    <Link
-                      href="/workbench"
-                      className="text-xs font-mono font-bold text-[#39FF6A] hover:underline flex items-center gap-1"
-                    >
-                      View all in Lab <ArrowRight className="w-3 h-3" />
-                    </Link>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {sampleProjects.map((proj) => (
-                      <div
-                        key={proj.id}
-                        className="group glass-card p-5 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] backdrop-blur-xl flex flex-col justify-between hover:border-[rgba(57,255,106,0.35)] hover:shadow-[0_0_20px_rgba(57,255,106,0.2)] transition-all duration-200"
+                    <div className="mt-3 pt-3 border-t border-robo-borderSubtle/50 flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-robo-teal">3 Components</span>
+                      <Link
+                        href="/workbench?sample=blink"
+                        className="text-xs font-mono text-robo-neon hover:underline flex items-center gap-1"
                       >
-                        <div>
-                          <div className="flex items-center justify-between mb-2.5">
-                            <span className={`text-[9.5px] font-mono font-bold px-2 py-0.5 rounded-full ${proj.tagBg}`}>
-                              {proj.tag}
-                            </span>
-                            <span className="text-[10px] font-mono text-[#8FA99B]">
-                              {proj.difficulty}
-                            </span>
-                          </div>
-                          <h4 className="text-sm font-bold text-[#EAF7EF] group-hover:text-[#39FF6A] transition-colors">
-                            {proj.title}
-                          </h4>
-                          <p className="text-[11px] text-[#8FA99B] mt-1.5 line-clamp-3 leading-relaxed">
-                            {proj.description}
-                          </p>
+                        <span>Simulate</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </Link>
+                    </div>
+                  </div>
 
-                          {/* Components Preview */}
-                          <div className="mt-3 pt-3 border-t border-[rgba(57,255,106,0.10)] font-mono">
-                            <span className="text-[9.5px] font-bold text-[#8FA99B] uppercase tracking-wider">
-                              Components ({proj.componentsCount}):
-                            </span>
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                              {proj.components.slice(0, 3).map((comp, idx) => (
-                                <span
-                                  key={idx}
-                                  className="text-[9px] font-medium px-2 py-0.5 rounded-md bg-[#040B08] text-[#CBD8D0] border border-[rgba(57,255,106,0.15)]"
-                                >
-                                  {comp}
-                                </span>
-                              ))}
-                              {proj.components.length > 3 && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded text-[#39FF6A]">
-                                  +{proj.components.length - 3} more
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="mt-5 pt-3 border-t border-[rgba(57,255,106,0.10)] flex items-center gap-2">
-                          <Link
-                            href={proj.href}
-                            className="flex-1 py-1.5 text-center text-xs font-bold rounded-full bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] shadow-[0_0_12px_rgba(57,255,106,0.35)] hover:brightness-110 transition-all flex items-center justify-center gap-1"
-                          >
-                            <Play className="w-3 h-3 fill-current" />
-                            <span>Open in Lab</span>
-                          </Link>
-                          <Link
-                            href={`${proj.href}&view=schematic`}
-                            className="px-3 py-1.5 text-xs font-mono font-bold rounded-full bg-[rgba(57,255,106,0.10)] text-[#39FF6A] border border-[rgba(57,255,106,0.25)] hover:bg-[rgba(57,255,106,0.20)] transition-colors"
-                            title="View Schematic"
-                          >
-                            Schematic
-                          </Link>
-                        </div>
+                  {/* Sample 2: Push Button & Buzzer */}
+                  <div className="p-4 rounded-xl bg-[#040D09] border border-robo-borderSubtle hover:border-robo-neon/40 transition-colors flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-robo-teal/15 text-robo-teal font-bold">
+                          INTERACTIVE • INPUT/SOUND
+                        </span>
+                        <span className="text-[10px] font-mono text-robo-textMuted">Sample 02</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Projects Filter & Search Toolbar (Tinkercad-style rows in dark glass) */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[rgba(57,255,106,0.12)]">
-                {/* Category Filter Tabs */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                  {[
-                    { id: 'all', label: 'All Projects' },
-                    { id: 'circuits', label: `Circuits (${circuits.length})` },
-                    { id: 'sample-projects', label: 'Sample Projects (3)' },
-                    { id: 'code', label: `Code (${codeProjects.length})` },
-                    { id: '3d', label: `3D Builds (${robotBuilds.length})` },
-                    { id: 'collections', label: `Collections (${collections.length})` },
-                    { id: 'certificates', label: `Certificates (${certificates.length})` },
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveCategoryTab(tab.id as any)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-mono font-bold transition-all whitespace-nowrap ${
-                        activeCategoryTab === tab.id
-                          ? 'bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] shadow-[0_0_10px_rgba(57,255,106,0.4)]'
-                          : 'text-[#8FA99B] hover:text-[#EAF7EF] bg-[#0E2A1F]/50 border border-[rgba(57,255,106,0.15)]'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Search & Grid/List View Toggle */}
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#8FA99B]" />
-                    <input
-                      type="text"
-                      value={searchFilter}
-                      onChange={(e) => setSearchFilter(e.target.value)}
-                      placeholder="Search my projects..."
-                      className="pl-8 pr-3 py-1.5 rounded-full bg-[#040B08] border border-[rgba(57,255,106,0.15)] text-xs font-mono text-[#EAF7EF] placeholder:text-[#527063] focus:outline-none focus:border-[#39FF6A] w-44"
-                    />
+                      <h4 className="text-sm font-bold text-robo-text">
+                        Push Button & Piezo Buzzer
+                      </h4>
+                      <p className="text-xs text-robo-textSecondary mt-1">
+                        10kΩ pull-down momentary switch triggering variable frequency piezo buzzer tones.
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-robo-borderSubtle/50 flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-robo-teal">5 Components</span>
+                      <Link
+                        href="/workbench?sample=button_buzzer"
+                        className="text-xs font-mono text-robo-neon hover:underline flex items-center gap-1"
+                      >
+                        <span>Simulate</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </Link>
+                    </div>
                   </div>
 
-                  <div className="flex items-center p-1 bg-[#040B08] rounded-full border border-[rgba(57,255,106,0.15)]">
-                    <button
-                      onClick={() => setViewMode('grid')}
-                      className={`p-1.5 rounded-full transition-colors ${
-                        viewMode === 'grid' ? 'bg-[rgba(57,255,106,0.2)] text-[#39FF6A]' : 'text-[#8FA99B]'
-                      }`}
-                      title="Grid View"
-                    >
-                      <Grid className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`p-1.5 rounded-full transition-colors ${
-                        viewMode === 'list' ? 'bg-[rgba(57,255,106,0.2)] text-[#39FF6A]' : 'text-[#8FA99B]'
-                      }`}
-                      title="List View"
-                    >
-                      <List className="w-3.5 h-3.5" />
-                    </button>
+                  {/* Sample 3: Traffic Light Controller */}
+                  <div className="p-4 rounded-xl bg-[#040D09] border border-robo-borderSubtle hover:border-robo-neon/40 transition-colors flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-robo-orange/15 text-robo-orange font-bold">
+                          TIMING • STATE MACHINE
+                        </span>
+                        <span className="text-[10px] font-mono text-robo-textMuted">Sample 03</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-robo-text">
+                        RGB Traffic Signal Controller
+                      </h4>
+                      <p className="text-xs text-robo-textSecondary mt-1">
+                        Three-channel Red, Yellow, Green LED sequenced logic with pedestrian override button.
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-robo-borderSubtle/50 flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-robo-teal">7 Components</span>
+                      <Link
+                        href="/workbench?sample=traffic_light"
+                        className="text-xs font-mono text-robo-neon hover:underline flex items-center gap-1"
+                      >
+                        <span>Simulate</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Sample 4: 2-Wheel Autonomous Line Follower */}
+                  <div className="p-4 rounded-xl bg-[#040D09] border border-robo-borderSubtle hover:border-robo-neon/40 transition-colors flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-robo-neon/15 text-robo-neon font-bold">
+                          ROBOTICS • DUAL MOTOR
+                        </span>
+                        <span className="text-[10px] font-mono text-robo-textMuted">Active Work</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-robo-text">
+                        Autonomous 2-Wheel Line Follower
+                      </h4>
+                      <p className="text-xs text-robo-textSecondary mt-1">
+                        Dual IR sensors on A0/A1, L298N driver on pins 3-6, PWM speed control loop.
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-robo-borderSubtle/50 flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-robo-teal">11 Components</span>
+                      <Link
+                        href="/workbench?sample=line_follower"
+                        className="text-xs font-mono text-robo-neon hover:underline flex items-center gap-1"
+                      >
+                        <span>Open Project</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* SECTION: Circuits (My Saved Circuits) */}
-              {(activeCategoryTab === 'all' || activeCategoryTab === 'circuits') && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Cpu className="w-5 h-5 text-[#39FF6A]" />
-                      <h3 className="text-base font-black text-[#EAF7EF]">
-                        Circuits
-                      </h3>
-                      <span className="text-xs font-mono text-[#8FA99B]">
-                        ({filteredCircuits.length})
+              {/* NEARBY STORES CARD */}
+              <div className="rounded-2xl glass-panel p-6 border border-robo-borderSubtle bg-[#040C08]">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-sm font-bold font-mono text-robo-text uppercase tracking-wider flex items-center gap-2">
+                      <Store className="w-4 h-4 text-robo-teal" />
+                      <span>Nearby Verified Electronics & Robotics Stores</span>
+                    </h3>
+                    <p className="text-xs text-robo-textSecondary mt-0.5">
+                      Need hardware right now? Find components at verified offline shops nearby.
+                    </p>
+                  </div>
+                  <Link
+                    href="/shops"
+                    className="text-xs font-mono text-robo-neon hover:underline flex items-center gap-1 shrink-0"
+                  >
+                    <span>View Map Directory</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Shop 1 */}
+                  <div className="p-3.5 rounded-xl bg-[#040E0A] border border-robo-borderSubtle hover:border-robo-teal/40 transition-colors">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-mono font-bold text-robo-neon bg-robo-neon/15 px-2 py-0.5 rounded">
+                        1.8 KM
+                      </span>
+                      <span className="text-[10px] font-mono text-robo-teal flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Verified
                       </span>
                     </div>
-                    <Link
-                      href="/workbench"
-                      className="text-xs font-mono font-bold text-[#39FF6A] hover:underline flex items-center gap-1"
-                    >
-                      View all in Lab <ArrowRight className="w-3 h-3" />
-                    </Link>
+                    <h5 className="text-xs font-bold text-robo-text truncate">
+                      TechSavyyy Components Hub
+                    </h5>
+                    <p className="text-[11px] text-robo-textMuted mt-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-robo-teal shrink-0" />
+                      <span className="truncate">Connaught Place, New Delhi</span>
+                    </p>
+                    <div className="mt-2 text-[10px] font-mono text-robo-textSecondary">
+                      Stock: Arduino, Servos, Resistors, Sensors
+                    </div>
                   </div>
 
-                  {viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                      {/* Add Placeholder Card */}
-                      <AddPlaceholderCard
-                        onClick={() => router.push('/workbench')}
-                        title="Create New Circuit"
-                        subtitle="Launch 3D & 2D workshop"
-                      />
-
-                      {filteredCircuits.map((c) => (
-                        <ItemCard
-                          key={c.id}
-                          id={c.id}
-                          title={c.title}
-                          category={c.category}
-                          timeAgo={c.timeAgo}
-                          isPublic={c.isPublic}
-                          remixCount={c.remixCount}
-                          likeCount={c.likeCount}
-                          componentsCount={c.componentsCount}
-                          onSimulate={() => router.push(`/workbench?project=${c.id}`)}
-                          onDuplicate={() => {
-                            const newCircuit = {
-                              ...c,
-                              id: `proj_${Date.now()}`,
-                              title: `${c.title} (Copy)`,
-                              timeAgo: 'Just now',
-                            };
-                            setCircuits([newCircuit, ...circuits]);
-                          }}
-                          onDelete={() => {
-                            setCircuits(circuits.filter((item) => item.id !== c.id));
-                          }}
-                        />
-                      ))}
+                  {/* Shop 2 */}
+                  <div className="p-3.5 rounded-xl bg-[#040E0A] border border-robo-borderSubtle hover:border-robo-teal/40 transition-colors">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-mono font-bold text-robo-neon bg-robo-neon/15 px-2 py-0.5 rounded">
+                        3.4 KM
+                      </span>
+                      <span className="text-[10px] font-mono text-robo-teal flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Verified
+                      </span>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredCircuits.map((c) => (
-                        <div
-                          key={c.id}
-                          className="glass-card p-3 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] flex items-center justify-between gap-4"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-lg bg-[rgba(57,255,106,0.12)] border border-[rgba(57,255,106,0.25)] text-[#39FF6A] flex items-center justify-center shrink-0">
-                              <Cpu className="w-5 h-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="text-xs font-bold text-[#EAF7EF] truncate">{c.title}</h4>
-                              <p className="text-[10px] font-mono text-[#8FA99B]">{c.timeAgo} • {c.componentsCount} parts</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Link
-                              href={`/workbench?project=${c.id}`}
-                              className="px-3 py-1 rounded-full text-xs font-bold bg-[#39FF6A] text-[#07110D] hover:brightness-110"
-                            >
-                              Simulate
-                            </Link>
-                          </div>
-                        </div>
-                      ))}
+                    <h5 className="text-xs font-bold text-robo-text truncate">
+                      Silicon Valley Electronics
+                    </h5>
+                    <p className="text-[11px] text-robo-textMuted mt-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-robo-teal shrink-0" />
+                      <span className="truncate">Nehru Place, New Delhi</span>
+                    </p>
+                    <div className="mt-2 text-[10px] font-mono text-robo-textSecondary">
+                      Stock: ICs, Breadboards, Motors, Batteries
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* SECTION: Code Projects */}
-              {(activeCategoryTab === 'all' || activeCategoryTab === 'code') && (
-                <div className="space-y-4 pt-4 border-t border-[rgba(57,255,106,0.12)]">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Code2 className="w-5 h-5 text-[#7FE7D6]" />
-                      <h3 className="text-base font-black text-[#EAF7EF]">
-                        Code Projects
-                      </h3>
-                      <span className="text-xs font-mono text-[#8FA99B]">({codeProjects.length})</span>
-                    </div>
-                    <Link
-                      href="/workbench?tab=code"
-                      className="text-xs font-mono font-bold text-[#7FE7D6] hover:underline flex items-center gap-1"
-                    >
-                      View more <ArrowRight className="w-3 h-3" />
-                    </Link>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {codeProjects.map((p) => (
-                      <div
-                        key={p.id}
-                        className="glass-card p-4 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] flex flex-col justify-between"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between text-[10px] font-mono font-bold text-[#8FA99B] mb-2">
-                            <span className="px-2 py-0.5 rounded-full bg-[rgba(127,231,214,0.12)] text-[#7FE7D6] border border-[rgba(127,231,214,0.3)]">
-                              {p.type}
-                            </span>
-                            <span>{p.timeAgo}</span>
-                          </div>
-                          <h4 className="text-xs font-bold text-[#EAF7EF] line-clamp-2">
-                            {p.title}
-                          </h4>
-                          <p className="text-[11px] text-[#8FA99B] mt-1 font-mono">{p.board}</p>
-                        </div>
-                        <div className="mt-4 pt-2 border-t border-[rgba(57,255,106,0.10)] flex items-center justify-between font-mono">
-                          <span className="text-[10px] text-[#8FA99B]">{p.linesCount} lines</span>
-                          <Link
-                            href={`/workbench?code=${p.id}`}
-                            className="text-xs font-bold text-[#39FF6A] hover:underline"
-                          >
-                            Open in Monaco
-                          </Link>
-                        </div>
-                      </div>
-                    ))}
+                  {/* Shop 3 */}
+                  <div className="p-3.5 rounded-xl bg-[#040E0A] border border-robo-borderSubtle hover:border-robo-teal/40 transition-colors">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-mono font-bold text-robo-neon bg-robo-neon/15 px-2 py-0.5 rounded">
+                        5.2 KM
+                      </span>
+                      <span className="text-[10px] font-mono text-robo-teal flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Verified
+                      </span>
+                    </div>
+                    <h5 className="text-xs font-bold text-robo-text truncate">
+                      RoboKits India Depot
+                    </h5>
+                    <p className="text-[11px] text-robo-textMuted mt-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-robo-teal shrink-0" />
+                      <span className="truncate">Okhla Industrial Area, Delhi</span>
+                    </p>
+                    <div className="mt-2 text-[10px] font-mono text-robo-textSecondary">
+                      Stock: Chassis, L298N, BLDC Motors, ESCs
+                    </div>
                   </div>
                 </div>
-              )}
-
-              {/* SECTION: 3D Designs & Robot Builds */}
-              {(activeCategoryTab === 'all' || activeCategoryTab === '3d') && (
-                <div className="space-y-4 pt-4 border-t border-[rgba(57,255,106,0.12)]">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Box className="w-5 h-5 text-[#39FF6A]" />
-                      <h3 className="text-base font-black text-[#EAF7EF]">
-                        3D Designs & Robot Builds
-                      </h3>
-                      <span className="text-xs font-mono text-[#8FA99B]">({robotBuilds.length})</span>
-                    </div>
-                    <Link
-                      href="/workbench?mode=3d"
-                      className="text-xs font-mono font-bold text-[#39FF6A] hover:underline flex items-center gap-1"
-                    >
-                      View more <ArrowRight className="w-3 h-3" />
-                    </Link>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {robotBuilds.map((b) => (
-                      <div
-                        key={b.id}
-                        className="glass-card p-4 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] flex items-center gap-4"
-                      >
-                        <div className="w-14 h-14 rounded-2xl bg-[rgba(57,255,106,0.12)] border border-[rgba(57,255,106,0.25)] text-[#39FF6A] flex items-center justify-center shrink-0">
-                          <Box className="w-7 h-7" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-[10px] font-mono font-bold text-[#39FF6A] uppercase">{b.type}</span>
-                          <h4 className="text-xs font-bold text-[#EAF7EF] truncate">
-                            {b.title}
-                          </h4>
-                          <p className="text-[11px] text-[#8FA99B] font-mono mt-0.5">{b.partsCount} mechanical parts</p>
-                        </div>
-                        <Link
-                          href={`/workbench?robot=${b.id}`}
-                          className="px-3 py-1.5 rounded-full text-xs font-mono font-bold bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[rgba(57,255,106,0.3)] hover:bg-[#39FF6A] hover:text-[#07110D] transition-colors shrink-0"
-                        >
-                          View 3D
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* SECTION: Collections */}
-              {(activeCategoryTab === 'all' || activeCategoryTab === 'collections') && (
-                <div className="space-y-4 pt-4 border-t border-[rgba(57,255,106,0.12)]">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Bookmark className="w-5 h-5 text-[#39FF6A]" />
-                      <h3 className="text-base font-black text-[#EAF7EF]">
-                        Collections
-                      </h3>
-                      <span className="text-xs font-mono text-[#8FA99B]">({collections.length})</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {collections.map((col) => (
-                      <div
-                        key={col.id}
-                        className="glass-card p-4 bg-[#0E2A1F]/40 border border-[rgba(57,255,106,0.15)] flex items-center gap-3.5"
-                      >
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center font-bold"
-                          style={{ backgroundColor: `${col.color}20`, border: `1px solid ${col.color}50`, color: col.color }}
-                        >
-                          <Bookmark className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-bold text-[#EAF7EF] truncate">
-                            {col.name}
-                          </h4>
-                          <p className="text-[11px] text-[#8FA99B] font-mono">{col.count} projects stored</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* SECTION: Certificates & Verified Credentials (dark glass cards with neon seal) */}
-              {(activeCategoryTab === 'all' || activeCategoryTab === 'certificates') && (
-                <div className="space-y-4 pt-4 border-t border-[rgba(57,255,106,0.12)]">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Award className="w-5 h-5 text-[#39FF6A]" />
-                      <h3 className="text-base font-black text-[#EAF7EF]">
-                        Certificates & Verified Credentials
-                      </h3>
-                      <span className="text-xs font-mono text-[#8FA99B]">({certificates.length})</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {certificates.map((cert) => (
-                      <div
-                        key={cert.id}
-                        className="glass-card p-5 bg-[#0E2A1F]/50 border border-[rgba(57,255,106,0.25)] relative overflow-hidden backdrop-blur-xl"
-                      >
-                        {/* Neon Seal in Top Right */}
-                        <div className="absolute -top-3 -right-3 w-16 h-16 rounded-full bg-[rgba(57,255,106,0.15)] border border-[#39FF6A] flex items-center justify-center shadow-[0_0_15px_rgba(57,255,106,0.3)]">
-                          <ShieldCheck className="w-6 h-6 text-[#39FF6A]" />
-                        </div>
-
-                        <span className="text-[10px] font-mono font-bold text-[#7FE7D6] uppercase tracking-wider">
-                          {cert.track}
-                        </span>
-                        <h4 className="text-sm font-bold text-[#EAF7EF] mt-1 pr-12">
-                          {cert.title}
-                        </h4>
-                        <p className="text-[11px] text-[#8FA99B] font-mono mt-1">
-                          Issued on {cert.issueDate}
-                        </p>
-                        <p className="text-[9.5px] font-mono text-[#527063] mt-2 truncate">
-                          HASH: {cert.verificationHash}
-                        </p>
-
-                        <div className="mt-4 pt-3 border-t border-[rgba(57,255,106,0.12)] flex items-center justify-between">
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[rgba(57,255,106,0.3)]">
-                            {cert.badge}
-                          </span>
-                          <button
-                            onClick={() => alert(`Downloading verified PDF certificate for ${cert.title}...`)}
-                            className="text-xs font-mono font-bold text-[#39FF6A] hover:underline"
-                          >
-                            Download PDF ↓
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Bottom Simulation Scrubber */}
-              <div className="pt-4 border-t border-[rgba(57,255,106,0.12)]">
-                <TimelineScrubber />
               </div>
             </div>
           </div>
-        </main>
-      </div>
-
-      {/* Onboarding Journey Modal */}
-      <OnboardingJourneyModal
-        isOpen={showOnboarding}
-        onClose={handleFinishOnboarding}
-        studentName={studentName}
-        studentId={studentId}
-        schoolName={profile?.schoolOrCollegeName || 'Indian Institute of Robotics'}
-      />
-
-      {/* 3D Student ID Passport Card Modal */}
-      {showPassportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="relative w-full max-w-md bg-[#0A1F17]/95 rounded-3xl p-6 border border-[rgba(57,255,106,0.3)] shadow-[0_0_50px_rgba(57,255,106,0.25)]">
-            <button
-              onClick={() => setShowPassportModal(false)}
-              className="absolute top-4 right-4 p-2 rounded-full text-[#8FA99B] hover:text-[#39FF6A] transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="mb-4 text-center">
-              <h3 className="text-base font-extrabold text-[#EAF7EF]">RoboVerse Digital Passport</h3>
-              <p className="text-xs text-[#8FA99B] font-mono">Official Student ID • Tap card to flip & scan verification QR</p>
-            </div>
-            <StudentIdCard3D
-              fullName={studentName}
-              studentId={studentId}
-              school={profile?.schoolOrCollegeName || 'Indian Institute of Robotics'}
-              planName={currentPlan === 'pro' ? 'PRO MAKER' : currentPlan === 'plus' ? 'PLUS BUILDER' : 'FREE EXPLORER'}
-              level={typeof profile?.level === 'number' ? profile.level : 4}
-              xp={profile?.xp || 4850}
-              streak={profile?.streakDays || 18}
-            />
-          </div>
         </div>
-      )}
+      </main>
     </div>
   );
 }

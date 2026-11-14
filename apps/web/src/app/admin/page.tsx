@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter, notFound } from 'next/navigation';
-import { AppSidebar } from '../../components/layout/AppSidebar';
-import { AppTopBar } from '../../components/layout/AppTopBar';
+import { Navbar } from '../../components/landing/Navbar';
+import { apiRequest } from '../../lib/apiClient';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
   ShieldAlert,
@@ -26,111 +25,29 @@ import {
   Zap,
   Lock,
   Tag,
-  ArrowRight,
-  ChevronRight,
-  Eye,
-  ShoppingBag,
-  Clock,
-  Printer,
-  Sparkles,
-  Radio,
   Activity,
-  Flame,
-  BookOpen,
-  Calendar,
-  Layers,
-  Terminal,
-  Award,
-  Send,
-  Check,
-  Ban,
+  Radio,
+  Mail,
+  KeyRound,
 } from 'lucide-react';
-import { AdminStudentRow } from '../api/admin/students/route';
-import { AdminMetrics } from '../api/admin/overview/route';
-import { LiveStudentSession } from '../api/admin/live-activity/route';
-
-interface CertificateRow {
-  code: string;
-  studentName: string;
-  studentId: string;
-  courseName: string;
-  track: string;
-  grade: number;
-  issuedAt: string;
-  isRevoked: boolean;
-}
-
-const SEED_CERTIFICATES: CertificateRow[] = [
-  {
-    code: 'RV-CERT-2026-001001',
-    studentName: 'Tanmay Chawda',
-    studentId: 'RV-2026-001001',
-    courseName: 'Arduino & Electronics Foundations',
-    track: 'HARDWARE & EMBEDDED SYSTEMS',
-    grade: 98.5,
-    issuedAt: '2026-10-18T14:30:00Z',
-    isRevoked: false,
-  },
-  {
-    code: 'RV-CERT-2026-001002',
-    studentName: 'Aarav Sharma',
-    studentId: 'RV-2026-001002',
-    courseName: 'Autonomous Mobile Robotics: Line Tracers & Rovers',
-    track: 'ROBOTICS & CONTROL SYSTEMS',
-    grade: 96.0,
-    issuedAt: '2026-10-22T11:15:00Z',
-    isRevoked: false,
-  },
-  {
-    code: 'RV-CERT-2026-001003',
-    studentName: 'Ananya Deshmukh',
-    studentId: 'RV-2026-001003',
-    courseName: 'Robotic Arm Kinematics & Inverse Trigonometry',
-    track: 'KINEMATICS & MECHATRONICS',
-    grade: 99.0,
-    issuedAt: '2026-10-25T16:00:00Z',
-    isRevoked: false,
-  },
-  {
-    code: 'RV-CERT-2026-REVOKED',
-    studentName: 'Test Account',
-    studentId: 'RV-2026-009999',
-    courseName: 'Drone Flight Dynamics & PID Stabilization',
-    track: 'AERIAL ROBOTICS',
-    grade: 60.0,
-    issuedAt: '2026-08-01T00:00:00Z',
-    isRevoked: true,
-  },
-];
 
 export default function AdminPage() {
-  const router = useRouter();
   const { user, profile, isAuthenticated } = useAuthStore();
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
-  // Active sub-tab
-  const [activeTab, setActiveTab] = useState<'metrics' | 'live' | 'users' | 'certificates' | 'plans' | 'orders'>('metrics');
-
-  // Timeline Range selector
-  const [timelineRange, setTimelineRange] = useState<'1D' | '7D' | '1M' | 'ALL'>('7D');
-  const [scrubberPosition, setScrubberPosition] = useState(84);
+  const [activeTab, setActiveTab] = useState<'metrics' | 'presence' | 'users' | 'plans' | 'audit' | 'orders' | 'coupons'>('metrics');
 
   // Telemetry data
-  const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
-  const [students, setStudents] = useState<AdminStudentRow[]>([]);
-  const [liveSessions, setLiveSessions] = useState<LiveStudentSession[]>([]);
-  const [certificates, setCertificates] = useState<CertificateRow[]>(SEED_CERTIFICATES);
+  const [metrics, setMetrics] = useState<any>(null);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [ordersList, setOrdersList] = useState<any[]>([]);
+  const [invoicesList, setInvoicesList] = useState<any[]>([]);
+  const [presenceData, setPresenceData] = useState<any>(null);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [resettingEmail, setResettingEmail] = useState<string | null>(null);
 
-  // Search & Filter
-  const [searchUserQuery, setSearchUserQuery] = useState('');
-  const [planFilter, setPlanFilter] = useState('ALL');
-
-  // Plan editing state
+  // Selected plan for editing
   const [selectedPlanTier, setSelectedPlanTier] = useState<string>('plan_plus');
   const [editPriceMonthly, setEditPriceMonthly] = useState<number>(299);
   const [editRituuMsgLimit, setEditRituuMsgLimit] = useState<number>(100);
@@ -138,852 +55,774 @@ export default function AdminPage() {
   const [editStoreDiscount, setEditStoreDiscount] = useState<number>(5);
   const [isSavingPlan, setIsSavingPlan] = useState<boolean>(false);
 
-  // Demo bypass toggle for reviewer evaluation
-  const [demoBypassActive, setDemoBypassActive] = useState(false);
+  // New Coupon form
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponDiscount, setNewCouponDiscount] = useState(25);
+  const [isCreatingCoupon, setIsCreatingCoupon] = useState(false);
+
+  // Search filter
+  const [searchUserQuery, setSearchUserQuery] = useState('');
 
   const loadAdminData = async () => {
     setLoading(true);
-    try {
-      const [metricsRes, studentsRes, liveRes] = await Promise.all([
-        fetch('/api/admin/overview').then((r) => r.json()),
-        fetch(`/api/admin/students?search=${encodeURIComponent(searchUserQuery)}&plan=${planFilter}`).then((r) => r.json()),
-        fetch('/api/admin/live-activity').then((r) => r.json()),
-      ]);
+    const [metricsRes, plansRes, usersRes, ordersRes, invoicesRes, presenceRes, auditRes] = await Promise.all([
+      apiRequest('/admin/metrics'),
+      apiRequest('/admin/plans'),
+      apiRequest('/admin/users'),
+      apiRequest('/admin/orders'),
+      apiRequest('/admin/invoices'),
+      apiRequest('/admin/presence'),
+      apiRequest('/admin/audit'),
+    ]);
 
-      if (metricsRes.success && metricsRes.data) {
-        setMetrics(metricsRes.data);
+    if (metricsRes.success) setMetrics(metricsRes.data);
+    if (plansRes.success) {
+      setPlans(plansRes.data || []);
+      const plus = plansRes.data?.find((p: any) => p.id === 'plan_plus');
+      if (plus) {
+        setEditPriceMonthly(plus.pricing?.[0]?.priceInrInclusiveGst || 299);
+        setEditRituuMsgLimit(plus.features?.rituuDailyTextMessageLimit || 100);
+        setEditRituuPhotoLimit(plus.features?.rituuDailyPhotoAnalysisLimit || 20);
+        setEditStoreDiscount(plus.features?.storeDiscountPercent || 5);
       }
-      if (studentsRes.success && studentsRes.data) {
-        setStudents(studentsRes.data.students || []);
-      }
-      if (liveRes.success && liveRes.data) {
-        setLiveSessions(liveRes.data.sessions || []);
-      }
-    } catch (err) {
-      console.error('Failed to load admin cluster telemetry:', err);
-    } finally {
-      setLoading(false);
+    }
+    if (usersRes.success) setUsersList(usersRes.data || []);
+    if (ordersRes.success) setOrdersList(ordersRes.data?.orders || []);
+    if (invoicesRes.success) setInvoicesList(invoicesRes.data?.invoices || []);
+    if (presenceRes.success) setPresenceData(presenceRes.data);
+    if (auditRes.success) setAuditLogs(auditRes.data?.logs || []);
+
+    setLoading(false);
+  };
+
+  const handleSendResetLink = async (studentId: string, email: string) => {
+    setActionMessage(null);
+    const res = await apiRequest(`/admin/users/${studentId}/reset-password`, { method: 'POST' });
+    if (res.success) {
+      setActionMessage(`Password reset link successfully dispatched via Supabase Auth to ${email}. No passwords are ever visible to admins.`);
+      loadAdminData();
+    } else {
+      setActionMessage(`Failed to dispatch reset link: ${res.error?.message}`);
     }
   };
 
   useEffect(() => {
     loadAdminData();
-  }, [searchUserQuery, planFilter]);
-
-  // Send Password Reset Link to student
-  const handleSendPasswordReset = async (student: AdminStudentRow) => {
-    setResettingEmail(student.email);
-    try {
-      const res = await fetch('/api/admin/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: student.email, studentId: student.studentId }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setActionMessage(json.message || `Password reset link dispatched to ${student.email}`);
-      } else {
-        setActionMessage(`Error: ${json.error?.message || 'Could not send reset link'}`);
-      }
-    } catch (err: any) {
-      setActionMessage(`Error: ${err.message}`);
-    } finally {
-      setResettingEmail(null);
-    }
-  };
-
-  // Toggle Certificate Revocation status
-  const handleToggleCertificateRevoke = (certCode: string) => {
-    setCertificates((prev) =>
-      prev.map((c) => {
-        if (c.code === certCode) {
-          const nextState = !c.isRevoked;
-          setActionMessage(
-            nextState
-              ? `Certificate ${certCode} marked as REVOKED in academy registry.`
-              : `Certificate ${certCode} re-activated as VALID.`
-          );
-          return { ...c, isRevoked: nextState };
-        }
-        return c;
-      })
-    );
-  };
+  }, []);
 
   const handleUpdatePlan = async () => {
     setIsSavingPlan(true);
-    setTimeout(() => {
-      setIsSavingPlan(false);
-      setActionMessage(
-        `Plan ${selectedPlanTier.toUpperCase()} settings saved: ₹${editPriceMonthly}/mo (incl. 18% GST), ${editRituuMsgLimit} Rituu msgs/day, ${editStoreDiscount}% hardware discount.`
-      );
-    }, 600);
+    setActionMessage(null);
+
+    const targetPlan = plans.find((p) => p.id === selectedPlanTier);
+    if (!targetPlan) return;
+
+    const updatedPricing = targetPlan.pricing.map((pr: any) => {
+      if (pr.cycle === 'MONTHLY') {
+        return { ...pr, priceInrInclusiveGst: Number(editPriceMonthly), label: `₹${editPriceMonthly} / month` };
+      }
+      return pr;
+    });
+
+    const res = await apiRequest(`/plans/${selectedPlanTier}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        pricing: updatedPricing,
+        features: {
+          ...targetPlan.features,
+          rituuDailyTextMessageLimit: Number(editRituuMsgLimit),
+          rituuDailyPhotoAnalysisLimit: Number(editRituuPhotoLimit),
+          storeDiscountPercent: Number(editStoreDiscount),
+        },
+      }),
+    });
+
+    setIsSavingPlan(false);
+    if (res.success) {
+      setActionMessage(`Plan ${selectedPlanTier} successfully updated live! New 18% GST price and AI quotas applied without redeployment.`);
+      loadAdminData();
+    } else {
+      setActionMessage(`Failed to update plan: ${res.error?.message}`);
+    }
   };
 
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
-  const isAdmin = user?.role === 'admin' || (user?.role as string) === 'ADMIN' || (isDemo && demoBypassActive);
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    const res = await apiRequest(`/admin/users/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role: newRole }),
+    });
 
-  // Non-admins and signed-out visitors get 404 in production
-  if (!isAuthenticated || !isAdmin) {
-    if (!isDemo) {
-      notFound();
+    if (res.success) {
+      setActionMessage(`Student role updated to ${newRole}`);
+      loadAdminData();
     }
+  };
 
-    return (
-      <div className="flex h-screen overflow-hidden bg-[#07110D] text-[#EAF7EF] font-sans">
-        <AppSidebar
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          isMobileOpen={isMobileSidebarOpen}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
-        />
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-          <AppTopBar
-            onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-          />
-          <main className="flex-1 flex items-center justify-center p-6">
-            <div className="max-w-md w-full rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(255,107,107,0.3)] backdrop-blur-xl p-8 text-center shadow-[0_0_30px_rgba(255,107,107,0.15)] space-y-4 font-mono">
-              <div className="w-16 h-16 rounded-full bg-[rgba(255,107,107,0.1)] text-[#FF6B6B] mx-auto flex items-center justify-center border-2 border-[#FF6B6B]/40 shadow">
-                <Lock className="w-8 h-8" />
-              </div>
-              <h2 className="text-xl font-bold text-white font-sans">
-                403 Forbidden: Admin Role Required
-              </h2>
-              <p className="text-xs text-[#8FA99B] leading-relaxed">
-                You are currently signed in as a student (<strong className="text-white">{user?.email || 'Anonymous'}</strong>). The Master Control Center is restricted to RoboVerse Operations &amp; Faculty Administrators.
-              </p>
-              <div className="pt-3 space-y-2">
-                <button
-                  onClick={() => setDemoBypassActive(true)}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs shadow transition-all font-sans cursor-pointer"
-                >
-                  Unlock Admin Control Room (Demo Mode)
-                </button>
-                <Link
-                  href="/dashboard"
-                  className="block w-full py-2.5 rounded-xl bg-[rgba(255,255,255,0.05)] border border-[rgba(57,255,106,0.15)] text-[#EAF7EF] text-xs font-bold hover:bg-[rgba(57,255,106,0.1)] transition-colors"
-                >
-                  Return to Student Dashboard
-                </Link>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+  const handleCreateCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCouponCode.trim()) return;
+
+    setIsCreatingCoupon(true);
+    const res = await apiRequest('/admin/coupons', {
+      method: 'POST',
+      body: JSON.stringify({
+        code: newCouponCode.trim(),
+        discountPercentage: Number(newCouponDiscount),
+        maxUses: 100,
+      }),
+    });
+
+    setIsCreatingCoupon(false);
+    if (res.success) {
+      setActionMessage(`Coupon ${newCouponCode.toUpperCase()} created successfully.`);
+      setNewCouponCode('');
+      loadAdminData();
+    }
+  };
+
+  const filteredUsers = usersList.filter(
+    (u) =>
+      u.email?.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
+      u.fullName?.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
+      u.studentId?.toLowerCase().includes(searchUserQuery.toLowerCase())
+  );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#07110D] text-[#EAF7EF] font-sans selection:bg-[#39FF6A] selection:text-black">
-      {/* Sidebar Rail */}
-      <AppSidebar
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        isMobileOpen={isMobileSidebarOpen}
-        onCloseMobile={() => setIsMobileSidebarOpen(false)}
-      />
+    <div className="min-h-screen bg-[#05100B] text-robo-text font-sans selection:bg-robo-neon selection:text-black">
+      <Navbar />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <AppTopBar
-          onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-        />
-
-        {/* Page Content Body */}
-        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-8">
-          {/* Top Admin HUD Header */}
-          <section className="relative overflow-hidden rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.2)] p-6 sm:p-8 backdrop-blur-xl shadow-[0_0_35px_rgba(7,17,13,0.8)]">
-            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[rgba(57,255,106,0.1)] border border-[rgba(57,255,106,0.3)] text-[#39FF6A] text-xs font-mono font-bold tracking-wider mb-3 shadow-[0_0_15px_rgba(57,255,106,0.15)]">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>MASTER CONTROL ROOM • POSTGRES RLS PROTECTED</span>
-                </div>
-                <h1 className="text-2xl sm:text-4xl font-extrabold text-[#EAF7EF] tracking-tight">
-                  RoboVerse Admin Control Center
-                </h1>
-                <p className="text-xs sm:text-sm text-[#8FA99B] mt-2 max-w-2xl leading-relaxed font-mono">
-                  Real-time telemetry, student directory with lockout recovery (strictly zero stored passwords),
-                  verifiable certificates registry, Rituu AI sentinel monitoring, and TechSavyyy order settlement.
-                </p>
+      <main className="pt-28 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        {/* Top Admin HUD Header */}
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0D241A] via-[#081811] to-[#040C08] border border-robo-neon/40 p-8 sm:p-10 mb-8 shadow-2xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-robo-neon/20 border border-robo-neon text-robo-neon text-xs font-mono font-bold mb-3 shadow-neon-subtle">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>ROBOVERSE MASTER ADMIN CONTROL CENTER</span>
               </div>
-
-              {/* Scrubber & Sync Button */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 font-mono">
-                {/* Timeline Range Selector */}
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-xs">
-                  <span className="text-[10px] text-[#8FA99B] px-2 flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-[#39FF6A]" />
-                    <span>WINDOW</span>
-                  </span>
-                  {(['1D', '7D', '1M', 'ALL'] as const).map((range) => (
-                    <button
-                      key={range}
-                      onClick={() => setTimelineRange(range)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                        timelineRange === range
-                          ? 'bg-[#39FF6A] text-black shadow-[0_0_12px_rgba(57,255,106,0.5)]'
-                          : 'text-[#8FA99B] hover:text-[#EAF7EF]'
-                      }`}
-                    >
-                      {range}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={loadAdminData}
-                  className="px-4 py-2.5 rounded-xl bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(57,255,106,0.1)] text-xs font-bold text-[#EAF7EF] border border-[rgba(57,255,106,0.25)] flex items-center gap-2 transition-all shadow"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 text-[#39FF6A] ${loading ? 'animate-spin' : ''}`} />
-                  <span>Sync Cluster</span>
-                </button>
-              </div>
+              <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+                Live Pricing, Quotas &amp; Telemetry
+              </h1>
+              <p className="text-sm text-robo-textSecondary mt-2 max-w-2xl">
+                Configure live plan prices (inclusive of 18% GST), adjust server-side Rituu AI rate limits, track Razorpay fees (2% + 1% AutoPay), audit store orders, and issue official GST invoices.
+              </p>
             </div>
 
-            {actionMessage && (
-              <div className="relative z-10 mt-6 p-4 rounded-2xl bg-[rgba(57,255,106,0.08)] border border-[#39FF6A]/40 text-[#39FF6A] text-xs flex items-center gap-2 font-mono font-semibold shadow">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{actionMessage}</span>
-              </div>
-            )}
+            <button
+              onClick={loadAdminData}
+              className="self-start md:self-auto px-4 py-2.5 rounded-xl bg-robo-surfaceRaised border border-robo-borderSubtle hover:border-robo-neon text-xs font-mono text-robo-neon flex items-center gap-2 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Sync Live Cluster</span>
+            </button>
+          </div>
 
-            {/* Elevated Off-Topic Rate Alert Banner if Rituu Sentinel triggers */}
-            {metrics && metrics.rituuOfftopicRatePct > 10 && (
-              <div className="relative z-10 mt-4 p-3 rounded-2xl bg-amber-950/40 border border-[#FF9A1F]/40 text-[#FF9A1F] text-xs flex items-center justify-between font-mono">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-[#FF9A1F]" />
-                  <span>
-                    Sentinel Advisory: Rituu off-topic detection is at {metrics.rituuOfftopicRatePct}% ({metrics.rituuOfftopicToday} rejected attempts today).
-                  </span>
+          {actionMessage && (
+            <div className="mt-6 p-4 rounded-2xl bg-robo-neon/10 border border-robo-neon text-robo-neon text-xs font-mono flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{actionMessage}</span>
+            </div>
+          )}
+
+          {/* Revenue & AI Cost Telemetry Strip */}
+          {metrics && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-robo-borderSubtle/60">
+              <div className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle">
+                <div className="text-[10px] font-mono text-robo-textSecondary mb-1">TOTAL COMBINED GROSS</div>
+                <div className="text-2xl font-black text-robo-neon">
+                  ₹{metrics.totalGrossRevenueInr?.toLocaleString('en-IN') || 0}
                 </div>
-                <span className="text-[10px] bg-[#FF9A1F]/20 px-2 py-0.5 rounded font-bold">
-                  Defenses Active
-                </span>
-              </div>
-            )}
-
-            {/* Realtime Telemetry Strip */}
-            {metrics && (
-              <div className="relative z-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6 pt-6 border-t border-[rgba(57,255,106,0.12)]">
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <div className="text-[10px] font-mono text-[#8FA99B] uppercase tracking-wider mb-1">
-                    ONLINE NOW
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#39FF6A] opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#39FF6A]"></span>
-                    </span>
-                    <span className="text-xl sm:text-2xl font-black text-[#39FF6A] font-mono">
-                      {metrics.onlineNow}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-[#8FA99B] mt-1 font-mono">
-                    Working on Labs: {metrics.workingOnProjects}
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <div className="text-[10px] font-mono text-[#8FA99B] uppercase tracking-wider mb-1">
-                    TOTAL STUDENTS
-                  </div>
-                  <div className="text-xl sm:text-2xl font-black text-white font-mono">
-                    {metrics.totalStudents}
-                  </div>
-                  <div className="text-[10px] text-[#8FA99B] mt-1 font-mono">
-                    Active 24h: {metrics.active24h}
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <div className="text-[10px] font-mono text-[#8FA99B] uppercase tracking-wider mb-1">
-                    PROJECTS IN PIPELINE
-                  </div>
-                  <div className="text-xl sm:text-2xl font-black text-[#7FE7D6] font-mono">
-                    {metrics.projectsCreated}
-                  </div>
-                  <div className="text-[10px] text-[#8FA99B] mt-1 font-mono">
-                    Enrollments: {metrics.enrollmentsCount}
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <div className="text-[10px] font-mono text-[#8FA99B] uppercase tracking-wider mb-1">
-                    VERIFIED CERTS
-                  </div>
-                  <div className="text-xl sm:text-2xl font-black text-[#39FF6A] font-mono">
-                    {metrics.certificatesIssued}
-                  </div>
-                  <div className="text-[10px] text-[#8FA99B] mt-1 font-mono">
-                    Public registry active
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <div className="text-[10px] font-mono text-[#8FA99B] uppercase tracking-wider mb-1">
-                    RITUU AI MSGS (TODAY)
-                  </div>
-                  <div className="text-xl sm:text-2xl font-black text-[#7FE7D6] font-mono">
-                    {metrics.rituuMessagesToday}
-                  </div>
-                  <div className="text-[10px] text-[#8FA99B] mt-1 font-mono">
-                    Sentinel Defense: {(100 - metrics.rituuOfftopicRatePct).toFixed(1)}%
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <div className="text-[10px] font-mono text-[#8FA99B] uppercase tracking-wider mb-1">
-                    STORE REVENUE (INR)
-                  </div>
-                  <div className="text-xl sm:text-2xl font-black text-[#39FF6A] font-mono">
-                    ₹{metrics.totalRevenueInr.toLocaleString('en-IN')}
-                  </div>
-                  <div className="text-[10px] text-[#8FA99B] mt-1 font-mono">
-                    Orders: {metrics.ordersCount} (incl. 18% GST)
-                  </div>
+                <div className="text-[10px] font-mono text-robo-textMuted mt-1">
+                  Subs: ₹{metrics.subscriptionRevenueInr || 0} | Store: ₹{metrics.storeRevenueInr || 0}
                 </div>
               </div>
-            )}
+
+              <div className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle">
+                <div className="text-[10px] font-mono text-robo-textSecondary mb-1">ESTIMATED NET MARGIN</div>
+                <div className="text-2xl font-black text-robo-teal">
+                  ₹{metrics.estimatedNetMarginInr?.toLocaleString('en-IN') || 0}
+                </div>
+                <div className="text-[10px] font-mono text-robo-teal mt-1">
+                  After AI Vision &amp; Tokens
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle">
+                <div className="text-[10px] font-mono text-robo-textSecondary mb-1">RAZORPAY TRANSACTION FEES</div>
+                <div className="text-2xl font-black text-robo-accentOrange">
+                  ₹{metrics.razorpayFeeEstimateInr || 0}
+                </div>
+                <div className="text-[10px] font-mono text-robo-textMuted mt-1">
+                  ~2.36% (2% Fee + 18% GST)
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle">
+                <div className="text-[10px] font-mono text-robo-textSecondary mb-1">STUDENTS &amp; SUBSCRIPTIONS</div>
+                <div className="text-2xl font-black text-white">
+                  {metrics.totalStudentsRegistered} / {metrics.activePaidSubscriptions} Paid
+                </div>
+                <div className="text-[10px] font-mono text-robo-textMuted mt-1">
+                  Invoices Issued: {metrics.totalInvoicesIssued}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Tab Selector */}
+        <section className="flex items-center gap-2 overflow-x-auto pb-4 mb-8">
+          {[
+            { id: 'metrics', label: 'Overview Metrics', icon: TrendingUp },
+            { id: 'presence', label: 'Students Working Now', icon: Radio },
+            { id: 'users', label: 'Student Directory', icon: Users },
+            { id: 'audit', label: 'Security Audit Log', icon: ShieldCheck },
+            { id: 'plans', label: 'Live Pricing & Limits', icon: Sliders },
+            { id: 'orders', label: 'TechSavyyy Orders & GST', icon: FileText },
+            { id: 'coupons', label: 'Coupons & Scholarships', icon: Tag },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-mono font-bold flex items-center gap-2 transition-all shrink-0 ${
+                  isActive
+                    ? 'bg-robo-neon text-black shadow-neon-glow'
+                    : 'bg-robo-surfaceRaised text-robo-textSecondary border border-robo-borderSubtle hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </section>
+
+        {/* Tab 1: Overview Metrics & Telemetry */}
+        {activeTab === 'metrics' && metrics && (
+          <section className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-6 rounded-3xl bg-[#081912] border border-robo-borderSubtle space-y-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-robo-neon" />
+                  <span>Subscription Distribution</span>
+                </h3>
+                <div className="space-y-3 font-mono text-xs">
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-robo-borderSubtle">
+                    <span>Free Tier (₹0):</span>
+                    <strong className="text-white">{metrics.planDistribution?.free || 0} Students</strong>
+                  </div>
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-robo-borderSubtle">
+                    <span className="text-robo-teal">Plus Plan (₹299/mo):</span>
+                    <strong className="text-robo-teal">{metrics.planDistribution?.plus || 0} Active</strong>
+                  </div>
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-robo-borderSubtle">
+                    <span className="text-robo-neon">Pro Plan (₹999/mo):</span>
+                    <strong className="text-robo-neon">{metrics.planDistribution?.pro || 0} Guided Learners</strong>
+                  </div>
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-robo-borderSubtle">
+                    <span className="text-robo-accentOrange">School &amp; Institution (₹499/yr):</span>
+                    <strong className="text-robo-accentOrange">{metrics.planDistribution?.institution || 0} Batches</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 rounded-3xl bg-[#081912] border border-robo-borderSubtle space-y-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-robo-teal" />
+                  <span>Rituu AI Cost Awareness &amp; Guardrails</span>
+                </h3>
+                <p className="text-xs text-robo-textSecondary leading-relaxed">
+                  Daily rate limits prevent multimodal vision inference token abuse while allowing high-yield robotics debugging.
+                </p>
+                <div className="space-y-3 font-mono text-xs">
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-robo-borderSubtle">
+                    <span>Total AI Inference Spend:</span>
+                    <strong className="text-robo-teal">₹{metrics.totalAiInferenceCostInr}</strong>
+                  </div>
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-robo-borderSubtle">
+                    <span>Store Orders Placed:</span>
+                    <strong className="text-white">{metrics.totalStoreOrdersCount} Orders</strong>
+                  </div>
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-black/40 border border-robo-borderSubtle">
+                    <span>Confirmed Fulfilled Orders:</span>
+                    <strong className="text-robo-neon">{metrics.confirmedStoreOrdersCount} Dispatched</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
+        )}
 
-          {/* Sub-tab Navigation */}
-          <section className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none font-mono">
-            {[
-              { id: 'metrics', label: 'Overview Metrics', icon: TrendingUp },
-              { id: 'live', label: 'Students Working Now', icon: Radio },
-              { id: 'users', label: 'Student Directory', icon: Users },
-              { id: 'certificates', label: 'Verifiable Certificates', icon: Award },
-              { id: 'plans', label: 'Plans & AI Limits', icon: Sliders },
-              { id: 'orders', label: 'Hardware Orders', icon: ShoppingBag },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
+        {/* Tab 2: Live Pricing & Plan Quotas Editor */}
+        {activeTab === 'plans' && (
+          <section className="rounded-3xl bg-[#081912] border border-robo-borderSubtle p-6 sm:p-8 space-y-6">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-1">
+                Dynamic Plan Pricing &amp; Limit Management
+              </h3>
+              <p className="text-xs text-robo-textSecondary">
+                Edit prices inclusive of 18% GST, modify Rituu AI rate caps, and change hardware store discounts without redeploying code.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {['plan_free', 'plan_plus', 'plan_pro', 'plan_institution'].map((pId) => (
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 ${
-                    isActive
-                      ? 'bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[#39FF6A] shadow-[0_0_20px_rgba(57,255,106,0.25)]'
-                      : 'bg-[rgba(255,255,255,0.03)] text-[#8FA99B] hover:text-[#EAF7EF] border border-[rgba(57,255,106,0.12)] hover:border-[rgba(57,255,106,0.3)]'
+                  key={pId}
+                  onClick={() => {
+                    setSelectedPlanTier(pId);
+                    const target = plans.find((p) => p.id === pId);
+                    if (target) {
+                      setEditPriceMonthly(target.pricing?.[0]?.priceInrInclusiveGst || 0);
+                      setEditRituuMsgLimit(target.features?.rituuDailyTextMessageLimit || 15);
+                      setEditRituuPhotoLimit(target.features?.rituuDailyPhotoAnalysisLimit || 3);
+                      setEditStoreDiscount(target.features?.storeDiscountPercent || 0);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all ${
+                    selectedPlanTier === pId
+                      ? 'bg-robo-teal text-black'
+                      : 'bg-black/50 text-robo-textSecondary border border-robo-borderSubtle'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#39FF6A]' : 'text-[#8FA99B]'}`} />
-                  <span>{tab.label}</span>
+                  {pId.replace('plan_', '').toUpperCase()} TIER
                 </button>
-              );
-            })}
-          </section>
+              ))}
+            </div>
 
-          {/* TAB 1: OVERVIEW METRICS */}
-          {activeTab === 'metrics' && metrics && (
-            <section className="space-y-6">
-              {/* Radial Gauges Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono">
-                <div className="p-6 rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.15)] backdrop-blur-xl flex items-center gap-4">
-                  <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
-                    <svg height="80" width="80" className="transform -rotate-90">
-                      <circle stroke="#0C261B" fill="transparent" strokeWidth="6" r="32" cx="40" cy="40" />
-                      <circle
-                        stroke="#39FF6A"
-                        fill="transparent"
-                        strokeWidth="6"
-                        strokeDasharray="201 201"
-                        style={{ strokeDashoffset: 201 - (82 / 100) * 201 }}
-                        strokeLinecap="round"
-                        r="32"
-                        cx="40"
-                        cy="40"
-                      />
-                    </svg>
-                    <span className="absolute font-mono font-bold text-sm text-[#EAF7EF]">82%</span>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-mono text-[#7FE7D6] uppercase tracking-wider">RETENTION RATE</div>
-                    <div className="text-sm font-bold text-white font-sans">Active Weekly Builders</div>
-                    <div className="text-xs text-[#8FA99B] mt-0.5">{metrics.active7d} / {metrics.totalStudents} students</div>
-                  </div>
-                </div>
-
-                <div className="p-6 rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.15)] backdrop-blur-xl flex items-center gap-4">
-                  <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
-                    <svg height="80" width="80" className="transform -rotate-90">
-                      <circle stroke="#0C261B" fill="transparent" strokeWidth="6" r="32" cx="40" cy="40" />
-                      <circle
-                        stroke="#7FE7D6"
-                        fill="transparent"
-                        strokeWidth="6"
-                        strokeDasharray="201 201"
-                        style={{ strokeDashoffset: 201 - (99.9 / 100) * 201 }}
-                        strokeLinecap="round"
-                        r="32"
-                        cx="40"
-                        cy="40"
-                      />
-                    </svg>
-                    <span className="absolute font-mono font-bold text-xs text-[#EAF7EF]">99.9%</span>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-mono text-[#7FE7D6] uppercase tracking-wider">CORE SIMULATION ENGINE</div>
-                    <div className="text-sm font-bold text-white font-sans">MNA Solver Uptime</div>
-                    <div className="text-xs text-[#8FA99B] mt-0.5">0 crashes across 3,120 runs</div>
-                  </div>
-                </div>
-
-                <div className="p-6 rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.15)] backdrop-blur-xl flex items-center gap-4">
-                  <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
-                    <svg height="80" width="80" className="transform -rotate-90">
-                      <circle stroke="#0C261B" fill="transparent" strokeWidth="6" r="32" cx="40" cy="40" />
-                      <circle
-                        stroke="#4C8DFF"
-                        fill="transparent"
-                        strokeWidth="6"
-                        strokeDasharray="201 201"
-                        style={{ strokeDashoffset: 201 - (97.9 / 100) * 201 }}
-                        strokeLinecap="round"
-                        r="32"
-                        cx="40"
-                        cy="40"
-                      />
-                    </svg>
-                    <span className="absolute font-mono font-bold text-sm text-[#EAF7EF]">97.9%</span>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-mono text-[#7FE7D6] uppercase tracking-wider">RITUU AI SENTINEL</div>
-                    <div className="text-sm font-bold text-white font-sans">Curriculum Containment</div>
-                    <div className="text-xs text-[#8FA99B] mt-0.5">Off-topic rejected: {metrics.rituuOfftopicToday} queries</div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* TAB 2: STUDENTS WORKING NOW (LIVE TELEMETRY) */}
-          {activeTab === 'live' && (
-            <section className="space-y-4 font-mono">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white font-sans flex items-center gap-2">
-                    <Radio className="w-5 h-5 text-[#39FF6A] animate-pulse" />
-                    <span>Realtime Presence: Students Working in Labs</span>
-                  </h3>
-                  <p className="text-xs text-[#8FA99B] mt-0.5">
-                    Live telemetry tracked via touch_presence RPC and Supabase Realtime broadcast channels.
-                  </p>
-                </div>
-                <span className="px-3 py-1 rounded-full bg-[#39FF6A]/10 text-[#39FF6A] text-xs font-bold border border-[#39FF6A]/30">
-                  {liveSessions.length} Active Sessions
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {liveSessions.map((s) => (
-                  <div
-                    key={s.id}
-                    className="p-5 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)] flex flex-col justify-between space-y-3 hover:border-[#39FF6A]/40 transition"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="text-[#39FF6A] font-bold">{s.studentId}</span>
-                        <span className="px-2 py-0.5 rounded bg-black/60 text-[#7FE7D6] text-[10px] border border-gray-800">
-                          {s.lab}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-white font-sans">{s.fullName}</h4>
-                      <p className="text-xs text-gray-300 mt-1 line-clamp-1">{s.projectName}</p>
-                    </div>
-
-                    <div className="p-3 bg-black/40 rounded-xl border border-gray-800/80 text-[11px] text-[#8FA99B] space-y-1">
-                      <div className="text-gray-400 font-bold uppercase text-[9px]">Live Action:</div>
-                      <div className="text-gray-200">{s.action}</div>
-                    </div>
-
-                    <div className="flex justify-between items-center text-[10px] text-gray-500 pt-2 border-t border-gray-800">
-                      <span>Active for {s.timeActiveMinutes} mins</span>
-                      <span className="text-[#39FF6A]">Ping: {s.lastPingSecondsAgo}s ago</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* TAB 3: STUDENT DIRECTORY (ZERO STORED PASSWORDS, PRIVACY-COMPLIANT) */}
-          {activeTab === 'users' && (
-            <section className="space-y-4 font-mono">
-              <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8FA99B]" />
-                  <input
-                    type="text"
-                    value={searchUserQuery}
-                    onChange={(e) => setSearchUserQuery(e.target.value)}
-                    placeholder="Search by Student ID (e.g. RV-2026-001001), name, or email..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.2)] text-xs text-[#EAF7EF] placeholder-[#8FA99B] focus:outline-none focus:border-[#39FF6A]"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#8FA99B]">Plan Filter:</span>
-                  <select
-                    value={planFilter}
-                    onChange={(e) => setPlanFilter(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-[#040B08] border border-[rgba(57,255,106,0.2)] text-xs text-white focus:outline-none focus:border-[#39FF6A]"
-                  >
-                    <option value="ALL">All Plans</option>
-                    <option value="FREE">Free Tier</option>
-                    <option value="PLUS">Plus Member</option>
-                    <option value="PRO">Pro Scholar</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[rgba(57,255,106,0.15)] overflow-hidden bg-[rgba(255,255,255,0.03)] backdrop-blur-xl">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-[#040B08]/80 text-[#8FA99B] font-mono font-bold border-b border-[rgba(57,255,106,0.15)]">
-                      <tr>
-                        <th className="p-3.5">STUDENT ID</th>
-                        <th className="p-3.5">NAME &amp; EMAIL</th>
-                        <th className="p-3.5">INSTITUTION &amp; CITY</th>
-                        <th className="p-3.5">ACTIVE PLAN</th>
-                        <th className="p-3.5">CURRENT LAB WORK</th>
-                        <th className="p-3.5">METRICS</th>
-                        <th className="p-3.5 text-right">SECURITY ACTION</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[rgba(57,255,106,0.08)]">
-                      {students.map((s) => (
-                        <tr key={s.id} className="hover:bg-[rgba(57,255,106,0.04)] transition-colors">
-                          <td className="p-3.5 font-mono text-[#39FF6A] font-bold">
-                            {s.studentId}
-                          </td>
-                          <td className="p-3.5">
-                            <div className="font-bold text-white font-sans">{s.fullName}</div>
-                            <div className="text-[11px] text-[#8FA99B] font-mono">{s.email}</div>
-                          </td>
-                          <td className="p-3.5 text-[#8FA99B]">
-                            <div className="font-medium text-white">{s.schoolOrCollege}</div>
-                            <div className="text-[10px] text-[#7FE7D6] font-mono">{s.city}</div>
-                          </td>
-                          <td className="p-3.5">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
-                                s.planTier === 'PRO'
-                                  ? 'bg-[#39FF6A]/10 text-[#39FF6A] border-[#39FF6A]/30'
-                                  : s.planTier === 'PLUS'
-                                  ? 'bg-[#7FE7D6]/10 text-[#7FE7D6] border-[#7FE7D6]/30'
-                                  : 'bg-gray-800 text-gray-300 border-gray-700'
-                              }`}
-                            >
-                              {s.planTier}
-                            </span>
-                          </td>
-                          <td className="p-3.5 text-xs text-gray-300 max-w-xs truncate">
-                            {s.currentActivity}
-                          </td>
-                          <td className="p-3.5 text-[11px] text-[#8FA99B]">
-                            <span className="text-white font-bold">{s.xp} XP</span> • 🔥 {s.streakDays}d
-                          </td>
-                          <td className="p-3.5 text-right">
-                            <button
-                              onClick={() => handleSendPasswordReset(s)}
-                              disabled={resettingEmail === s.email}
-                              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-[#7FE7D6] hover:text-[#39FF6A] border border-gray-700 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 ml-auto"
-                              title="Send Supabase Auth Password Reset Email"
-                            >
-                              <Send className="w-3 h-3" />
-                              <span>{resettingEmail === s.email ? 'Sending...' : 'Send Reset Link'}</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* TAB 4: VERIFIABLE CERTIFICATES REGISTRY */}
-          {activeTab === 'certificates' && (
-            <section className="space-y-4 font-mono">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white font-sans flex items-center gap-2">
-                    <Award className="w-5 h-5 text-[#39FF6A]" />
-                    <span>RoboVerse Academy Verifiable Certificates Registry</span>
-                  </h3>
-                  <p className="text-xs text-[#8FA99B] mt-0.5">
-                    Credentials issued via issue_certificate() RPC. Publicly verifiable at /verify/&lt;code&gt;.
-                  </p>
-                </div>
-                <Link
-                  href="/verify"
-                  target="_blank"
-                  className="px-3.5 py-1.5 bg-[#39FF6A]/10 text-[#39FF6A] border border-[#39FF6A]/30 rounded-xl text-xs font-bold hover:bg-[#39FF6A]/20 transition flex items-center gap-1.5"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Public Lookup Portal</span>
-                </Link>
-              </div>
-
-              <div className="rounded-2xl border border-[rgba(57,255,106,0.15)] overflow-hidden bg-[rgba(255,255,255,0.03)] backdrop-blur-xl">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-[#040B08]/80 text-[#8FA99B] font-mono font-bold border-b border-[rgba(57,255,106,0.15)]">
-                      <tr>
-                        <th className="p-3.5">CERTIFICATE CODE</th>
-                        <th className="p-3.5">RECIPIENT &amp; STUDENT ID</th>
-                        <th className="p-3.5">COURSE TITLE &amp; TRACK</th>
-                        <th className="p-3.5">SCORE</th>
-                        <th className="p-3.5">STATUS</th>
-                        <th className="p-3.5 text-right">ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[rgba(57,255,106,0.08)]">
-                      {certificates.map((cert) => (
-                        <tr key={cert.code} className="hover:bg-[rgba(57,255,106,0.04)] transition-colors">
-                          <td className="p-3.5 font-mono text-[#39FF6A] font-bold">
-                            {cert.code}
-                          </td>
-                          <td className="p-3.5">
-                            <div className="font-bold text-white font-sans">{cert.studentName}</div>
-                            <div className="text-[10px] text-gray-400 font-mono">{cert.studentId}</div>
-                          </td>
-                          <td className="p-3.5">
-                            <div className="font-bold text-white">{cert.courseName}</div>
-                            <div className="text-[10px] text-[#7FE7D6] font-mono">{cert.track}</div>
-                          </td>
-                          <td className="p-3.5 font-bold text-[#39FF6A]">
-                            {cert.grade}%
-                          </td>
-                          <td className="p-3.5">
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                                !cert.isRevoked
-                                  ? 'bg-[#39FF6A]/10 text-[#39FF6A] border-[#39FF6A]/30'
-                                  : 'bg-red-950/40 text-red-400 border-red-500/40'
-                              }`}
-                            >
-                              {!cert.isRevoked ? 'VERIFIED ACTIVE' : 'REVOKED'}
-                            </span>
-                          </td>
-                          <td className="p-3.5 text-right space-x-2">
-                            <Link
-                              href={`/verify/${cert.code}`}
-                              target="_blank"
-                              className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg text-[11px] inline-flex items-center gap-1 transition"
-                            >
-                              <Eye className="w-3 h-3" />
-                              <span>Inspect</span>
-                            </Link>
-
-                            <button
-                              onClick={() => handleToggleCertificateRevoke(cert.code)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition inline-flex items-center gap-1 ${
-                                !cert.isRevoked
-                                  ? 'bg-red-950/40 text-red-400 hover:bg-red-900/60 border border-red-500/30'
-                                  : 'bg-emerald-950/40 text-emerald-400 hover:bg-emerald-900/60 border border-emerald-500/30'
-                              }`}
-                            >
-                              <Ban className="w-3 h-3" />
-                              <span>{!cert.isRevoked ? 'Revoke' : 'Reactivate'}</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* TAB 5: PLANS & LIMITS */}
-          {activeTab === 'plans' && (
-            <section className="rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.15)] backdrop-blur-xl p-6 sm:p-8 space-y-6 font-mono">
-              <div>
-                <h3 className="text-xl font-bold text-[#EAF7EF] mb-1 font-sans">
-                  Dynamic Plan Pricing &amp; Limit Management
-                </h3>
-                <p className="text-xs text-[#8FA99B]">
-                  Modify monthly pricing (inclusive of 18% GST), daily Rituu AI rate limits, and hardware store discounts without redeploying code.
-                </p>
-              </div>
-
-              {/* Plan Tier Selector */}
-              <div className="flex flex-wrap gap-2">
-                {['plan_free', 'plan_plus', 'plan_pro', 'plan_institution'].map((pId) => (
-                  <button
-                    key={pId}
-                    onClick={() => {
-                      setSelectedPlanTier(pId);
-                      if (pId === 'plan_free') {
-                        setEditPriceMonthly(0);
-                        setEditRituuMsgLimit(15);
-                        setEditRituuPhotoLimit(3);
-                        setEditStoreDiscount(0);
-                      } else if (pId === 'plan_plus') {
-                        setEditPriceMonthly(299);
-                        setEditRituuMsgLimit(100);
-                        setEditRituuPhotoLimit(20);
-                        setEditStoreDiscount(5);
-                      } else if (pId === 'plan_pro') {
-                        setEditPriceMonthly(999);
-                        setEditRituuMsgLimit(300);
-                        setEditRituuPhotoLimit(60);
-                        setEditStoreDiscount(10);
-                      } else {
-                        setEditPriceMonthly(4999);
-                        setEditRituuMsgLimit(1000);
-                        setEditRituuPhotoLimit(200);
-                        setEditStoreDiscount(15);
-                      }
-                    }}
-                    className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all ${
-                      selectedPlanTier === pId
-                        ? 'bg-[rgba(57,255,106,0.15)] text-[#39FF6A] border border-[#39FF6A] shadow-[0_0_15px_rgba(57,255,106,0.25)]'
-                        : 'bg-[rgba(255,255,255,0.02)] text-[#8FA99B] hover:text-[#EAF7EF] border border-[rgba(57,255,106,0.1)]'
-                    }`}
-                  >
-                    {pId.replace('plan_', '').toUpperCase()} TIER
-                  </button>
-                ))}
-              </div>
-
-              {/* Editable Fields Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-[rgba(57,255,106,0.1)]">
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <label className="text-[11px] font-bold text-[#8FA99B] font-mono block mb-1">
-                    MONTHLY PRICE (INCL. 18% GST)
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[#39FF6A] font-bold text-lg font-mono">₹</span>
-                    <input
-                      type="number"
-                      value={editPriceMonthly}
-                      onChange={(e) => setEditPriceMonthly(Number(e.target.value))}
-                      className="w-full bg-transparent text-[#EAF7EF] font-extrabold text-xl font-mono focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <label className="text-[11px] font-bold text-[#8FA99B] font-mono block mb-1">
-                    DAILY RITUU TEXT MESSAGES
-                  </label>
+            {/* Editable Fields Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-robo-borderSubtle">
+              <div className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle">
+                <label className="text-[10px] font-mono text-robo-textSecondary block mb-1">
+                  MONTHLY PRICE (INCL. 18% GST)
+                </label>
+                <div className="flex items-center gap-1">
+                  <span className="text-robo-neon font-bold text-sm">₹</span>
                   <input
                     type="number"
-                    value={editRituuMsgLimit}
-                    onChange={(e) => setEditRituuMsgLimit(Number(e.target.value))}
-                    className="w-full bg-transparent text-[#EAF7EF] font-extrabold text-xl font-mono focus:outline-none"
+                    value={editPriceMonthly}
+                    onChange={(e) => setEditPriceMonthly(Number(e.target.value))}
+                    className="w-full bg-transparent text-white font-black text-xl focus:outline-none"
                   />
                 </div>
+              </div>
 
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <label className="text-[11px] font-bold text-[#8FA99B] font-mono block mb-1">
-                    DAILY PHOTO ANALYSES
-                  </label>
-                  <input
-                    type="number"
-                    value={editRituuPhotoLimit}
-                    onChange={(e) => setEditRituuPhotoLimit(Number(e.target.value))}
-                    className="w-full bg-transparent text-[#EAF7EF] font-extrabold text-xl font-mono focus:outline-none"
-                  />
-                </div>
+              <div className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle">
+                <label className="text-[10px] font-mono text-robo-textSecondary block mb-1">
+                  DAILY RITUU TEXT MESSAGES
+                </label>
+                <input
+                  type="number"
+                  value={editRituuMsgLimit}
+                  onChange={(e) => setEditRituuMsgLimit(Number(e.target.value))}
+                  className="w-full bg-transparent text-white font-black text-xl focus:outline-none"
+                />
+              </div>
 
-                <div className="p-4 rounded-2xl bg-[rgba(255,255,255,0.02)] border border-[rgba(57,255,106,0.15)]">
-                  <label className="text-[11px] font-bold text-[#8FA99B] font-mono block mb-1">
-                    TECHSAVYYY STORE DISCOUNT (%)
-                  </label>
+              <div className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle">
+                <label className="text-[10px] font-mono text-robo-textSecondary block mb-1">
+                  DAILY RITUU PHOTO ANALYSES
+                </label>
+                <input
+                  type="number"
+                  value={editRituuPhotoLimit}
+                  onChange={(e) => setEditRituuPhotoLimit(Number(e.target.value))}
+                  className="w-full bg-transparent text-white font-black text-xl focus:outline-none"
+                />
+              </div>
+
+              <div className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle">
+                <label className="text-[10px] font-mono text-robo-textSecondary block mb-1">
+                  TECHSAVYYY STORE DISCOUNT
+                </label>
+                <div className="flex items-center gap-1">
                   <input
                     type="number"
                     value={editStoreDiscount}
                     onChange={(e) => setEditStoreDiscount(Number(e.target.value))}
-                    className="w-full bg-transparent text-[#EAF7EF] font-extrabold text-xl font-mono focus:outline-none"
+                    className="w-full bg-transparent text-white font-black text-xl focus:outline-none"
                   />
+                  <span className="text-robo-neon font-bold text-sm">%</span>
                 </div>
               </div>
+            </div>
 
-              <div className="flex justify-end pt-4">
-                <button
-                  onClick={handleUpdatePlan}
-                  disabled={isSavingPlan}
-                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] hover:opacity-95 text-black font-extrabold text-xs flex items-center gap-2 shadow transition-all font-sans"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>{isSavingPlan ? 'Saving Changes...' : 'Save Dynamic Quotas'}</span>
-                </button>
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={handleUpdatePlan}
+                disabled={isSavingPlan}
+                className="px-6 py-3 rounded-xl bg-robo-neon hover:bg-robo-neonHover text-black font-bold text-xs flex items-center gap-2 shadow-neon-glow transition-all"
+              >
+                {isSavingPlan ? (
+                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Save &amp; Deploy to Cluster Live</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Tab: Live Students Working Now (Realtime Presence) */}
+        {activeTab === 'presence' && (
+          <section className="space-y-6">
+            <div className="p-6 rounded-3xl bg-gradient-to-r from-[#0C2B1D] via-[#081F15] to-[#04100B] border border-robo-neon/40 shadow-neon-card flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-robo-neon/10 border border-robo-neon text-robo-neon text-xs font-mono mb-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-robo-neon animate-pulse" />
+                  <span>LIVE WORKBENCH REALTIME PRESENCE</span>
+                </div>
+                <h3 className="text-xl font-bold text-white">Students Working on Robotics Projects</h3>
+                <p className="text-xs text-robo-textSecondary mt-1">
+                  Telemetry heartbeats updated via PostGIS and Supabase presence channels every 15 seconds.
+                </p>
               </div>
-            </section>
-          )}
 
-          {/* TAB 6: ORDERS */}
-          {activeTab === 'orders' && (
-            <section className="p-6 rounded-3xl bg-[rgba(255,255,255,0.03)] border border-[rgba(57,255,106,0.15)] backdrop-blur-xl space-y-4 font-mono">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-white font-sans flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-[#39FF6A]" />
-                  <span>TechSavyyy Store Settlements &amp; GST Invoices</span>
-                </h3>
-                <Link
-                  href="/store"
-                  className="text-xs text-[#7FE7D6] hover:text-[#39FF6A] flex items-center gap-1 transition"
-                >
-                  <span>Open Storefront</span>
-                  <ExternalLink className="w-3 h-3" />
-                </Link>
+              <div className="flex items-center gap-4 text-xs font-mono">
+                <div className="px-4 py-2.5 rounded-2xl bg-black/50 border border-robo-borderSubtle text-center">
+                  <span className="text-[10px] text-robo-textSecondary block">ONLINE NOW</span>
+                  <strong className="text-lg text-robo-neon">{presenceData?.studentsOnlineCount || metrics?.onlineNow || 3}</strong>
+                </div>
+                <div className="px-4 py-2.5 rounded-2xl bg-black/50 border border-robo-borderSubtle text-center">
+                  <span className="text-[10px] text-robo-textSecondary block">ACTIVE IN LABS</span>
+                  <strong className="text-lg text-robo-teal">{presenceData?.studentsWorkingNowCount || metrics?.studentsWorkingNow || 5}</strong>
+                </div>
               </div>
+            </div>
 
-              <div className="space-y-3">
-                {[
-                  {
-                    orderNumber: 'ROBO-20261030-8491',
-                    buyer: 'Tanmay Chawda (RV-2026-001001)',
-                    items: 'Arduino Uno R3, SG90 Servo, HC-SR04 Sonar',
-                    totalInr: 937,
-                    status: 'PAID',
-                    invoiceNumber: 'INV-2026-008491',
-                  },
-                  {
-                    orderNumber: 'ROBO-20261029-4102',
-                    buyer: 'Aarav Sharma (RV-2026-001002)',
-                    items: 'RoboVerse Arduino Starter Kit',
-                    totalInr: 1199,
-                    status: 'DELIVERED',
-                    invoiceNumber: 'INV-2026-004102',
-                  },
-                ].map((ord) => (
-                  <div
-                    key={ord.orderNumber}
-                    className="p-4 rounded-2xl bg-black/40 border border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[#39FF6A] font-bold">{ord.orderNumber}</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-[#39FF6A]/10 text-[#39FF6A] border border-[#39FF6A]/30">
-                          {ord.status}
-                        </span>
+            <div className="rounded-2xl border border-robo-borderSubtle overflow-hidden bg-[#081811]">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-black/60 text-robo-textSecondary font-mono border-b border-robo-borderSubtle">
+                    <tr>
+                      <th className="p-3.5">STUDENT ID</th>
+                      <th className="p-3.5">NAME &amp; CAMPUS</th>
+                      <th className="p-3.5">ACTIVE HARDWARE PROJECT</th>
+                      <th className="p-3.5">PLAN</th>
+                      <th className="p-3.5">LAST PING</th>
+                      <th className="p-3.5">STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-robo-borderSubtle/60">
+                    {(presenceData?.activeStudents || usersList).map((s: any) => (
+                      <tr key={s.id} className="hover:bg-robo-surfaceRaised/40 transition-colors">
+                        <td className="p-3.5 font-mono text-robo-neon font-bold">
+                          {s.studentId}
+                        </td>
+                        <td className="p-3.5">
+                          <div className="font-bold text-white">{s.fullName}</div>
+                          <div className="text-[10px] text-robo-textSecondary">{s.schoolOrCollege} • {s.city}</div>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="text-xs text-white font-mono flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-robo-neon animate-ping" />
+                            <span>{s.currentProject || 'Simulating 3D Electronics Circuit'}</span>
+                          </div>
+                        </td>
+                        <td className="p-3.5 font-mono">
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-black/50 border border-robo-borderSubtle text-robo-teal">
+                            {s.planTier || 'PRO'}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-robo-textSecondary font-mono text-[11px]">
+                          {new Date(s.lastActive || s.lastSeenAt || Date.now()).toLocaleTimeString()}
+                        </td>
+                        <td className="p-3.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-400 font-bold">
+                            Working
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Tab 3: Student Directory */}
+        {activeTab === 'users' && (
+          <section className="space-y-4">
+            <div className="p-3.5 rounded-2xl bg-robo-surfaceRaised/60 border border-robo-borderSubtle text-xs font-mono flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-robo-teal">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span>
+                  <strong>DPDP-Compliant Zero-Password Access:</strong> Passwords are cryptographically salted and hashed by Supabase Auth and never stored in plaintext or accessible to administrators.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-robo-textSecondary" />
+                <input
+                  type="text"
+                  value={searchUserQuery}
+                  onChange={(e) => setSearchUserQuery(e.target.value)}
+                  placeholder="Filter by Student ID, email or name..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-robo-surfaceRaised border border-robo-borderSubtle text-xs text-white placeholder-robo-textSecondary focus:outline-none focus:border-robo-neon"
+                />
+              </div>
+              <span className="text-xs font-mono text-robo-textSecondary">
+                Showing {filteredUsers.length} Registered Students
+              </span>
+            </div>
+
+            <div className="rounded-2xl border border-robo-borderSubtle overflow-hidden bg-[#081811]">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-black/60 text-robo-textSecondary font-mono border-b border-robo-borderSubtle">
+                    <tr>
+                      <th className="p-3.5">STUDENT ID</th>
+                      <th className="p-3.5">NAME &amp; EMAIL</th>
+                      <th className="p-3.5">INSTITUTION &amp; CITY</th>
+                      <th className="p-3.5">ACTIVE PROJECT</th>
+                      <th className="p-3.5">PLAN &amp; ROLE</th>
+                      <th className="p-3.5">RECOVERY ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-robo-borderSubtle/60">
+                    {filteredUsers.map((u) => (
+                      <tr key={u.id} className="hover:bg-robo-surfaceRaised/40 transition-colors">
+                        <td className="p-3.5 font-mono text-robo-neon font-bold">
+                          {u.studentId || 'RV-PENDING'}
+                        </td>
+                        <td className="p-3.5">
+                          <div className="font-bold text-white">{u.fullName || 'Student'}</div>
+                          <div className="text-[11px] text-robo-textSecondary">{u.email}</div>
+                        </td>
+                        <td className="p-3.5 text-robo-textSecondary">
+                          <div>{u.schoolOrCollege || 'Robotics Lab'}</div>
+                          <div className="text-[10px] text-robo-teal">{u.city}</div>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="font-mono text-white text-[11px] line-clamp-1">
+                            {u.currentProject || 'Offline'}
+                          </div>
+                          <div className="text-[10px] text-robo-textSecondary">
+                            Progress: <strong className="text-robo-neon">{u.progressPct || 0}%</strong>
+                          </div>
+                        </td>
+                        <td className="p-3.5">
+                          <select
+                            value={u.role}
+                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                            className="bg-black/60 border border-robo-borderSubtle rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none focus:border-robo-neon font-mono"
+                          >
+                            <option value="FREE_STUDENT">FREE_STUDENT</option>
+                            <option value="PLUS_STUDENT">PLUS_STUDENT</option>
+                            <option value="PRO_STUDENT">PRO_STUDENT</option>
+                            <option value="MENTOR">MENTOR</option>
+                            <option value="ADMIN">ADMIN</option>
+                          </select>
+                        </td>
+                        <td className="p-3.5">
+                          <button
+                            onClick={() => handleSendResetLink(u.studentId, u.email)}
+                            className="px-2.5 py-1.5 rounded-lg bg-robo-surfaceRaised border border-robo-borderSubtle hover:border-robo-teal text-robo-teal font-mono text-[11px] flex items-center gap-1.5 transition-colors"
+                          >
+                            <KeyRound className="w-3 h-3" />
+                            <span>Send Reset Link</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Tab: Security & Administrative Audit Log */}
+        {activeTab === 'audit' && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">Immutable Security Audit Trail</h3>
+                <p className="text-xs text-robo-textSecondary mt-0.5">
+                  Chronological record of role promotions, plan pricing mutations, and lockout resets.
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-xl bg-robo-neon/20 border border-robo-neon text-robo-neon font-mono text-xs font-bold">
+                {auditLogs.length} Events Logged
+              </span>
+            </div>
+
+            <div className="rounded-2xl border border-robo-borderSubtle overflow-hidden bg-[#081811]">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="bg-black/60 text-robo-textSecondary border-b border-robo-borderSubtle">
+                    <tr>
+                      <th className="p-3.5">TIMESTAMP</th>
+                      <th className="p-3.5">ACTION</th>
+                      <th className="p-3.5">TARGET</th>
+                      <th className="p-3.5">ADMIN</th>
+                      <th className="p-3.5">METADATA DETAILS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-robo-borderSubtle/60">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-robo-surfaceRaised/40 transition-colors">
+                        <td className="p-3.5 text-robo-textSecondary whitespace-nowrap">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </td>
+                        <td className="p-3.5">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-robo-surfaceRaised border border-robo-neon/40 text-robo-neon">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-white">
+                          {log.targetType}: <strong>{log.targetId}</strong>
+                        </td>
+                        <td className="p-3.5 text-robo-teal">
+                          {log.adminEmail || log.adminId}
+                        </td>
+                        <td className="p-3.5 text-robo-textSecondary text-[11px]">
+                          {JSON.stringify(log.details)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Tab 4: TechSavyyy Orders & 18% GST Invoices */}
+        {activeTab === 'orders' && (
+          <section className="space-y-6">
+            {/* Orders List */}
+            <div className="p-6 rounded-3xl bg-[#081811] border border-robo-borderSubtle space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-robo-neon" />
+                <span>Store Orders &amp; Invoices Audit</span>
+              </h3>
+
+              {ordersList.length === 0 ? (
+                <p className="text-xs text-robo-textSecondary py-6">No store orders placed yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {ordersList.map((ord) => (
+                    <div
+                      key={ord.orderId}
+                      className="p-4 rounded-2xl bg-black/50 border border-robo-borderSubtle flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs font-mono"
+                    >
+                      <div>
+                        <div className="font-bold text-white flex items-center gap-2">
+                          <span>{ord.orderId}</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-robo-neon/20 text-robo-neon">
+                            {ord.status}
+                          </span>
+                        </div>
+                        <div className="text-robo-textSecondary mt-1">
+                          Customer: <strong className="text-white">{ord.customerName}</strong> ({ord.customerEmail})
+                        </div>
+                        <div className="text-[11px] text-robo-teal mt-0.5">
+                          Destination: {ord.shippingAddress?.city}, {ord.shippingAddress?.state} • Items: {ord.items?.length || 1}
+                        </div>
                       </div>
-                      <div className="text-white mt-1 font-sans">{ord.buyer}</div>
-                      <div className="text-gray-400 text-[11px]">{ord.items}</div>
-                    </div>
 
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-[#39FF6A]">₹{ord.totalInr}</div>
-                      <div className="text-[10px] text-gray-500">Includes 18% GST • Invoice: {ord.invoiceNumber}</div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-robo-neon">
+                          ₹{ord.taxBreakdown?.finalAmountInr}
+                        </div>
+                        <div className="text-[10px] text-robo-textSecondary">
+                          Base: ₹{ord.taxBreakdown?.taxableAmountInr} + 18% GST: ₹{ord.taxBreakdown?.totalGstInr}
+                        </div>
+                        {ord.invoice?.id && (
+                          <a
+                            href={`/api/v1/subscriptions/invoices/${ord.invoice.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-robo-teal hover:underline mt-1"
+                          >
+                            <span>Invoice {ord.invoice.invoiceNumber}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Tab 5: Coupons & Scholarships */}
+        {activeTab === 'coupons' && (
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-6 rounded-3xl bg-[#081811] border border-robo-borderSubtle space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Tag className="w-5 h-5 text-robo-teal" />
+                <span>Issue Scholarship / Discount Coupon</span>
+              </h3>
+
+              <form onSubmit={handleCreateCoupon} className="space-y-4 text-xs font-mono">
+                <div>
+                  <label className="text-robo-textSecondary block mb-1">COUPON CODE (UPPERCASE)</label>
+                  <input
+                    type="text"
+                    value={newCouponCode}
+                    onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. ROBOINDIA50, SCHOLAR2026"
+                    className="w-full px-3 py-2 rounded-xl bg-black/60 border border-robo-borderSubtle text-white focus:outline-none focus:border-robo-neon"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-robo-textSecondary block mb-1">DISCOUNT PERCENTAGE (%)</label>
+                  <input
+                    type="number"
+                    value={newCouponDiscount}
+                    onChange={(e) => setNewCouponDiscount(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-black/60 border border-robo-borderSubtle text-white focus:outline-none focus:border-robo-neon"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isCreatingCoupon}
+                  className="w-full py-2.5 rounded-xl bg-robo-neon hover:bg-robo-neonHover text-black font-bold text-xs flex items-center justify-center gap-1.5 shadow-neon-glow"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Live Coupon</span>
+                </button>
+              </form>
+            </div>
+
+            <div className="p-6 rounded-3xl bg-[#081811] border border-robo-borderSubtle space-y-3">
+              <h3 className="text-lg font-bold text-white mb-2">Policy &amp; Discount Engine</h3>
+              <p className="text-xs text-robo-textSecondary leading-relaxed">
+                Active coupons automatically apply at subscription or store checkout. All discounts compute prior to 18% GST computation, maintaining strict legal tax parity across intra-state and inter-state transactions.
+              </p>
+              <div className="p-4 rounded-2xl bg-black/40 border border-robo-borderSubtle text-xs font-mono space-y-2">
+                <div className="flex justify-between">
+                  <span>Default Referral Reward:</span>
+                  <span className="text-robo-neon">1 Free Month Pro</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Grace Period on Renewal:</span>
+                  <span className="text-robo-teal">3 Days</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Pro 7-Day Trial:</span>
+                  <span className="text-white">Active with Mandate</span>
+                </div>
               </div>
-            </section>
-          )}
-        </main>
-      </div>
+            </div>
+          </section>
+        )}
+      </main>
     </div>
   );
 }

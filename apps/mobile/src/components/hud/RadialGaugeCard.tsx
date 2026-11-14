@@ -33,7 +33,7 @@ export function RadialGaugeCard({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke="rgba(255, 138, 31, 0.15)"
+            stroke="rgba(57, 255, 106, 0.15)"
             strokeWidth={strokeWidth}
             fill="none"
           />
@@ -42,7 +42,7 @@ export function RadialGaugeCard({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke={COLORS.primary}
+            stroke={COLORS.neon}
             strokeWidth={strokeWidth}
             strokeDasharray={`${circumference} ${circumference}`}
             strokeDashoffset={strokeDashoffset}
@@ -71,7 +71,7 @@ export function RadialGaugeCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.card,
+    backgroundColor: '#091A14',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
@@ -81,11 +81,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 6,
     gap: 14,
-    shadowColor: 'rgba(20, 30, 60, 0.05)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 2,
   },
   gaugeBox: {
     width: 80,
@@ -100,20 +95,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   percentageText: {
-    color: COLORS.primary,
-    fontSize: 15,
+    color: COLORS.neon,
+    fontSize: 14,
     fontWeight: '800',
+    fontFamily: 'monospace',
   },
   infoCol: {
     flex: 1,
   },
   headerLabel: {
     color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    fontSize: 9,
+    fontFamily: 'monospace',
+    letterSpacing: 1,
     marginBottom: 4,
-    textTransform: 'uppercase',
   },
   countsRow: {
     flexDirection: 'row',
@@ -121,7 +116,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   completedCount: {
-    color: COLORS.navy,
+    color: COLORS.textPrimary,
     fontSize: 22,
     fontWeight: '800',
   },
@@ -135,8 +130,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subtitleText: {
-    color: COLORS.blue,
-    fontSize: 11,
+    color: COLORS.teal,
+    fontSize: 10,
     fontWeight: '600',
   },
 });

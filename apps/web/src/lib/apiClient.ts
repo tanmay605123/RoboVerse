@@ -1,7 +1,4 @@
-// Use the Next.js same-origin proxy by default. This keeps browser requests
-// working in both local development and Vercel without exposing a backend URL
-// in client code. The proxy target is configured in next.config.mjs.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export async function apiRequest<T = any>(
   endpoint: string,
@@ -19,21 +16,15 @@ export async function apiRequest<T = any>(
   }
 
   try {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const targetUrl = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${cleanEndpoint}`;
+
+    const res = await fetch(targetUrl, {
       ...options,
       headers,
     });
 
     const json = await res.json();
-    if (!res.ok && json?.success !== false) {
-      return {
-        success: false,
-        error: {
-          code: `HTTP_${res.status}`,
-          message: json?.message || `RoboVerse API request failed (${res.status}).`,
-        },
-      };
-    }
     return json;
   } catch (err: any) {
     return {

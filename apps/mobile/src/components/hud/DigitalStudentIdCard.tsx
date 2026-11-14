@@ -36,13 +36,13 @@ export function DigitalStudentIdCard({
             <View style={styles.headerRow}>
               <View style={styles.brandRow}>
                 <View style={styles.chipIcon}>
-                  <Cpu size={14} color={COLORS.primary} />
+                  <Cpu size={14} color={COLORS.neon} />
                 </View>
                 <Text style={styles.brandTitle}>ROBOVERSE ID</Text>
               </View>
 
               <View style={styles.planBadge}>
-                <Sparkles size={11} color={COLORS.primary} />
+                <Sparkles size={11} color={COLORS.neon} />
                 <Text style={styles.planText}>{planTier}</Text>
               </View>
             </View>
@@ -78,7 +78,7 @@ export function DigitalStudentIdCard({
 
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>TOTAL XP</Text>
-                <Text style={[styles.statValue, { color: COLORS.primary }]}>{xp} XP</Text>
+                <Text style={[styles.statValue, { color: COLORS.neon }]}>{xp} XP</Text>
               </View>
 
               <View style={styles.statDivider} />
@@ -86,8 +86,8 @@ export function DigitalStudentIdCard({
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>STATUS</Text>
                 <View style={styles.verifiedRow}>
-                  <ShieldCheck size={12} color={COLORS.green} />
-                  <Text style={[styles.statValue, { color: COLORS.green, marginLeft: 3 }]}>
+                  <ShieldCheck size={12} color={COLORS.teal} />
+                  <Text style={[styles.statValue, { color: COLORS.teal, marginLeft: 3 }]}>
                     ACTIVE
                   </Text>
                 </View>
@@ -97,12 +97,12 @@ export function DigitalStudentIdCard({
             {/* Bottom Flip Button & QR hint */}
             <View style={styles.footerRow}>
               <View style={styles.qrBadge}>
-                <QrCode size={13} color={COLORS.textMuted} />
+                <QrCode size={13} color={COLORS.textSecondary} />
                 <Text style={styles.qrHint}>OFFICIAL CREDENTIAL</Text>
               </View>
 
               <View style={styles.flipHintRow}>
-                <RotateCw size={12} color={COLORS.primary} />
+                <RotateCw size={12} color={COLORS.neon} />
                 <Text style={styles.flipHintText}>TAP TO FLIP</Text>
               </View>
             </View>
@@ -112,14 +112,14 @@ export function DigitalStudentIdCard({
           <View style={styles.innerContent}>
             <View style={styles.headerRow}>
               <View style={styles.brandRow}>
-                <Award size={14} color={COLORS.blue} />
-                <Text style={[styles.brandTitle, { color: COLORS.blue }]}>
+                <Award size={14} color={COLORS.teal} />
+                <Text style={[styles.brandTitle, { color: COLORS.teal }]}>
                   LEARNING PASSPORT
                 </Text>
               </View>
 
               <View style={styles.flipHintRow}>
-                <RotateCw size={12} color={COLORS.primary} />
+                <RotateCw size={12} color={COLORS.neon} />
                 <Text style={styles.flipHintText}>TAP FRONT</Text>
               </View>
             </View>
@@ -137,14 +137,14 @@ export function DigitalStudentIdCard({
 
               <View style={styles.passportItem}>
                 <Text style={styles.passportLabel}>Primary Specialization:</Text>
-                <Text style={[styles.passportValue, { color: COLORS.blue }]}>
+                <Text style={[styles.passportValue, { color: COLORS.teal }]}>
                   Autonomous Rovers & ROS 2
                 </Text>
               </View>
 
               <View style={styles.passportItem}>
                 <Text style={styles.passportLabel}>Hackathon Team Pool:</Text>
-                <Text style={[styles.passportValue, { color: COLORS.primary }]}>
+                <Text style={[styles.passportValue, { color: COLORS.neon }]}>
                   Verified Perception Lead
                 </Text>
               </View>
@@ -172,19 +172,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     padding: 16,
-    shadowColor: 'rgba(20, 30, 60, 0.08)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 1,
+    shadowColor: COLORS.neon,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
     shadowRadius: 16,
-    elevation: 4,
+    elevation: 8,
   },
   cardFront: {
-    backgroundColor: COLORS.card,
-    borderColor: 'rgba(255, 138, 31, 0.35)',
+    backgroundColor: '#091C14',
+    borderColor: 'rgba(57, 255, 106, 0.4)',
   },
   cardBack: {
-    backgroundColor: COLORS.card,
-    borderColor: 'rgba(76, 141, 255, 0.35)',
+    backgroundColor: '#061610',
+    borderColor: 'rgba(127, 231, 214, 0.4)',
   },
   innerContent: {
     justifyContent: 'space-between',
@@ -202,32 +202,33 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   chipIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
-    backgroundColor: 'rgba(255, 138, 31, 0.12)',
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: 'rgba(57, 255, 106, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   brandTitle: {
-    color: COLORS.primary,
-    fontSize: 12,
+    color: COLORS.neon,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
+    fontFamily: 'monospace',
   },
   planBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 138, 31, 0.12)',
+    backgroundColor: 'rgba(57, 255, 106, 0.15)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 138, 31, 0.3)',
+    borderColor: COLORS.neon,
     gap: 4,
   },
   planText: {
-    color: COLORS.primary,
+    color: COLORS.neon,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -240,9 +241,9 @@ const styles = StyleSheet.create({
   avatarBorder: {
     width: 52,
     height: 52,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.neon,
     overflow: 'hidden',
     marginRight: 12,
   },
@@ -254,19 +255,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   studentName: {
-    color: COLORS.navy,
-    fontSize: 17,
+    color: COLORS.textPrimary,
+    fontSize: 16,
     fontWeight: '700',
     marginBottom: 2,
   },
   studentIdCode: {
-    color: COLORS.primary,
+    color: COLORS.neon,
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: 'monospace',
     letterSpacing: 0.5,
   },
   institutionText: {
-    color: COLORS.textMuted,
+    color: COLORS.textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
@@ -274,12 +276,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: '#F9FAFC',
-    borderRadius: 14,
-    paddingVertical: 10,
+    backgroundColor: 'rgba(4, 11, 8, 0.7)',
+    borderRadius: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   statItem: {
     alignItems: 'center',
@@ -287,12 +289,11 @@ const styles = StyleSheet.create({
   statLabel: {
     color: COLORS.textMuted,
     fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.6,
+    fontFamily: 'monospace',
     marginBottom: 2,
   },
   statValue: {
-    color: COLORS.navy,
+    color: COLORS.textPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -318,8 +319,7 @@ const styles = StyleSheet.create({
   qrHint: {
     color: COLORS.textMuted,
     fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    fontFamily: 'monospace',
   },
   flipHintRow: {
     flexDirection: 'row',
@@ -327,10 +327,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   flipHintText: {
-    color: COLORS.primary,
+    color: COLORS.neon,
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    fontFamily: 'monospace',
   },
   // Passport Back Styles
   passportList: {
@@ -341,38 +341,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F9FAFC',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
+    backgroundColor: 'rgba(4, 11, 8, 0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   passportLabel: {
-    color: COLORS.textMuted,
+    color: COLORS.textSecondary,
     fontSize: 11,
   },
   passportValue: {
-    color: COLORS.navy,
+    color: COLORS.textPrimary,
     fontSize: 11,
     fontWeight: '700',
+    fontFamily: 'monospace',
   },
   cryptoSignatureBox: {
-    backgroundColor: '#F5F6F8',
-    borderRadius: 10,
-    padding: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 8,
+    padding: 8,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
   },
   signatureTitle: {
     color: COLORS.textMuted,
     fontSize: 8,
-    fontWeight: '700',
+    fontFamily: 'monospace',
     letterSpacing: 0.8,
   },
   signatureCode: {
-    color: COLORS.blue,
+    color: COLORS.teal,
     fontSize: 10,
+    fontFamily: 'monospace',
     marginTop: 2,
   },
 });

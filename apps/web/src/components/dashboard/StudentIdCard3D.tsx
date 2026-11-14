@@ -3,161 +3,147 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Logo } from '../brand/Logo';
-import {
-  ShieldCheck,
-  QrCode,
-  Sparkles,
-  ExternalLink,
-  Award,
-  Flame,
-  CheckCircle2,
-  RefreshCw,
-} from 'lucide-react';
+import { ShieldCheck, Award, Zap, QrCode, RefreshCw } from 'lucide-react';
+import { DigitalStudentIdCard } from '@roboverse/shared';
 
 interface StudentIdCard3DProps {
-  fullName?: string;
-  studentId?: string;
-  school?: string;
-  planName?: string;
-  qrCodeUrl?: string;
-  level?: number;
-  xp?: number;
-  streak?: number;
+  cardData?: Partial<DigitalStudentIdCard>;
 }
 
-export const StudentIdCard3D: React.FC<StudentIdCard3DProps> = ({
-  fullName = 'Aarav Sharma',
-  studentId = 'RV-2026-000101',
-  school = 'Delhi Public School, R.K. Puram',
-  planName = 'PRO MAKER',
-  qrCodeUrl,
-  level = 4,
-  xp = 4850,
-  streak = 18,
-}) => {
+export function StudentIdCard3D({ cardData }: StudentIdCard3DProps) {
   const [isFlipped, setIsFlipped] = useState(false);
 
+  const studentId = cardData?.studentId || 'RV-2026-000101';
+  const fullName = cardData?.fullName || 'Aarav Sharma';
+  const planName = cardData?.planName || 'Free Explorer';
+  const school = cardData?.schoolOrCollege || 'Delhi Public School';
+  const level = cardData?.level || 1;
+  const xp = cardData?.xp || 240;
+  const streak = cardData?.streakDays || 5;
+  const qrCodeUrl =
+    cardData?.qrCodeDataUrl ||
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkWPjfDwAEeQHzc1tD0QAAAABJRU5ErkJggg==';
+
   return (
-    <div className="w-full select-none">
-      {/* Top action helper */}
-      <div className="flex items-center justify-between text-xs mb-2">
-        <span className="flex items-center gap-1.5 text-[#39FF6A] font-bold font-mono">
-          <ShieldCheck className="w-4 h-4" />
-          <span>OFFICIAL LEARNING PASSPORT</span>
+    <div className="w-full max-w-sm mx-auto select-none [perspective:1000px]">
+      <div className="flex items-center justify-between mb-2 px-1 text-xs font-mono text-robo-textSecondary">
+        <span className="flex items-center gap-1.5 text-robo-teal">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>VERIFIABLE STUDENT ID</span>
         </span>
         <button
           type="button"
           onClick={() => setIsFlipped(!isFlipped)}
-          className="flex items-center gap-1 text-[11px] font-bold text-[#8FA99B] hover:text-[#39FF6A] transition-colors font-mono"
+          className="flex items-center gap-1 text-[11px] text-robo-neon hover:underline"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Flip Card</span>
+          <RefreshCw className="w-3 h-3" />
+          <span>Click to Flip</span>
         </button>
       </div>
 
       <motion.div
         animate={{ rotateY: isFlipped ? 180 : 0 }}
-        transition={{ duration: 0.6, type: 'spring', stiffness: 240, damping: 20 }}
+        transition={{ duration: 0.6, type: 'spring', stiffness: 260, damping: 20 }}
         onClick={() => setIsFlipped(!isFlipped)}
-        className="w-full h-[240px] relative cursor-pointer [transform-style:preserve-3d]"
+        className="w-full h-[230px] sm:h-[240px] relative cursor-pointer [transform-style:preserve-3d]"
       >
-        {/* FRONT FACE (Dark Glass Card with Glowing Neon Green Border) */}
-        <div className="absolute inset-0 rounded-2xl p-5 bg-[#0A1F17]/95 border-2 border-[rgba(57,255,106,0.35)] shadow-[0_0_35px_rgba(57,255,106,0.2)] backdrop-blur-2xl flex flex-col justify-between [backface-visibility:hidden]">
-          {/* Top Header */}
-          <div className="flex items-center justify-between border-b border-[rgba(57,255,106,0.15)] pb-3">
+        {/* FRONT FACE */}
+        <div className="absolute inset-0 rounded-2xl p-5 bg-gradient-to-br from-[#0B2A1E] via-[#061811] to-[#040C08] border border-robo-neon/40 shadow-neon-glow flex flex-col justify-between [backface-visibility:hidden]">
+          {/* Hologram Header */}
+          <div className="flex items-center justify-between border-b border-robo-borderSubtle/60 pb-3">
             <div className="flex items-center gap-2">
               <Logo variant="icon" size="sm" withLink={false} />
               <div>
-                <div className="text-xs font-black tracking-wider text-[#EAF7EF] font-sans">
+                <div className="text-[11px] font-extrabold tracking-wider text-robo-text font-sans">
                   ROBOVERSE
                 </div>
-                <div className="text-[9px] font-mono uppercase tracking-widest text-[#39FF6A] font-bold">
-                  STUDENT IDENTITY
+                <div className="text-[9px] font-mono text-robo-teal tracking-widest">
+                  CREDENTIAL
                 </div>
               </div>
             </div>
 
-            <span className="text-[10px] font-mono font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-gradient-to-r from-[#39FF6A] to-[#2BD95B] text-[#07110D] shadow-[0_0_12px_rgba(57,255,106,0.4)]">
-              {planName}
+            <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-robo-neon/20 border border-robo-neon/50 text-robo-neon">
+              {planName.toUpperCase()}
             </span>
           </div>
 
           {/* Student Profile Info & Avatar */}
-          <div className="flex items-center gap-3.5 my-2">
-            <div className="relative w-14 h-14 rounded-2xl overflow-hidden border-2 border-[#39FF6A]/60 bg-gradient-to-tr from-[#39FF6A] to-[#7FE7D6] p-0.5 shrink-0 shadow-[0_0_15px_rgba(57,255,106,0.3)]">
-              <div className="w-full h-full rounded-[14px] bg-[#07110D] flex items-center justify-center text-lg font-black text-[#39FF6A]">
-                {fullName.slice(0, 2).toUpperCase()}
-              </div>
+          <div className="flex items-center gap-4 my-2">
+            <div className="relative w-14 h-14 rounded-xl overflow-hidden border-2 border-robo-neon/60 bg-black/60 shrink-0">
+              <img
+                src={cardData?.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(fullName)}`}
+                alt={fullName}
+                className="w-full h-full object-cover"
+              />
             </div>
 
-            <div className="overflow-hidden flex-1">
-              <h4 className="text-base font-extrabold text-[#EAF7EF] font-sans truncate">
+            <div className="overflow-hidden">
+              <h4 className="text-base font-bold text-robo-text font-sans truncate">
                 {fullName}
               </h4>
-              <p className="text-[11px] text-[#8FA99B] truncate">
+              <p className="text-[11px] text-robo-textSecondary truncate">
                 {school}
               </p>
-              <p className="text-xs font-mono font-bold text-[#39FF6A] mt-0.5">
+              <p className="text-xs font-mono font-bold text-robo-neon mt-0.5">
                 {studentId}
               </p>
             </div>
           </div>
 
           {/* Gamification Bar (Level, XP, Streak) */}
-          <div className="pt-2.5 border-t border-[rgba(57,255,106,0.15)] flex items-center justify-between text-[11px] font-mono">
-            <div className="flex items-center gap-1 text-[#EAF7EF] font-bold">
-              <Award className="w-3.5 h-3.5 text-[#4C8DFF]" />
+          <div className="pt-2 border-t border-robo-borderSubtle/40 flex items-center justify-between text-[11px] font-mono">
+            <div className="flex items-center gap-1.5 text-robo-teal">
+              <Award className="w-3.5 h-3.5" />
               <span>LVL {level}</span>
             </div>
-            <div className="text-[#8FA99B] font-semibold">
-              <span className="text-[#EAF7EF] font-bold">{xp}</span> XP
+            <div className="text-robo-textSecondary">
+              <span className="text-robo-neon font-bold">{xp}</span> XP
             </div>
-            <div className="flex items-center gap-1 text-[#39FF6A] font-bold">
-              <Flame className="w-3.5 h-3.5 text-[#39FF6A] fill-current" />
+            <div className="flex items-center gap-1 text-robo-orange">
+              <Zap className="w-3.5 h-3.5 fill-robo-orange" />
               <span>{streak}d STREAK</span>
             </div>
           </div>
         </div>
 
-        {/* BACK FACE (Cryptographic QR & Verification in Dark Control Room Glass) */}
-        <div className="absolute inset-0 rounded-2xl p-5 bg-gradient-to-br from-[#0E2A1F] via-[#0A1F17] to-[#040B08] text-[#EAF7EF] border-2 border-[rgba(57,255,106,0.35)] shadow-[0_0_35px_rgba(57,255,106,0.2)] flex flex-col justify-between [transform:rotateY(180deg)] [backface-visibility:hidden]">
-          <div className="flex items-center justify-between border-b border-[rgba(57,255,106,0.15)] pb-2 font-mono">
-            <span className="text-[10px] text-[#7FE7D6] uppercase tracking-wider font-bold">
-              DIGITAL VERIFICATION PASSPORT
+        {/* BACK FACE (180deg rotated) */}
+        <div className="absolute inset-0 rounded-2xl p-5 bg-gradient-to-bl from-[#051810] via-[#040D08] to-[#020704] border border-robo-teal/50 shadow-teal-glow flex flex-col justify-between [transform:rotateY(180deg)] [backface-visibility:hidden]">
+          <div className="flex items-center justify-between border-b border-robo-borderSubtle/60 pb-2">
+            <span className="text-[10px] font-mono text-robo-teal tracking-wider">
+              CRYPTOGRAPHIC ID VERIFICATION
             </span>
-            <span className="text-[9px] text-[#8FA99B]">
-              ACADEMIC YEAR 2026
+            <span className="text-[9px] font-mono text-robo-textMuted">
+              VALID: 2026-2030
             </span>
           </div>
 
           <div className="flex items-center gap-4 my-2">
-            {/* High-res QR Code */}
-            <div className="w-24 h-24 p-1.5 rounded-xl bg-white flex items-center justify-center shrink-0 shadow-lg border border-[rgba(57,255,106,0.3)]">
+            {/* High-res base64 QR Code */}
+            <div className="w-24 h-24 p-1 rounded-xl bg-white flex items-center justify-center shrink-0">
               {qrCodeUrl && qrCodeUrl.startsWith('data:') ? (
-                <img src={qrCodeUrl} alt="Student QR Code" className="w-full h-full object-contain" />
+                <img src={qrCodeUrl} alt="QR Code" className="w-full h-full" />
               ) : (
-                <QrCode className="w-16 h-16 text-[#07110D]" />
+                <QrCode className="w-16 h-16 text-black" />
               )}
             </div>
 
-            <div className="text-[11px] font-mono text-[#CBD8D0] space-y-1 flex-1 min-w-0">
-              <div className="text-[#EAF7EF] font-bold">Public Verification URL</div>
-              <div className="text-[10px] text-[#39FF6A] truncate">
-                roboverse.io/verify/{studentId}
+            <div className="text-[11px] font-mono text-robo-textSecondary space-y-1">
+              <div className="text-robo-text font-bold">Official Registry Hash</div>
+              <div className="text-[10px] text-robo-teal break-all">
+                sha256:7f3a9e2d...01
               </div>
-              <div className="flex items-center gap-1 text-[9.5px] text-[#8FA99B] pt-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#39FF6A]" />
-                <span>SHA-256 Ledger Verified</span>
+              <div className="text-[10px] text-robo-textMuted leading-tight pt-1">
+                Scan with any mobile camera to verify student credentials & certificate authenticity.
               </div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-[rgba(57,255,106,0.15)] flex items-center justify-between text-[10px] font-mono text-[#8FA99B]">
-            <span>Valid Until: Dec 31, 2026</span>
-            <span className="text-[#39FF6A]">Tap anywhere to flip</span>
+          <div className="text-center text-[9px] font-mono text-robo-textMuted">
+            RoboVerse Technologies Pvt Ltd • Accredited Digital Passport
           </div>
         </div>
       </motion.div>
     </div>
   );
-};
+}

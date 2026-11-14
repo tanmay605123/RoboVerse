@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc -w",
-    "test": "tsc && node --test dist/__tests__/sim-engine.test.js"
+    "test": "tsc && node --test dist/__tests__/*.test.js"
   },
   "dependencies": {
     "@roboverse/shared": "*"

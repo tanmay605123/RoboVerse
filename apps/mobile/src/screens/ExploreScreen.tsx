@@ -18,12 +18,13 @@ import {
   Clock,
   Star,
   Users,
+  Calendar,
   ExternalLink,
   ShieldCheck,
   Radio,
 } from 'lucide-react-native';
 
-export function ExploreScreen() {
+export function ExploreScreen({ navigation }: any) {
   const [activeTab, setActiveTab] = useState<'hackathons' | 'shops'>('hackathons');
 
   const [hackathons, setHackathons] = useState<any[]>([]);
@@ -66,7 +67,7 @@ export function ExploreScreen() {
           style={[styles.tabButton, activeTab === 'hackathons' && styles.tabButtonActive]}
           onPress={() => setActiveTab('hackathons')}
         >
-          <Trophy size={15} color={activeTab === 'hackathons' ? '#FFFFFF' : COLORS.textMuted} />
+          <Trophy size={14} color={activeTab === 'hackathons' ? '#000' : COLORS.textSecondary} />
           <Text
             style={[
               styles.tabButtonText,
@@ -81,7 +82,7 @@ export function ExploreScreen() {
           style={[styles.tabButton, activeTab === 'shops' && styles.tabButtonActive]}
           onPress={() => setActiveTab('shops')}
         >
-          <Radio size={15} color={activeTab === 'shops' ? '#FFFFFF' : COLORS.textMuted} />
+          <Radio size={14} color={activeTab === 'shops' ? '#000' : COLORS.textSecondary} />
           <Text
             style={[
               styles.tabButtonText,
@@ -96,17 +97,33 @@ export function ExploreScreen() {
       {/* Content Stream */}
       {loading ? (
         <View style={styles.loaderCenter}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
+          <ActivityIndicator size="small" color={COLORS.neon} />
           <Text style={styles.loaderText}>Scanning Robotics Grid...</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollList}>
           {activeTab === 'hackathons' ? (
-            hackathons.map((h) => (
+            <>
+              <TouchableOpacity
+                style={styles.squadChatBanner}
+                onPress={() => navigation?.navigate('SquadChat')}
+                activeOpacity={0.8}
+              >
+                <View style={styles.squadChatBannerLeft}>
+                  <View style={styles.livePulse} />
+                  <View>
+                    <Text style={styles.squadChatTitle}>TEAM GARUDA AUTONOMOUS</Text>
+                    <Text style={styles.squadChatSub}>Squad Chat &bull; 4 Members Online</Text>
+                  </View>
+                </View>
+                <Text style={styles.squadChatBtnText}>OPEN CHAT ➔</Text>
+              </TouchableOpacity>
+
+              {hackathons.map((h) => (
               <View key={h.id} style={styles.hackathonCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cityBadge}>
-                    <MapPin size={11} color={COLORS.blue} />
+                    <MapPin size={10} color={COLORS.teal} />
                     <Text style={styles.cityText}>{h.city}</Text>
                   </View>
                   <Text style={styles.modeText}>{h.mode}</Text>
@@ -125,7 +142,7 @@ export function ExploreScreen() {
                   </View>
 
                   <View style={styles.squadBadge}>
-                    <Users size={13} color={COLORS.textSecondary} />
+                    <Users size={12} color={COLORS.textSecondary} />
                     <Text style={styles.squadText}>Squad of {h.teamSizeMax}</Text>
                   </View>
                 </View>
@@ -135,7 +152,7 @@ export function ExploreScreen() {
                     style={styles.joinSquadBtn}
                     onPress={() => Linking.openURL(h.url)}
                   >
-                    <Users size={13} color={COLORS.blue} />
+                    <Users size={12} color={COLORS.teal} />
                     <Text style={styles.joinSquadText}>Find Teammates</Text>
                   </TouchableOpacity>
 
@@ -144,18 +161,19 @@ export function ExploreScreen() {
                     onPress={() => Linking.openURL(h.url)}
                   >
                     <Text style={styles.portalText}>Official Rules</Text>
-                    <ExternalLink size={13} color="#FFFFFF" />
+                    <ExternalLink size={12} color="#000" />
                   </TouchableOpacity>
                 </View>
               </View>
-            ))
+            ))}
+            </>
           ) : (
             shops.map((s) => (
               <View key={s.id} style={styles.shopCard}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.shopName}>{s.name}</Text>
                   <View style={styles.distanceBadge}>
-                    <Navigation size={10} color={COLORS.primary} />
+                    <Navigation size={10} color={COLORS.neon} />
                     <Text style={styles.distanceText}>{s.distanceKm} km</Text>
                   </View>
                 </View>
@@ -166,19 +184,19 @@ export function ExploreScreen() {
 
                 <View style={styles.shopMetaRow}>
                   <View style={styles.ratingBadge}>
-                    <Star size={12} color="#FF9A1F" fill="#FF9A1F" />
+                    <Star size={11} color="#FFD700" fill="#FFD700" />
                     <Text style={styles.ratingText}>{s.rating}</Text>
                   </View>
 
                   <View style={styles.hoursRow}>
-                    <Clock size={12} color={COLORS.textMuted} />
+                    <Clock size={11} color={COLORS.textMuted} />
                     <Text style={styles.hoursText}>{s.openingHours}</Text>
                   </View>
 
                   {s.isVerified && (
                     <View style={styles.verifiedRow}>
-                      <ShieldCheck size={12} color={COLORS.green} />
-                      <Text style={styles.verifiedText}>Verified Shop</Text>
+                      <ShieldCheck size={12} color={COLORS.neon} />
+                      <Text style={styles.verifiedText}>Verified</Text>
                     </View>
                   )}
                 </View>
@@ -198,7 +216,7 @@ export function ExploreScreen() {
                     style={styles.callStoreBtn}
                     onPress={() => dialShopPhone(s.phone)}
                   >
-                    <Phone size={13} color={COLORS.navy} />
+                    <Phone size={12} color={COLORS.textPrimary} />
                     <Text style={styles.callStoreText}>Call Shop</Text>
                   </TouchableOpacity>
 
@@ -206,7 +224,7 @@ export function ExploreScreen() {
                     style={styles.directionsBtn}
                     onPress={() => openMapsDirections(s.directionsUrl)}
                   >
-                    <Navigation size={13} color="#FFFFFF" />
+                    <Navigation size={12} color="#000" />
                     <Text style={styles.directionsText}>Google Maps</Text>
                   </TouchableOpacity>
                 </View>
@@ -227,10 +245,10 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     padding: 12,
-    backgroundColor: COLORS.card,
+    backgroundColor: '#05110C',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderSubtle,
-    gap: 10,
+    gap: 8,
   },
   tabButton: {
     flex: 1,
@@ -238,33 +256,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: '#F9FAFC',
+    borderRadius: 12,
+    backgroundColor: '#091A14',
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     gap: 6,
   },
   tabButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 2,
+    backgroundColor: COLORS.neon,
+    borderColor: COLORS.neon,
   },
   tabButtonText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontSize: 11,
     fontWeight: '700',
   },
   tabButtonTextActive: {
-    color: '#FFFFFF',
+    color: '#000',
     fontWeight: '800',
   },
   scrollList: {
     padding: 16,
-    gap: 14,
+    gap: 12,
   },
   loaderCenter: {
     flex: 1,
@@ -273,20 +286,16 @@ const styles = StyleSheet.create({
   },
   loaderText: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 8,
+    fontFamily: 'monospace',
   },
   hackathonCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: '#081A12',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     padding: 16,
-    shadowColor: 'rgba(20, 30, 60, 0.05)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -298,40 +307,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(76, 141, 255, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: 'rgba(127, 231, 214, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
   },
   cityText: {
-    color: COLORS.blue,
-    fontSize: 11,
+    color: COLORS.teal,
+    fontSize: 10,
     fontWeight: '700',
+    fontFamily: 'monospace',
   },
   modeText: {
-    color: COLORS.primary,
-    fontSize: 11,
+    color: COLORS.neon,
+    fontSize: 9,
+    fontFamily: 'monospace',
     fontWeight: '700',
-    backgroundColor: 'rgba(255, 138, 31, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
   },
   hackathonTitle: {
-    color: COLORS.navy,
-    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontSize: 15,
     fontWeight: '800',
     marginBottom: 4,
   },
   organizerText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontSize: 11,
     marginBottom: 6,
   },
   hackathonDesc: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 18,
+    color: COLORS.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
     marginBottom: 12,
   },
   statsRow: {
@@ -340,19 +347,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: COLORS.borderSubtle,
-    paddingTop: 12,
+    paddingTop: 10,
     marginBottom: 12,
   },
   prizeLabel: {
     color: COLORS.textMuted,
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    fontSize: 8,
+    fontFamily: 'monospace',
   },
   prizeValue: {
-    color: COLORS.primary,
-    fontSize: 18,
+    color: COLORS.neon,
+    fontSize: 16,
     fontWeight: '800',
+    fontFamily: 'monospace',
   },
   squadBadge: {
     flexDirection: 'row',
@@ -361,28 +368,27 @@ const styles = StyleSheet.create({
   },
   squadText: {
     color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
   },
   cardActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   joinSquadBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFC',
+    backgroundColor: '#091A14',
     borderWidth: 1,
-    borderColor: 'rgba(76, 141, 255, 0.3)',
-    borderRadius: 12,
-    height: 40,
+    borderColor: COLORS.teal,
+    borderRadius: 10,
+    height: 36,
     gap: 6,
   },
   joinSquadText: {
-    color: COLORS.blue,
-    fontSize: 12,
+    color: COLORS.teal,
+    fontSize: 11,
     fontWeight: '700',
   },
   portalBtn: {
@@ -390,59 +396,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    height: 40,
+    backgroundColor: COLORS.neon,
+    borderRadius: 10,
+    height: 36,
     gap: 6,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 2,
   },
   portalText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    color: '#000',
+    fontSize: 11,
     fontWeight: '800',
   },
   // Shop card
   shopCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: '#081A12',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
     padding: 16,
-    shadowColor: 'rgba(20, 30, 60, 0.05)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 2,
   },
   shopName: {
-    color: COLORS.navy,
-    fontSize: 15,
+    color: COLORS.textPrimary,
+    fontSize: 14,
     fontWeight: '800',
     flex: 1,
   },
   distanceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 138, 31, 0.1)',
+    backgroundColor: 'rgba(57, 255, 106, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 138, 31, 0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderColor: COLORS.neon,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
-    gap: 4,
+    gap: 3,
   },
   distanceText: {
-    color: COLORS.primary,
-    fontSize: 11,
+    color: COLORS.neon,
+    fontSize: 10,
     fontWeight: '800',
+    fontFamily: 'monospace',
   },
   addressText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontSize: 11,
     marginVertical: 6,
   },
   shopMetaRow: {
@@ -454,67 +451,67 @@ const styles = StyleSheet.create({
   ratingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   ratingText: {
-    color: COLORS.navy,
-    fontSize: 12,
+    color: '#FFD700',
+    fontSize: 11,
     fontWeight: '700',
   },
   hoursRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   hoursText: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     marginLeft: 'auto',
   },
   verifiedText: {
-    color: COLORS.green,
-    fontSize: 11,
+    color: COLORS.neon,
+    fontSize: 10,
     fontWeight: '700',
   },
   stockedChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 14,
+    gap: 4,
+    marginBottom: 12,
   },
   componentChip: {
-    backgroundColor: '#F5F6F8',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   componentChipText: {
     color: COLORS.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 9,
+    fontFamily: 'monospace',
   },
   callStoreBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFC',
+    backgroundColor: '#091A14',
     borderWidth: 1,
     borderColor: COLORS.borderSubtle,
-    borderRadius: 12,
-    height: 40,
+    borderRadius: 10,
+    height: 36,
     gap: 6,
   },
   callStoreText: {
-    color: COLORS.navy,
-    fontSize: 12,
+    color: COLORS.textPrimary,
+    fontSize: 11,
     fontWeight: '700',
   },
   directionsBtn: {
@@ -522,19 +519,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    height: 40,
+    backgroundColor: COLORS.neon,
+    borderRadius: 10,
+    height: 36,
     gap: 6,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 2,
   },
   directionsText: {
+    color: '#000',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  squadChatBanner: {
+    backgroundColor: '#0B1914',
+    borderWidth: 1,
+    borderColor: '#39FF6A',
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  squadChatBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  livePulse: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#39FF6A',
+  },
+  squadChatTitle: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  squadChatSub: {
+    color: '#94A3B8',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  squadChatBtnText: {
+    color: '#39FF6A',
+    fontSize: 11,
+    fontWeight: '900',
   },
 });

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-interface MergedShop {
+interface SeedShop {
   id: string;
   name: string;
   phone: string;
@@ -12,31 +8,125 @@ interface MergedShop {
   city: string;
   state: string;
   pincode: string;
-  latitude: number;
-  longitude: number;
-  distance_meters: number;
-  distance_km: number;
-  travel_time_mins: number;
-  opening_hours: string;
+  lat: number;
+  lng: number;
+  hours: string;
   categories: string[];
-  is_verified: boolean;
-  verified_status: 'verified' | 'pending' | 'rejected' | 'google_places';
+  isVerified: boolean;
   rating: number;
-  review_count: number;
-  google_maps_uri?: string;
-  google_place_id?: string;
-  photos: string[];
-  stocked_components: string[];
-  source: 'verified' | 'google_places';
 }
 
-function calculateHaversineDistanceM(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371000;
+const SEED_SHOPS: SeedShop[] = [
+  {
+    id: 'shop_delhi_1',
+    name: 'ElectroHub Components & Robotics',
+    phone: '+91-11-23861234',
+    address: 'Shop 42, Ground Floor, Lajpat Rai Market, Chandni Chowk',
+    city: 'Delhi',
+    state: 'Delhi',
+    pincode: '110006',
+    lat: 28.6562,
+    lng: 77.2355,
+    hours: '10:00 AM - 8:00 PM (Mon-Sat)',
+    categories: ['Arduino', 'Microcontrollers', 'Sensors', 'Robotics Kits', 'LEDs & Passives'],
+    isVerified: true,
+    rating: 4.8,
+  },
+  {
+    id: 'shop_delhi_2',
+    name: 'Nehru Place Maker Supplies',
+    phone: '+91-11-41609876',
+    address: 'Building 14, 2nd Floor, Nehru Place Market',
+    city: 'Delhi',
+    state: 'Delhi',
+    pincode: '110019',
+    lat: 28.5494,
+    lng: 77.2522,
+    hours: '10:30 AM - 8:30 PM (Mon-Sat)',
+    categories: ['Arduino', 'ESP32', 'Wires & Tools', '3D Printing', 'L298N Drivers'],
+    isVerified: true,
+    rating: 4.6,
+  },
+  {
+    id: 'shop_delhi_3',
+    name: 'Palam Electronics & Hobby Store',
+    phone: '+91-11-25364411',
+    address: 'Shop 12, Main Market, Sector 7, Dwarka',
+    city: 'Delhi',
+    state: 'Delhi',
+    pincode: '110075',
+    lat: 28.5823,
+    lng: 77.0700,
+    hours: '10:00 AM - 7:30 PM (Daily)',
+    categories: ['Arduino', 'Batteries', 'Sensors', 'Soldering Guns'],
+    isVerified: true,
+    rating: 4.5,
+  },
+  {
+    id: 'shop_blr_1',
+    name: 'RoboSpares Lab & Kits',
+    phone: '+91-80-22234567',
+    address: '24/1 Sadar Patrappa Road (SP Road), Nagarathpete',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    pincode: '560002',
+    lat: 12.9644,
+    lng: 77.5833,
+    hours: '10:00 AM - 9:00 PM (Mon-Sat)',
+    categories: ['Arduino', 'Raspberry Pi', 'Motors', 'Servos', 'LiPo Batteries', 'Sensors'],
+    isVerified: true,
+    rating: 4.9,
+  },
+  {
+    id: 'shop_mum_1',
+    name: 'Lamington Maker Space & Components',
+    phone: '+91-22-23876543',
+    address: '102 Jagmohan Mansion, Lamington Road, Grant Road East',
+    city: 'Mumbai',
+    state: 'Maharashtra',
+    pincode: '400007',
+    lat: 18.9616,
+    lng: 72.8164,
+    hours: '10:30 AM - 8:00 PM (Mon-Sat)',
+    categories: ['Arduino', 'ESP32', 'Motors', 'Sensors', 'Tools', 'Multimeters'],
+    isVerified: true,
+    rating: 4.7,
+  },
+  {
+    id: 'shop_pune_1',
+    name: 'Pune RoboZone & Electronics',
+    phone: '+91-20-24451234',
+    address: 'Shop 18, Pasodya Vithoba Temple Lane, Budhwar Peth',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pincode: '411002',
+    lat: 18.5186,
+    lng: 73.8553,
+    hours: '10:00 AM - 8:00 PM (Mon-Sat)',
+    categories: ['Arduino', 'Chassis', 'Wheels', 'Batteries', 'Sensors'],
+    isVerified: true,
+    rating: 4.6,
+  },
+  {
+    id: 'shop_hyd_1',
+    name: 'Hyderabad Maker Hub',
+    phone: '+91-40-24758899',
+    address: 'Shop 8, Bank Street, Gujarati Galli, Koti',
+    city: 'Hyderabad',
+    state: 'Telangana',
+    pincode: '500095',
+    lat: 17.3850,
+    lng: 78.4867,
+    hours: '10:30 AM - 8:30 PM (Mon-Sat)',
+    categories: ['Arduino', 'Microcontrollers', 'Motors', 'Sensors', 'Breadboards'],
+    isVerified: true,
+    rating: 4.7,
+  },
+];
+
+// Haversine formula to compute distance in km
+function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -46,354 +136,60 @@ function calculateHaversineDistanceM(
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Math.round(R * c);
+  return R * c;
 }
-
-// 24-hour server-side cell cache for Google Places search results
-// Grid cell: round lat/lng to 2 decimals (~1.1 km cell) to prevent repeat queries
-interface CellCacheEntry {
-  places: any[];
-  timestamp: number;
-}
-const placesCellCache = new Map<string, CellCacheEntry>();
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-// Verified Indian Robotics and Electronics Markets Fallback Registry
-const INDIAN_MARKETS_SEEDED = [
-  {
-    id: 'seed-sp-road-blr',
-    name: 'SP Road Robotics & Electronics Hub',
-    phone: '+91 80 2223 8899',
-    address: '#42, Sadar Patrappa Road, Near City Market',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    pincode: '560002',
-    latitude: 12.9644,
-    longitude: 77.5833,
-    opening_hours: '10:00 AM - 8:30 PM (Mon-Sat)',
-    categories: ['Arduino', 'Sensors', 'BLDC Motors', 'Chassis', 'LiPo Batteries'],
-    rating: 4.9,
-    stocked_components: ['Arduino Uno', 'ESP32', 'HC-SR04', 'L298N', 'SG90', '3S LiPo', 'Breadboards'],
-  },
-  {
-    id: 'seed-lajpat-rai-del',
-    name: 'Lajpat Rai Market Electronics Emporium',
-    phone: '+91 11 2386 1122',
-    address: 'Shop 118, Old Lajpat Rai Market, Chandni Chowk',
-    city: 'Delhi',
-    state: 'Delhi',
-    pincode: '110006',
-    latitude: 28.6562,
-    longitude: 77.2355,
-    opening_hours: '10:30 AM - 8:00 PM (Mon-Sat)',
-    categories: ['Microcontrollers', 'Sensors', 'LEDs', 'Motors', 'Tools'],
-    rating: 4.8,
-    stocked_components: ['Arduino Uno', 'Nano', 'Raspberry Pi', 'IR Sensor Array', 'Soldering Station'],
-  },
-  {
-    id: 'seed-lamington-mum',
-    name: 'Lamington Road Tech Components Center',
-    phone: '+91 22 2382 7744',
-    address: 'Tara Temple Lane, Grant Road East',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    pincode: '400007',
-    latitude: 18.9616,
-    longitude: 72.8164,
-    opening_hours: '10:00 AM - 8:00 PM (Mon-Sat)',
-    categories: ['Robotics Kits', 'Power Supplies', 'Microcontrollers', 'Servos'],
-    rating: 4.7,
-    stocked_components: ['Arduino Mega', 'ESP32 Cam', 'MG996R Servos', 'Buck Converters', '18650 Cells'],
-  },
-  {
-    id: 'seed-koti-hyd',
-    name: 'Koti Gujarati Galli Electronics World',
-    phone: '+91 40 2475 3388',
-    address: 'Opposite Women’s College, Bank Street, Koti',
-    city: 'Hyderabad',
-    state: 'Telangana',
-    pincode: '500095',
-    latitude: 17.385,
-    longitude: 78.4867,
-    opening_hours: '10:30 AM - 8:30 PM (Mon-Sat)',
-    categories: ['Sensors', 'Arduino', 'Drone Components', 'Soldering'],
-    rating: 4.6,
-    stocked_components: ['HC-SR04', 'MPU6050', 'F450 Frame', 'ESC 30A', '1045 Propellers'],
-  },
-  {
-    id: 'seed-pune-budhwar',
-    name: 'Budhwar Peth Mechatronics Supplies',
-    phone: '+91 20 2445 6611',
-    address: 'Budhwar Peth, Near Pasodya Maruti Temple',
-    city: 'Pune',
-    state: 'Maharashtra',
-    pincode: '411002',
-    latitude: 18.5167,
-    longitude: 73.8562,
-    opening_hours: '10:00 AM - 8:00 PM (Mon-Sat)',
-    categories: ['Motors', 'Drivers', 'Arduino', 'Batteries'],
-    rating: 4.8,
-    stocked_components: ['TT Gear Motors', 'L298N', 'Arduino Uno', '4xAA Battery Holder', 'Jumper Wires'],
-  },
-  {
-    id: 'seed-ritchie-chennai',
-    name: 'Ritchie Street Robotics & Semiconductor Depot',
-    phone: '+91 44 2854 9900',
-    address: 'Narasingapuram Street, Mount Road',
-    city: 'Chennai',
-    state: 'Tamil Nadu',
-    pincode: '600002',
-    latitude: 13.0674,
-    longitude: 80.2707,
-    opening_hours: '10:00 AM - 8:30 PM (Mon-Sat)',
-    categories: ['Sensors', 'Arduino', 'Raspberry Pi', 'Relays'],
-    rating: 4.8,
-    stocked_components: ['DHT22', 'Ultrasonic HC-SR04', 'ESP8266', '5V Relays', 'Breadboards'],
-  },
-];
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const lat = parseFloat(searchParams.get('lat') || '28.6315');
-    const lng = parseFloat(searchParams.get('lng') || '77.2167');
-    const radiusM = parseInt(searchParams.get('radius_m') || '5000', 10);
-    const query = searchParams.get('query') || '';
+    const url = new URL(req.url);
+    const lat = parseFloat(url.searchParams.get('lat') || '28.6315');
+    const lng = parseFloat(url.searchParams.get('lng') || '77.2167');
+    const radiusKm = parseFloat(url.searchParams.get('radiusKm') || url.searchParams.get('radius_m') ? (parseFloat(url.searchParams.get('radius_m') || '25000') / 1000).toString() : '50');
+    const component = (url.searchParams.get('component') || url.searchParams.get('category') || '').toLowerCase().trim();
 
-    if (isNaN(lat) || isNaN(lng)) {
-      return NextResponse.json(
-        { error: 'Valid latitude and longitude coordinates are required' },
-        { status: 400 }
+    // Compute distances
+    const enriched = SEED_SHOPS.map((shop) => {
+      const dist = haversineDistanceKm(lat, lng, shop.lat, shop.lng);
+      return {
+        ...shop,
+        distanceKm: Number(dist.toFixed(1)),
+        directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${shop.name}, ${shop.address}, ${shop.city}`)}`,
+        stockedComponents: shop.categories,
+        openingHours: shop.hours,
+      };
+    });
+
+    // Filter by radius and component
+    let filtered = enriched.filter((shop) => shop.distanceKm <= radiusKm);
+
+    if (component) {
+      filtered = filtered.filter(
+        (shop) =>
+          shop.name.toLowerCase().includes(component) ||
+          shop.categories.some((c) => c.toLowerCase().includes(component))
       );
     }
 
-    const mergedShopsMap = new Map<string, MergedShop>();
+    // Sort by distance ascending
+    filtered.sort((a, b) => a.distanceKm - b.distanceKm);
 
-    // 1. Fetch verified shops from Supabase PostGIS RPC nearby_shops
-    try {
-      const { data: dbShops, error } = await (supabase.rpc as any)('nearby_shops', {
-        lat,
-        lng,
-        radius_m: radiusM,
-        p_limit: 30,
-      });
-
-      if (!error && Array.isArray(dbShops) && dbShops.length > 0) {
-        for (const shop of dbShops) {
-          const distM =
-            shop.distance_meters ||
-            calculateHaversineDistanceM(lat, lng, shop.latitude, shop.longitude);
-          const distKm = Number((distM / 1000).toFixed(1));
-          const travelMins = Math.max(3, Math.round((distKm / 20) * 60 + 2));
-
-          mergedShopsMap.set(shop.id, {
-            id: shop.id,
-            name: shop.name,
-            phone: shop.phone || '+91 98100 00000',
-            address: shop.address,
-            city: shop.city,
-            state: shop.state || 'India',
-            pincode: shop.pincode || '',
-            latitude: shop.latitude,
-            longitude: shop.longitude,
-            distance_meters: distM,
-            distance_km: distKm,
-            travel_time_mins: travelMins,
-            opening_hours: shop.opening_hours || '10:00 AM - 8:00 PM (Mon-Sat)',
-            categories: shop.categories || ['Arduino', 'Sensors', 'Electronics'],
-            is_verified: true,
-            verified_status: 'verified',
-            rating: shop.rating || 4.8,
-            review_count: 28,
-            google_maps_uri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-              shop.name + ' ' + shop.city
-            )}`,
-            photos: shop.photos || [],
-            stocked_components: [
-              'Arduino Uno',
-              'ESP32',
-              'HC-SR04 Ultrasonic',
-              'L298N Motor Driver',
-              'SG90 Servo',
-              'Breadboard & Jumpers',
-            ],
-            source: 'verified',
-          });
-        }
-      }
-    } catch {
-      // Continue gracefully to seeded registry and Google Places
+    // If none within radius, return nearest 3 shops anyway so the student always sees closest hubs
+    if (filtered.length === 0) {
+      filtered = enriched.sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 3);
     }
-
-    // 2. Add seeded registry shops within radius (or nearest hubs if map is sparse)
-    for (const seed of INDIAN_MARKETS_SEEDED) {
-      const distM = calculateHaversineDistanceM(lat, lng, seed.latitude, seed.longitude);
-      if (distM <= radiusM * 1.5 || mergedShopsMap.size < 2) {
-        const distKm = Number((distM / 1000).toFixed(1));
-        const travelMins = Math.max(3, Math.round((distKm / 20) * 60 + 2));
-
-        if (!mergedShopsMap.has(seed.id)) {
-          mergedShopsMap.set(seed.id, {
-            ...seed,
-            distance_meters: distM,
-            distance_km: distKm,
-            travel_time_mins: travelMins,
-            is_verified: true,
-            verified_status: 'verified',
-            review_count: 45,
-            google_maps_uri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-              seed.name + ' ' + seed.city
-            )}`,
-            photos: [],
-            source: 'verified',
-          });
-        }
-      }
-    }
-
-    // 3. Google Places API (New) Text Search with STRICT field mask & 24h cell caching
-    const serverKey =
-      process.env.GOOGLE_PLACES_SERVER_KEY || process.env.GOOGLE_MAPS_SERVER_KEY;
-
-    if (serverKey) {
-      try {
-        // Grid cell key rounded to 2 decimals (~1.1 km)
-        const cellLat = Math.round(lat * 100) / 100;
-        const cellLng = Math.round(lng * 100) / 100;
-        const cacheKey = `${cellLat}_${cellLng}_${radiusM}_${query.toLowerCase().trim()}`;
-
-        let places: any[] = [];
-        const cached = placesCellCache.get(cacheKey);
-
-        if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-          places = cached.places;
-        } else {
-          // Indian market multi-lingual query variants
-          const textQuery = query
-            ? `${query} electronic components shop OR robotics parts OR स्पेयर पार्ट्स`
-            : 'electronic components shop OR arduino OR robotics kit OR electronics spare parts OR रोबोटिक्स';
-
-          const placesRes = await fetch(
-            'https://places.googleapis.com/v1/places:searchText',
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': serverKey,
-                // STRICT FIELD MASK: Highest priced field sets pricing tier. Phone/hours fetched on demand via /details
-                'X-Goog-FieldMask':
-                  'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryType',
-              },
-              body: JSON.stringify({
-                textQuery,
-                locationBias: {
-                  circle: {
-                    center: { latitude: lat, longitude: lng },
-                    radius: radiusM,
-                  },
-                },
-                languageCode: 'en',
-                regionCode: 'IN',
-                maxResultCount: 15,
-              }),
-            }
-          );
-
-          if (placesRes.ok) {
-            const placesData = await placesRes.json();
-            places = placesData.places || [];
-            placesCellCache.set(cacheKey, { places, timestamp: Date.now() });
-          }
-        }
-
-        for (const place of places) {
-          const pLat = place.location?.latitude;
-          const pLng = place.location?.longitude;
-          if (!pLat || !pLng) continue;
-
-          const placeName = place.displayName?.text || 'Electronics Store';
-          const placeId = place.id;
-
-          // Deduplication: Check if already in list by google_place_id OR name match + distance < 150m
-          let isDuplicate = false;
-          for (const existing of Array.from(mergedShopsMap.values())) {
-            const distBetween = calculateHaversineDistanceM(
-              existing.latitude,
-              existing.longitude,
-              pLat,
-              pLng
-            );
-            if (
-              existing.google_place_id === placeId ||
-              distBetween < 150 ||
-              existing.name.toLowerCase().includes(placeName.toLowerCase()) ||
-              placeName.toLowerCase().includes(existing.name.toLowerCase())
-            ) {
-              isDuplicate = true;
-              if (!existing.google_place_id) existing.google_place_id = placeId;
-              if (!existing.google_maps_uri && place.googleMapsUri) {
-                existing.google_maps_uri = place.googleMapsUri;
-              }
-              break;
-            }
-          }
-
-          if (!isDuplicate) {
-            const distM = calculateHaversineDistanceM(lat, lng, pLat, pLng);
-            const distKm = Number((distM / 1000).toFixed(1));
-            const travelMins = Math.max(3, Math.round((distKm / 20) * 60 + 2));
-
-            mergedShopsMap.set(placeId, {
-              id: placeId,
-              name: placeName,
-              phone: 'Tap to view hours & contact',
-              address: place.formattedAddress || 'Local Market',
-              city: 'Nearby',
-              state: 'India',
-              pincode: '',
-              latitude: pLat,
-              longitude: pLng,
-              distance_meters: distM,
-              distance_km: distKm,
-              travel_time_mins: travelMins,
-              opening_hours: '10:00 AM - 8:00 PM (Mon-Sat)',
-              categories: ['General Electronics', 'Hardware Components'],
-              is_verified: false,
-              verified_status: 'google_places',
-              rating: place.rating || 4.2,
-              review_count: place.userRatingCount || 10,
-              google_maps_uri:
-                place.googleMapsUri ||
-                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  placeName
-                )}`,
-              google_place_id: placeId,
-              photos: [],
-              stocked_components: ['General Electronics', 'Wiring & Cables', 'Components'],
-              source: 'google_places',
-            });
-          }
-        }
-      } catch (err) {
-        // Fallback: Never throw an error if Google Places API fails
-        console.warn('Google Places fetch failed, fallback to verified registry:', err);
-      }
-    }
-
-    const shopsList = Array.from(mergedShopsMap.values()).sort(
-      (a, b) => a.distance_meters - b.distance_meters
-    );
 
     return NextResponse.json({
-      shops: shopsList,
-      total: shopsList.length,
-      center: { lat, lng },
-      radius_m: radiusM,
-      hasServerKey: Boolean(serverKey),
+      success: true,
+      data: {
+        center: { lat, lng },
+        radiusKm,
+        totalFound: filtered.length,
+        shops: filtered,
+      },
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: err?.message || 'Failed to fetch nearby shops' },
+      { success: false, error: { message: err.message || 'Failed to fetch nearby shops' } },
       { status: 500 }
     );
   }

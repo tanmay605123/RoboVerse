@@ -1,21 +1,6 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const API_BACKEND_URL =
-  process.env.API_BACKEND_URL ||
-  (process.env.NODE_ENV === 'production'
-    ? 'https://roboverse-backend.onrender.com/api/v1'
-    : 'http://localhost:4000/api/v1');
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Keep development artifacts out of OneDrive's synced .next placeholder.
-  // Builds still use the standard Next.js output directory by default.
-  distDir: process.env.NEXT_DIST_DIR || (process.env.NODE_ENV === 'development' ? '.next-dev' : '.next'),
   transpilePackages: ['@roboverse/shared', '@roboverse/ui-tokens', '@roboverse/sim-engine', 'three'],
   images: {
     remotePatterns: [
@@ -25,54 +10,15 @@ const nextConfig = {
       },
     ],
   },
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin',
-          },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(self), microphone=(self), geolocation=(self)',
-          },
-          {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=63072000; includeSubDomains; preload',
-          },
-        ],
-      },
-    ];
-  },
   async rewrites() {
     return [
       {
         source: '/api/v1/:path*',
-        destination: `${API_BACKEND_URL}/:path*`,
+        destination: 'http://localhost:4000/api/v1/:path*',
       },
     ];
   },
   webpack: (config) => {
-    config.resolve.alias = {
-      ...(config.resolve.alias || {}),
-      '@roboverse/shared': path.resolve(__dirname, '../../packages/shared/src'),
-      '@roboverse/ui-tokens': path.resolve(__dirname, '../../packages/ui-tokens/src'),
-      '@roboverse/sim-engine': path.resolve(__dirname, '../../packages/sim-engine/src'),
-    };
     config.externals = [...(config.externals || [])];
     return config;
   },

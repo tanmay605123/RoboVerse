@@ -29,7 +29,6 @@ export interface RituuMessage {
   }>;
   rating?: 'UP' | 'DOWN';
   feedbackComment?: string;
-  safetyWarning?: string;
 }
 
 export const SendRituuMessageInputSchema = z.object({
