@@ -175,6 +175,16 @@ CREATE TABLE IF NOT EXISTS public.plans (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS price_inr_monthly NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS price_inr_quarterly NUMERIC(10,2);
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS price_inr_yearly NUMERIC(10,2);
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS gst_percent NUMERIC(5,2) DEFAULT 18.00;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS max_saved_projects INT DEFAULT 5;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS rituu_daily_messages INT DEFAULT 15;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS rituu_daily_photos INT DEFAULT 3;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS store_discount_percent NUMERIC(5,2) DEFAULT 0.00;
+ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
 CREATE TABLE IF NOT EXISTS public.subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -628,6 +638,8 @@ CREATE TABLE IF NOT EXISTS public.rituu_usage (
   UNIQUE(user_id, day_ist)
 );
 
+ALTER TABLE public.rituu_usage ADD COLUMN IF NOT EXISTS estimated_cost_inr NUMERIC(10,4) DEFAULT 0;
+
 -- RPC: rituu_consume (Atomic limit check & consumption in IST timezone)
 DROP FUNCTION IF EXISTS public.rituu_consume(boolean);
 CREATE OR REPLACE FUNCTION public.rituu_consume(p_is_photo BOOLEAN DEFAULT false)
@@ -746,6 +758,10 @@ CREATE TABLE IF NOT EXISTS public.shop_reports (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.shop_reports ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+ALTER TABLE public.shop_reports ADD COLUMN IF NOT EXISTS report_type TEXT DEFAULT 'other';
+ALTER TABLE public.shop_reports ADD COLUMN IF NOT EXISTS details TEXT;
+
 -- RPC: nearby_shops using PostGIS ST_DWithin and ST_Distance
 DROP FUNCTION IF EXISTS public.nearby_shops(double precision, double precision, double precision, integer);
 DROP FUNCTION IF EXISTS public.nearby_shops(double precision, double precision, integer, integer);
@@ -829,6 +845,11 @@ CREATE TABLE IF NOT EXISTS public.products (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS component_id TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS age_restricted BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS shipping_class TEXT DEFAULT 'standard';
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
 CREATE TABLE IF NOT EXISTS public.kits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID UNIQUE REFERENCES public.products(id) ON DELETE CASCADE,
@@ -885,6 +906,11 @@ CREATE TABLE IF NOT EXISTS public.orders (
   payment_id UUID REFERENCES public.payments(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS total_amount_inr NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS tax_breakdown JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS shipping_class TEXT DEFAULT 'standard';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_id UUID;
 
 CREATE TABLE IF NOT EXISTS public.order_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
