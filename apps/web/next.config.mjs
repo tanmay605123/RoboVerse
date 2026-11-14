@@ -12,6 +12,10 @@ const API_BACKEND_URL =
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Vercel publishes the workspace build from the repository root.
+  // Keep output-file tracing rooted at the monorepo so hoisted dependencies
+  // such as Next's styled-jsx package are included in the deployment bundle.
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   // The repository contains legacy API route type mismatches that are
   // independent of the web UI build. Keep deployment unblocked while those
   // routes are migrated to the current shared client types.
