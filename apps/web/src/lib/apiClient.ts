@@ -26,8 +26,20 @@ export async function apiRequest<T = any>(
       headers,
     });
 
-    const json = await res.json();
-    return json;
+    const responseText = await res.text();
+    try {
+      return JSON.parse(responseText);
+    } catch {
+      return {
+        success: false,
+        error: {
+          code: 'API_HTTP_ERROR',
+          message: res.ok
+            ? 'The API returned an unexpected response. Please try again.'
+            : `The API returned HTTP ${res.status}. Please try again later.`,
+        },
+      };
+    }
   } catch (err: any) {
     return {
       success: false,

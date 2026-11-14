@@ -151,30 +151,6 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // 4. SIGNED-IN USERS VISITING /login OR /register REDIRECT TO WORKSPACE
-  if ((pathname === '/login' || pathname === '/register') && user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    const role = (profile as any)?.role as DbUserRole | undefined;
-
-    switch (role) {
-      case 'admin':
-        return NextResponse.redirect(new URL('/admin', request.url));
-      case 'teacher':
-        return NextResponse.redirect(new URL('/teacher', request.url));
-      case 'institution_admin':
-        return NextResponse.redirect(new URL('/institution', request.url));
-      case 'store_admin':
-        return NextResponse.redirect(new URL('/store-admin', request.url));
-      default:
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-  }
-
   return response;
 }
 

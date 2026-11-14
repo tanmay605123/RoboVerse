@@ -69,6 +69,137 @@ router.get('/redirect-path', (req: Request, res: Response) => {
 router.post('/register', validateBody(RegisterInputSchema), async (req: Request, res: Response) => {
   const data = req.body;
 
+  // Local development fallback when no database URL is configured.
+  // Production and deployed environments continue through Prisma below.
+  if (!ENV.DATABASE_URL) {
+    const existingUserByEmail = Array.from(inMemoryDb.users.values()).find(
+      (user) => user.email.toLowerCase() === data.email.toLowerCase()
+    );
+    if (existingUserByEmail) {
+      res.status(409).json({
+        success: false,
+        error: { code: 'EMAIL_ALREADY_EXISTS', message: 'An account with this email already exists' },
+      });
+      return;
+    }
+
+    const existingUserByMobile = Array.from(inMemoryDb.users.values()).find(
+      (user) => user.mobileNumber === data.mobileNumber
+    );
+    if (existingUserByMobile) {
+      res.status(409).json({
+        success: false,
+        error: { code: 'MOBILE_ALREADY_EXISTS', message: 'This mobile number is already registered' },
+      });
+      return;
+    }
+
+    const birthYear = new Date(data.dateOfBirth).getFullYear();
+    const currentYear = new Date().getFullYear();
+    const age = currentYear - birthYear;
+    if (age < 18 && (!data.parentEmail || !data.parentalConsentGiven)) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'PARENTAL_CONSENT_REQUIRED',
+          message: 'Students under 18 years of age require parental/guardian consent and parent email.',
+        },
+      });
+      return;
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    studentSequenceCounter += 1;
+    const studentIdRecord = await generateStudentIdRecord(studentSequenceCounter, 2026);
+    const user = {
+      id: userId,
+      email: data.email.toLowerCase(),
+      passwordHash,
+      mobileNumber: data.mobileNumber,
+      role: UserRole.FREE_STUDENT,
+      status: UserStatus.ACTIVE,
+      referralCode: `RV-${data.fullName.slice(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      referredById: data.referralCode || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const profile = {
+      id: `prof_${userId}`,
+      userId,
+      fullName: data.fullName,
+      dateOfBirth: data.dateOfBirth,
+      parentEmail: data.parentEmail || null,
+      parentalConsentGiven: data.parentalConsentGiven || false,
+      institutionType: data.institutionType,
+      schoolOrCollegeName: data.schoolOrCollegeName,
+      classOrYear: data.classOrYear,
+      city: data.city,
+      state: data.state,
+      country: data.country || 'India',
+      interests: data.interests,
+      avatarUrl: data.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(data.fullName)}`,
+      bio: 'Aspiring roboticist & electronics builder at RoboVerse',
+      level: 1,
+      xp: 50,
+      streakDays: 1,
+      totalLearningHours: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    inMemoryDb.users.set(userId, user);
+    inMemoryDb.profiles.set(userId, profile);
+    inMemoryDb.studentIds.set(userId, {
+      id: `stid_${userId}`,
+      userId,
+      ...studentIdRecord,
+    });
+    inMemoryDb.subscriptions.set(`sub_${userId}_free`, {
+      id: `sub_${userId}_free`,
+      userId,
+      planId: 'plan_free',
+      billingCycle: BillingCycle.MONTHLY,
+      status: 'ACTIVE',
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date('2099-12-31'),
+      cancelAtPeriodEnd: false,
+    });
+
+    const tokens = generateAuthTokens({
+      userId,
+      email: user.email,
+      role: user.role,
+      studentId: studentIdRecord.studentId,
+      planId: 'plan_free',
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Welcome to RoboVerse! Student account and Digital ID created successfully.',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          mobileNumber: user.mobileNumber,
+          role: user.role,
+          referralCode: user.referralCode,
+        },
+        studentId: studentIdRecord.studentId,
+        studentIdCard: {
+          studentId: studentIdRecord.studentId,
+          qrCodeDataUrl: studentIdRecord.qrCodeDataUrl,
+          verificationUrl: studentIdRecord.verificationUrl,
+          validUntil: studentIdRecord.validUntil,
+        },
+        profile,
+        tokens,
+        redirectTo: getRoleRedirectPath(user.role),
+      },
+    });
+    return;
+  }
+
   // 1. Check existing email or mobile
   const existingUserByEmail = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (existingUserByEmail) {

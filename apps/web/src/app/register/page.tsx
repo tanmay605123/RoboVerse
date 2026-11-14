@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../../lib/apiClient';
 import { useAuthStore } from '../../store/useAuthStore';
-import { STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
+import { RegisterInputSchema, STUDENT_INTEREST_OPTIONS } from '@roboverse/shared';
 import { OnboardingJourneyModal } from '../../components/onboarding/OnboardingJourneyModal';
 
 export default function RegisterPage() {
@@ -123,9 +123,9 @@ export default function RegisterPage() {
   // Step Validation
   const canProceedStep1 =
     fullName.length >= 2 &&
-    email.includes('@') &&
-    passwordStrength >= 4 &&
-    mobileNumber.length >= 10 &&
+    RegisterInputSchema.shape.email.safeParse(email).success &&
+    passwordStrength === 5 &&
+    RegisterInputSchema.shape.mobileNumber.safeParse(mobileNumber).success &&
     (!isMinor || (parentEmail.includes('@') && parentalConsentGiven));
 
   const canProceedStep2 =
@@ -167,6 +167,13 @@ export default function RegisterPage() {
       referralCode: referralCode || undefined,
     };
 
+    const validation = RegisterInputSchema.safeParse(payload);
+    if (!validation.success) {
+      setLoading(false);
+      setError(validation.error.issues.map((issue) => `${issue.path.join('.') || 'form'}: ${issue.message}`).join(' '));
+      return;
+    }
+
     const res = await apiRequest('/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -175,7 +182,11 @@ export default function RegisterPage() {
     setLoading(false);
 
     if (!res.success || !res.data) {
-      setError(res.error?.message || 'Registration failed. Please try again.');
+      const details = res.error?.details;
+      const detailMessage = Array.isArray(details)
+        ? details.map((detail: any) => `${detail.field || 'form'}: ${detail.message}`).join(' ')
+        : null;
+      setError(detailMessage || res.error?.message || 'Registration failed. Please try again.');
       return;
     }
 
