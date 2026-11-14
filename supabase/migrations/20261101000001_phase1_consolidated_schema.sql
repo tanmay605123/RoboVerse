@@ -610,6 +610,11 @@ CREATE TABLE IF NOT EXISTS public.products (
   updated_at timestamptz DEFAULT now()
 );
 
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS description text;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS component_id text;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS age_restricted boolean DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
+
 CREATE TABLE IF NOT EXISTS public.kits (
   id text PRIMARY KEY,
   slug text UNIQUE NOT NULL,

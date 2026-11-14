@@ -849,6 +849,7 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS component_id TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS age_restricted BOOLEAN DEFAULT false;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS shipping_class TEXT DEFAULT 'standard';
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS description TEXT;
 
 CREATE TABLE IF NOT EXISTS public.kits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
