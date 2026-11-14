@@ -13,6 +13,7 @@
     "build": "npm run build:web",
     "start": "npm --workspace=@roboverse/web run start",
     "build:packages": "npm --workspace=@roboverse/ui-tokens run build && npm --workspace=@roboverse/shared run build && npm --workspace=@roboverse/components-lib run build && npm --workspace=@roboverse/sim-engine run build",
+    "postinstall": "npm run build:packages",
     "build:web": "npm run build:packages && npm --workspace=@roboverse/web run build && (cp -R apps/web/.next .next 2>/dev/null || true)",
     "test": "npm run test:api && npm run test:sim",
     "test:api": "npm --workspace=@roboverse/api run test",

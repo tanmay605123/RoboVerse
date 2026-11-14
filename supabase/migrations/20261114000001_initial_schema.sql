@@ -314,6 +314,7 @@ CREATE TABLE IF NOT EXISTS public.certificates (
 );
 
 -- RPC: issue_certificate
+DROP FUNCTION IF EXISTS public.issue_certificate(text);
 CREATE OR REPLACE FUNCTION public.issue_certificate(p_course_id TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -393,6 +394,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- RPC: verify_certificate (Public)
+DROP FUNCTION IF EXISTS public.verify_certificate(text);
 CREATE OR REPLACE FUNCTION public.verify_certificate(p_code TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -615,6 +617,7 @@ CREATE TABLE IF NOT EXISTS public.rituu_usage (
 );
 
 -- RPC: rituu_consume (Atomic limit check & consumption in IST timezone)
+DROP FUNCTION IF EXISTS public.rituu_consume(boolean);
 CREATE OR REPLACE FUNCTION public.rituu_consume(p_is_photo BOOLEAN DEFAULT false)
 RETURNS JSONB AS $$
 DECLARE
@@ -732,6 +735,8 @@ CREATE TABLE IF NOT EXISTS public.shop_reports (
 );
 
 -- RPC: nearby_shops using PostGIS ST_DWithin and ST_Distance
+DROP FUNCTION IF EXISTS public.nearby_shops(double precision, double precision, double precision, integer);
+DROP FUNCTION IF EXISTS public.nearby_shops(double precision, double precision, integer, integer);
 CREATE OR REPLACE FUNCTION public.nearby_shops(
   p_lat DOUBLE PRECISION,
   p_lng DOUBLE PRECISION,
@@ -879,6 +884,8 @@ CREATE TABLE IF NOT EXISTS public.order_items (
 );
 
 -- RPC: create_order_from_cart (COMPUTES TOTALS FROM DATABASE ONLY)
+DROP FUNCTION IF EXISTS public.create_order_from_cart(uuid, text);
+DROP FUNCTION IF EXISTS public.create_order_from_cart(uuid);
 CREATE OR REPLACE FUNCTION public.create_order_from_cart(p_address_id UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -1008,6 +1015,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- RPC: finalize_order_payment (used by Razorpay webhook)
+DROP FUNCTION IF EXISTS public.finalize_order_payment(uuid, text);
 CREATE OR REPLACE FUNCTION public.finalize_order_payment(p_order_id UUID, p_razorpay_payment_id TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -1049,6 +1057,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 -- ============================================================================
 
 -- Presence helper
+DROP FUNCTION IF EXISTS public.touch_presence(text, uuid);
 CREATE OR REPLACE FUNCTION public.touch_presence(p_activity TEXT, p_project_id UUID DEFAULT NULL)
 RETURNS VOID AS $$
 BEGIN
@@ -1084,6 +1093,7 @@ CREATE TABLE IF NOT EXISTS public.daily_stats (
 );
 
 -- RPC: admin_overview
+DROP FUNCTION IF EXISTS public.admin_overview();
 CREATE OR REPLACE FUNCTION public.admin_overview()
 RETURNS JSONB AS $$
 DECLARE
@@ -1143,6 +1153,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- RPC: admin_students (Returns directory without passwords)
+DROP FUNCTION IF EXISTS public.admin_students(text, text, integer, integer);
 CREATE OR REPLACE FUNCTION public.admin_students(
   p_search TEXT DEFAULT '',
   p_filter_plan TEXT DEFAULT NULL,
